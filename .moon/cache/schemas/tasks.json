@@ -27,11 +27,11 @@
       "additionalProperties": {
         "type": "array",
         "items": {
-          "type": "string"
+          "$ref": "#/definitions/Input"
         }
       },
       "propertyNames": {
-        "type": "string"
+        "$ref": "#/definitions/Id"
       }
     },
     "implicitDeps": {
@@ -47,7 +47,7 @@
       "description": "Task inputs that'll automatically be injected into every task that inherits this configuration.",
       "type": "array",
       "items": {
-        "type": "string"
+        "$ref": "#/definitions/Input"
       }
     },
     "taskOptions": {
@@ -70,7 +70,7 @@
         "$ref": "#/definitions/TaskConfig"
       },
       "propertyNames": {
-        "type": "string"
+        "$ref": "#/definitions/Id"
       }
     }
   },
@@ -89,6 +89,180 @@
         }
       ]
     },
+    "FileGroupInput": {
+      "description": "A file group input.",
+      "type": "object",
+      "properties": {
+        "as": {
+          "title": "as",
+          "description": "Format to resolve the file group into.",
+          "default": "static",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FileGroupInputFormat"
+            }
+          ]
+        },
+        "format": {
+          "title": "format",
+          "description": "Format to resolve the file group into.",
+          "default": "static",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FileGroupInputFormat"
+            }
+          ]
+        },
+        "group": {
+          "title": "group",
+          "description": "The file group identifier.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Id"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FileGroupInputFormat": {
+      "description": "Available formats to resolve the file group into.",
+      "type": "string",
+      "enum": [
+        "static",
+        "dirs",
+        "envs",
+        "files",
+        "globs",
+        "root"
+      ]
+    },
+    "FileInput": {
+      "description": "A file path input.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "title": "content",
+          "description": "Regex pattern to match the file's contents against when determining affected status.",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "regex"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file": {
+          "title": "file",
+          "description": "The literal file path.",
+          "type": "string"
+        },
+        "optional": {
+          "title": "optional",
+          "description": "Mark the file as optional instead of logging a warning when hashing a task.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FileOutput": {
+      "description": "A file path output.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "title": "file",
+          "description": "The literal file path.",
+          "type": "string"
+        },
+        "optional": {
+          "title": "optional",
+          "description": "Mark the file as optional instead of failing with an error after running a task and the output doesn't exist.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GlobInput": {
+      "description": "A glob pattern input.",
+      "type": "object",
+      "properties": {
+        "cache": {
+          "title": "cache",
+          "description": "Cache the glob walking result for increased performance.",
+          "default": true,
+          "type": "boolean"
+        },
+        "glob": {
+          "title": "glob",
+          "description": "The glob pattern.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GlobOutput": {
+      "description": "A glob pattern output.",
+      "type": "object",
+      "properties": {
+        "glob": {
+          "title": "glob",
+          "description": "The glob pattern.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Id": {
+      "type": "string"
+    },
+    "Input": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/FileInput"
+        },
+        {
+          "$ref": "#/definitions/FileGroupInput"
+        },
+        {
+          "$ref": "#/definitions/GlobInput"
+        },
+        {
+          "$ref": "#/definitions/ProjectInput"
+        }
+      ]
+    },
+    "Output": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/FileOutput"
+        },
+        {
+          "$ref": "#/definitions/GlobOutput"
+        }
+      ]
+    },
     "PlatformType": {
       "description": "Platforms that each programming language can belong to.",
       "type": "string",
@@ -101,6 +275,50 @@
         "system",
         "unknown"
       ]
+    },
+    "ProjectInput": {
+      "description": "An external project input.",
+      "type": "object",
+      "properties": {
+        "fileGroup": {
+          "title": "fileGroup",
+          "description": "A file group identifier within the project in which to determine affected status.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "title": "filter",
+          "description": "A list of globs, relative from the project's root, in which to determine affected status.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "group": {
+          "title": "group",
+          "description": "A file group identifier within the project in which to determine affected status.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project": {
+          "title": "project",
+          "description": "The external project identifier.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "TaskArgs": {
       "description": "Configures a command to execute, and its arguments.",
@@ -191,7 +409,7 @@
           "description": "Extends settings from a sibling task by ID.",
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/definitions/Id"
             },
             {
               "type": "null"
@@ -205,7 +423,7 @@
             {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/definitions/Input"
               }
             },
             {
@@ -243,7 +461,7 @@
             {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/definitions/Output"
               }
             },
             {
@@ -288,15 +506,30 @@
         },
         "toolchain": {
           "title": "toolchain",
-          "description": "The toolchain(s) in which the task will be ran in. The toolchain determines available binaries, lookup paths, and more. When not provided, will be automatically detected.",
+          "description": "List of additional toolchain(s) in which the task will be ran in. The toolchain determines available binaries, lookup paths, and more. This list will be merged with detected toolchains.",
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/definitions/Id"
             },
             {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/definitions/Id"
+              }
+            }
+          ]
+        },
+        "toolchains": {
+          "title": "toolchains",
+          "description": "List of additional toolchain(s) in which the task will be ran in. The toolchain determines available binaries, lookup paths, and more. This list will be merged with detected toolchains.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Id"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Id"
               }
             }
           ]
@@ -465,7 +698,18 @@
           "description": "Caches the outputs of the task. Defaults to true if outputs are configured for the task.",
           "anyOf": [
             {
-              "type": "boolean"
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "local",
+                    "remote"
+                  ]
+                }
+              ]
             },
             {
               "type": "null"
@@ -754,7 +998,9 @@
                   "type": "string",
                   "enum": [
                     "always",
-                    "affected"
+                    "affected",
+                    "only",
+                    "skip"
                   ]
                 }
               ]

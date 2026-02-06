@@ -11,6 +11,7 @@
     "bun": {
       "title": "bun",
       "description": "Configures and enables the Bun platform.",
+      "deprecated": true,
       "anyOf": [
         {
           "$ref": "#/definitions/BunConfig"
@@ -23,6 +24,7 @@
     "deno": {
       "title": "deno",
       "description": "Configures and enables the Deno platform.",
+      "deprecated": true,
       "anyOf": [
         {
           "$ref": "#/definitions/DenoConfig"
@@ -56,6 +58,7 @@
     "node": {
       "title": "node",
       "description": "Configures and enables the Node.js platform.",
+      "deprecated": true,
       "anyOf": [
         {
           "$ref": "#/definitions/NodeConfig"
@@ -73,8 +76,17 @@
         "$ref": "#/definitions/ToolchainPluginConfig"
       },
       "propertyNames": {
-        "type": "string"
+        "$ref": "#/definitions/Id"
       }
+    },
+    "proto": {
+      "title": "proto",
+      "description": "Configures how moon integrates with proto.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ProtoConfig"
+        }
+      ]
     },
     "python": {
       "title": "python",
@@ -91,6 +103,7 @@
     "rust": {
       "title": "rust",
       "description": "Configures and enables the Rust platform.",
+      "deprecated": true,
       "anyOf": [
         {
           "$ref": "#/definitions/RustConfig"
@@ -337,6 +350,9 @@
         }
       ]
     },
+    "Id": {
+      "type": "string"
+    },
     "MoonConfig": {
       "description": "Configures how and where updates will be received.",
       "type": "object",
@@ -350,7 +366,7 @@
         "manifestUrl": {
           "title": "manifestUrl",
           "description": "A secure URL to lookup the latest version.",
-          "default": "https://launch.moonrepo.app/versions/cli/current",
+          "default": "https://launch.moonrepo.app/moon/check_version",
           "type": "string"
         }
       },
@@ -650,6 +666,22 @@
       },
       "additionalProperties": false
     },
+    "ProtoConfig": {
+      "description": "Configures how moon integrates with proto.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "title": "version",
+          "description": "The version of proto to download and install, and to use for installing and running other toolchains.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/VersionSpec"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "PythonConfig": {
       "type": "object",
       "properties": {
@@ -683,6 +715,11 @@
               "type": "null"
             }
           ]
+        },
+        "rootRequirementsOnly": {
+          "title": "rootRequirementsOnly",
+          "description": "Assumes a workspace root virtual environment is used for dependencies. Can be used to support the \"one version policy\" pattern.",
+          "type": "boolean"
         },
         "rootVenvOnly": {
           "title": "rootVenvOnly",
@@ -856,9 +893,31 @@
               "type": "null"
             }
           ]
+        },
+        "versionFromPrototools": {
+          "title": "versionFromPrototools",
+          "description": "Inherit the version from the root .prototools. When true, matches using the same ID, otherwise a string can be provided for a custom ID.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ToolchainPluginVersionFrom"
+            }
+          ],
+          "markdownDescription": "Inherit the version from the root `.prototools`. When true, matches using the same ID, otherwise a string can be provided for a custom ID."
         }
       },
       "additionalProperties": false
+    },
+    "ToolchainPluginVersionFrom": {
+      "description": "Strategy in which to inherit a version from .prototools.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "markdownDescription": "Strategy in which to inherit a version from `.prototools`."
     },
     "UnresolvedVersionSpec": {
       "description": "Represents an unresolved version or alias that must be resolved to a fully-qualified version.",
@@ -904,6 +963,10 @@
         }
       },
       "additionalProperties": false
+    },
+    "VersionSpec": {
+      "description": "Represents a resolved version or alias.",
+      "type": "string"
     },
     "YarnConfig": {
       "description": "Options for Yarn, when used as a package manager.",
