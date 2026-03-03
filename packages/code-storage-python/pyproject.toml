@@ -68,7 +68,7 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "SIM117"]
 
 [tool.uv]
 dev-dependencies = [
