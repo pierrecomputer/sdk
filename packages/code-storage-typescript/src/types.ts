@@ -48,6 +48,7 @@ export interface Repo {
   createdAt: string;
   getRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
   getEphemeralRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
+  getImportRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
 
   getFileStream(options: GetFileOptions): Promise<Response>;
   getArchiveStream(options?: ArchiveOptions): Promise<Response>;

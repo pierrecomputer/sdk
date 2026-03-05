@@ -76,6 +76,22 @@ func (r *Repo) EphemeralRemoteURL(ctx context.Context, options RemoteURLOptions)
 	return u.String(), nil
 }
 
+// ImportRemoteURL returns the import remote URL.
+func (r *Repo) ImportRemoteURL(ctx context.Context, options RemoteURLOptions) (string, error) {
+	jwtToken, err := r.client.generateJWT(r.ID, options)
+	if err != nil {
+		return "", err
+	}
+
+	u := url.URL{
+		Scheme: "https",
+		Host:   r.client.options.StorageBaseURL,
+		Path:   "/" + r.ID + "+import.git",
+	}
+	u.User = url.UserPassword("t", jwtToken)
+	return u.String(), nil
+}
+
 // FileStream returns the raw response for streaming file contents.
 func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Response, error) {
 	if strings.TrimSpace(options.Path) == "" {

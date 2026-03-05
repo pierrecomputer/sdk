@@ -179,6 +179,24 @@ class RepoImpl:
         url = f"https://t:{jwt_token}@{self.storage_base_url}/{self._id}.git"
         return url
 
+    async def get_import_remote_url(
+        self,
+        *,
+        permissions: Optional[list[str]] = None,
+        ttl: Optional[int] = None,
+    ) -> str:
+        """Get import remote URL for Git operations.
+
+        Args:
+            permissions: List of permissions (e.g., ["git:write", "git:read"])
+            ttl: Token TTL in seconds
+
+        Returns:
+            Git remote URL with embedded JWT pointing to import namespace
+        """
+        url = await self.get_remote_url(permissions=permissions, ttl=ttl)
+        return url.replace(".git", "+import.git")
+
     async def get_ephemeral_remote_url(
         self,
         *,

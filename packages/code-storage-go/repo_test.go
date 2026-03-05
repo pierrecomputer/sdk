@@ -47,6 +47,26 @@ func TestEphemeralRemoteURL(t *testing.T) {
 	}
 }
 
+func TestImportRemoteURL(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, StorageBaseURL: "acme.code.storage"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo-1", DefaultBranch: "main", client: client}
+
+	remote, err := repo.ImportRemoteURL(nil, RemoteURLOptions{})
+	if err != nil {
+		t.Fatalf("remote url error: %v", err)
+	}
+	if !strings.Contains(remote, "repo-1+import.git") {
+		t.Fatalf("expected import url: %s", remote)
+	}
+	claims := parseJWTFromURL(t, remote)
+	if claims["repo"] != "repo-1" {
+		t.Fatalf("expected repo claim")
+	}
+}
+
 func TestListFilesEphemeral(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/files" {

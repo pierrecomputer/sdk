@@ -458,6 +458,24 @@ class Repo(Protocol):
         """Get the remote URL for the repository."""
         ...
 
+    async def get_import_remote_url(
+        self,
+        *,
+        permissions: Optional[list[str]] = None,
+        ttl: Optional[int] = None,
+    ) -> str:
+        """Get the import remote URL for the repository."""
+        ...
+
+    async def get_ephemeral_remote_url(
+        self,
+        *,
+        permissions: Optional[list[str]] = None,
+        ttl: Optional[int] = None,
+    ) -> str:
+        """Get the ephemeral remote URL for the repository."""
+        ...
+
     async def get_file_stream(
         self,
         *,

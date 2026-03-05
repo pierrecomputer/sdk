@@ -126,7 +126,7 @@ const readOnlyUrl = await repo.getRemoteURL({
 #### Ephemeral Branches
 
 For working with ephemeral branches (temporary branches isolated from the main
-repository), use `getEphemeralRemote()`:
+repository), use `getEphemeralRemoteURL()`:
 
 ```typescript
 // Get ephemeral namespace remote URL
@@ -143,6 +143,23 @@ console.log(
 // git push ephemeral feature-branch
 
 // The ephemeral remote supports all the same options and permission as regular remotes
+```
+
+#### Import Remote
+
+For write-only history imports, use `getImportRemoteURL()`:
+
+```typescript
+// Get import remote URL
+const importUrl = await repo.getImportRemoteURL();
+// Returns: https://t:JWT@your-name.code.storage/repo-id+import.git
+
+console.log(`Run: git remote add import ${importUrl}`);
+
+// Push imported history through the import remote
+// git push import main
+
+// Reads are disabled on +import remotes; use the repository remote for clone/fetch
 ```
 
 ### Working with Repository Content
