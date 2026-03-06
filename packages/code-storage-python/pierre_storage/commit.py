@@ -389,28 +389,26 @@ class CommitBuilderImpl:
             "Code-Storage-Agent": get_user_agent(),
         }
 
-        async with (
-            httpx.AsyncClient() as client,
-            client.stream(
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
                 "POST",
                 self.url,
                 headers=headers,
                 content=self._build_request_body(metadata),
                 timeout=180.0,
-            ) as response,
-        ):
-            if not response.is_success:
-                error_info = await _parse_commit_error(response, "createCommit")
-                raise RefUpdateError(
-                    error_info["message"],
-                    status=error_info["status"],
-                    reason=error_info["status"],
-                    ref_update=error_info.get("ref_update"),
-                )
+            ) as response:
+                if not response.is_success:
+                    error_info = await _parse_commit_error(response, "createCommit")
+                    raise RefUpdateError(
+                        error_info["message"],
+                        status=error_info["status"],
+                        reason=error_info["status"],
+                        ref_update=error_info.get("ref_update"),
+                    )
 
-            result_data = await response.aread()
-            result = json.loads(result_data)
-            return _build_commit_result(result)
+                result_data = await response.aread()
+                result = json.loads(result_data)
+                return _build_commit_result(result)
 
     def _build_metadata(self) -> Dict[str, Any]:
         """Build metadata payload for commit."""
@@ -491,28 +489,26 @@ async def send_diff_commit_request(
 
     url = f"{base_url.rstrip('/')}/api/v{api_version}/repos/diff-commit"
 
-    async with (
-        httpx.AsyncClient() as client,
-        client.stream(
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
             "POST",
             url,
             headers=headers,
             content=request_stream(),
             timeout=180.0,
-        ) as response,
-    ):
-        if not response.is_success:
-            error_info = await _parse_commit_error(response, "createCommitFromDiff")
-            raise RefUpdateError(
-                error_info["message"],
-                status=error_info["status"],
-                reason=error_info["status"],
-                ref_update=error_info.get("ref_update"),
-            )
+        ) as response:
+            if not response.is_success:
+                error_info = await _parse_commit_error(response, "createCommitFromDiff")
+                raise RefUpdateError(
+                    error_info["message"],
+                    status=error_info["status"],
+                    reason=error_info["status"],
+                    ref_update=error_info.get("ref_update"),
+                )
 
-        result_data = await response.aread()
-        result = json.loads(result_data)
-        return _build_commit_result(result)
+            result_data = await response.aread()
+            result = json.loads(result_data)
+            return _build_commit_result(result)
 
 
 def resolve_commit_ttl_seconds(options: Optional[CreateCommitOptions]) -> int:

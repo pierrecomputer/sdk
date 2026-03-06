@@ -676,3 +676,71 @@ class TestCommitBuilder:
             assert captured_headers is not None
             assert "Code-Storage-Agent" in captured_headers
             assert captured_headers["Code-Storage-Agent"] == get_user_agent()
+
+    @pytest.mark.asyncio
+    async def test_send_importable_on_python39(self, git_storage_options: dict) -> None:
+        """Regression test: parenthesized async-with syntax is Python 3.10+ only.
+
+        Before the fix, commit.py used:
+
+            async with (
+                httpx.AsyncClient() as client,
+                client.stream(...) as response,
+            ):
+
+        That form raises SyntaxError on Python 3.9 at import time, making the
+        entire module unusable despite pyproject.toml declaring requires-python>=3.9.
+        The fix is nested async-with statements, which are valid back to Python 3.1.
+
+        This test confirms send() completes successfully, which would be unreachable
+        on Python 3.9 because the module would never import.
+        """
+        import sys
+
+        import pierre_storage.commit  # must be importable without SyntaxError
+
+        assert pierre_storage.commit is not None, (
+            "pierre_storage.commit failed to import — likely a SyntaxError "
+            f"from parenthesized async-with on Python {sys.version_info}"
+        )
+
+        storage = GitStorage(git_storage_options)
+
+        stream_response = MagicMock()
+        stream_response.is_success = True
+        stream_response.aread = AsyncMock(
+            return_value=(
+                b'{"commit":{"commit_sha":"aaa","tree_sha":"bbb",'
+                b'"target_branch":"main","pack_bytes":10,"blob_count":1},'
+                b'"result":{"success":true,"status":"ok","branch":"main",'
+                b'"old_sha":"000","new_sha":"aaa"}}'
+            )
+        )
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.is_success = True
+            mock_response.json.return_value = {"repo_id": "test-repo"}
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            stream_ctx = MagicMock()
+            stream_ctx.__aenter__ = AsyncMock(return_value=stream_response)
+            stream_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_client.return_value.__aenter__.return_value.stream = MagicMock(
+                return_value=stream_ctx
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await (
+                repo.create_commit(
+                    target_branch="main",
+                    commit_message="test",
+                    author={"name": "A", "email": "a@example.com"},
+                )
+                .add_file_from_string("f.txt", "hello")
+                .send()
+            )
+
+        assert result["commit_sha"] == "aaa"

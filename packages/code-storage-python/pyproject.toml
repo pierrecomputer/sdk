@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pierre-storage"
-version = "1.3.2"
+version = "1.3.3"
 description = "Pierre Git Storage SDK for Python"
 readme = "README.md"
 license = "MIT"
@@ -68,7 +68,7 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "SIM117"]
 
 [tool.uv]
 dev-dependencies = [
