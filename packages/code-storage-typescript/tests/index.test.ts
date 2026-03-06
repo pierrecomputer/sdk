@@ -651,6 +651,36 @@ describe('GitStorage', () => {
       expect(url).toContain('eyJ'); // JWT should contain base64 encoded content
     });
 
+    it('should return import remote URL with +import suffix', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      const url = await repo.getImportRemoteURL();
+      expect(url).toMatch(
+        new RegExp(
+          `^https:\\/\\/t:.+@v0\\.3p\\.pierre\\.rip\\/${repo.id}\\+import\\.git$`
+        )
+      );
+      expect(url).toContain('eyJ');
+      expect(url).toContain('+import.git');
+    });
+
+    it('should accept options for getImportRemoteURL', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      const url = await repo.getImportRemoteURL({
+        permissions: ['git:write'],
+        ttl: 3600,
+      });
+      expect(url).toMatch(
+        new RegExp(
+          `^https:\\/\\/t:.+@v0\\.3p\\.pierre\\.rip\\/${repo.id}\\+import\\.git$`
+        )
+      );
+      expect(url).toContain('eyJ');
+    });
+
     it('getRemoteURL and getEphemeralRemote should return different URLs', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({});
@@ -1920,6 +1950,16 @@ describe('GitStorage', () => {
           /^https:\/\/t:.+@v0\.3p\.pierre\.rip\/test-repo\+ephemeral\.git$/
         );
       });
+
+      it('should use getDefaultStorageBaseUrl for import remote URLs when storageBaseUrl is not provided', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = await store.createRepo({ id: 'test-repo' });
+
+        const url = await repo.getImportRemoteURL();
+        expect(url).toMatch(
+          /^https:\/\/t:.+@v0\.3p\.pierre\.rip\/test-repo\+import\.git$/
+        );
+      });
     });
 
     describe('URL construction with custom values', () => {
@@ -1966,6 +2006,21 @@ describe('GitStorage', () => {
         const url = await repo.getEphemeralRemoteURL();
         expect(url).toMatch(
           /^https:\/\/t:.+@custom-storage\.example\.com\/test-repo\+ephemeral\.git$/
+        );
+      });
+
+      it('should use custom storageBaseUrl for import remote URLs when provided', async () => {
+        const customStorageBaseUrl = 'custom-storage.example.com';
+        const store = new GitStorage({
+          name: 'v0',
+          key,
+          storageBaseUrl: customStorageBaseUrl,
+        });
+        const repo = await store.createRepo({ id: 'test-repo' });
+
+        const url = await repo.getImportRemoteURL();
+        expect(url).toMatch(
+          /^https:\/\/t:.+@custom-storage\.example\.com\/test-repo\+import\.git$/
         );
       });
 
@@ -2087,6 +2142,13 @@ describe('GitStorage', () => {
           expect(ephemeralUrl).toMatch(
             new RegExp(
               `^https:\\/\\/t:.+@${name}\\.3p\\.pierre\\.rip\\/test-repo\\+ephemeral\\.git$`
+            )
+          );
+
+          const importUrl = await repo.getImportRemoteURL();
+          expect(importUrl).toMatch(
+            new RegExp(
+              `^https:\\/\\/t:.+@${name}\\.3p\\.pierre\\.rip\\/test-repo\\+import\\.git$`
             )
           );
 

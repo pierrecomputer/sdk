@@ -6,8 +6,8 @@ import jwt
 import pytest
 
 from pierre_storage import GitStorage, create_client, generate_jwt
-from pierre_storage.version import get_user_agent
 from pierre_storage.errors import ApiError
+from pierre_storage.version import get_user_agent
 
 
 class TestGitStorage:
@@ -674,6 +674,57 @@ class TestJWTGeneration:
             assert "test-repo+ephemeral.git" in url
 
     @pytest.mark.asyncio
+    async def test_get_import_remote_url(self, git_storage_options: dict) -> None:
+        """Test getting import remote URL."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            url = await repo.get_import_remote_url()
+
+            assert url.endswith("+import.git")
+            assert "test-repo+import.git" in url
+
+    @pytest.mark.asyncio
+    async def test_get_import_remote_url_with_permissions(
+        self, git_storage_options: dict
+    ) -> None:
+        """Test import remote URL with custom permissions."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            url = await repo.get_import_remote_url(permissions=["git:read"], ttl=3600)
+
+            assert url.endswith("+import.git")
+
+            import re
+
+            match = re.search(r"https://t:(.+)@test\.code\.storage/test-repo\+import\.git", url)
+            assert match is not None
+            token = match.group(1)
+            payload = jwt.decode(token, options={"verify_signature": False})
+
+            assert payload["scopes"] == ["git:read"]
+            assert payload["exp"] - payload["iat"] == 3600
+
+    @pytest.mark.asyncio
     async def test_get_ephemeral_remote_url_with_permissions(
         self, git_storage_options: dict
     ) -> None:
@@ -732,6 +783,35 @@ class TestJWTGeneration:
             assert match is not None, f"URL doesn't match expected pattern: {ephemeral_url}"
 
             # Verify JWT has correct scopes and TTL
+            token = match.group(1)
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["scopes"] == ["git:write"]
+            assert payload["exp"] - payload["iat"] == 1800
+
+    @pytest.mark.asyncio
+    async def test_import_url_structure(self, git_storage_options: dict) -> None:
+        """Test that get_import_remote_url has correct URL structure."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            import_url = await repo.get_import_remote_url(permissions=["git:write"], ttl=1800)
+
+            import re
+
+            match = re.search(
+                r"https://t:(.+)@test\.code\.storage/test-repo\+import\.git", import_url
+            )
+            assert match is not None, f"URL doesn't match expected pattern: {import_url}"
+
             token = match.group(1)
             payload = jwt.decode(token, options={"verify_signature": False})
             assert payload["scopes"] == ["git:write"]

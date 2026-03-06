@@ -34,7 +34,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-fmt.Println(url)
+	fmt.Println(url)
+
+	importURL, err := repo.ImportRemoteURL(context.Background(), storage.RemoteURLOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(importURL)
 }
 ```
 
@@ -142,8 +149,8 @@ fmt.Println(repo.ID)
 Because this Go module lives in a monorepo, git tags must be prefixed with the module's subdirectory path:
 
 ```bash
-git tag packages/code-storage-go/v0.0.3
-git push origin packages/code-storage-go/v0.0.3
+git tag packages/code-storage-go/v0.2.2
+git push origin packages/code-storage-go/v0.2.2
 ```
 
 Make sure the version in `version.go` (`PackageVersion`) matches the tag before tagging.
@@ -151,7 +158,7 @@ Make sure the version in `version.go` (`PackageVersion`) matches the tag before 
 ## Features
 
 - Create, list, find, and delete repositories.
-- Generate authenticated git remote URLs.
+- Generate authenticated git remote URLs, including import and ephemeral variants.
 - Read files, read file metadata, download archives, list branches/commits, and run grep queries.
 - Create commits via streaming commit-pack or diff-commit endpoints.
 - Restore commits, manage git notes, and create branches.

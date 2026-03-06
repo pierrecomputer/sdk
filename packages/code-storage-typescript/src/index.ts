@@ -635,6 +635,15 @@ class RepoImpl implements Repo {
     return url.toString();
   }
 
+  async getImportRemoteURL(urlOptions?: GetRemoteURLOptions): Promise<string> {
+    const url = new URL(
+      `https://${this.options.storageBaseUrl}/${this.id}+import.git`
+    );
+    url.username = `t`;
+    url.password = await this.generateJWT(this.id, urlOptions);
+    return url.toString();
+  }
+
   async getFileStream(options: GetFileOptions): Promise<Response> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
     const jwt = await this.generateJWT(this.id, {

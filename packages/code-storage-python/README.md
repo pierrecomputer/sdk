@@ -119,8 +119,18 @@ read_only_url = await repo.get_remote_url(
 ephemeral_url = await repo.get_ephemeral_remote_url()
 # Returns: https://t:JWT@your-name.code.storage/repo-id+ephemeral.git
 
+# Get import remote URL (points to import namespace)
+import_url = await repo.get_import_remote_url()
+# Returns: https://t:JWT@your-name.code.storage/repo-id+import.git
+
 # Get ephemeral URL with custom permissions and TTL
 ephemeral_url = await repo.get_ephemeral_remote_url(
+    permissions=["git:write", "git:read"],
+    ttl=3600,
+)
+
+# Get import URL with custom permissions and TTL
+import_url = await repo.get_import_remote_url(
     permissions=["git:write", "git:read"],
     ttl=3600,
 )
@@ -577,6 +587,13 @@ class Repo:
     def id(self) -> str: ...
 
     async def get_remote_url(
+        self,
+        *,
+        permissions: Optional[List[str]] = None,
+        ttl: Optional[int] = None,
+    ) -> str: ...
+
+    async def get_import_remote_url(
         self,
         *,
         permissions: Optional[List[str]] = None,
