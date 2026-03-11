@@ -134,6 +134,19 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 				baseRepo.DefaultBranch = base.DefaultBranch
 				resolvedDefaultBranch = base.DefaultBranch
 			}
+		case GenericGitBaseRepo:
+			baseRepo = &baseRepoPayload{
+				Provider: string(base.Provider),
+				Owner:    base.Owner,
+				Name:     base.Name,
+			}
+			if strings.TrimSpace(base.DefaultBranch) != "" {
+				baseRepo.DefaultBranch = base.DefaultBranch
+				resolvedDefaultBranch = base.DefaultBranch
+			}
+			if strings.TrimSpace(base.UpstreamHost) != "" {
+				baseRepo.UpstreamHost = base.UpstreamHost
+			}
 		default:
 			return nil, errors.New("unsupported base repo type")
 		}
@@ -317,6 +330,117 @@ func (c *Client) DeleteRepo(ctx context.Context, options DeleteRepoOptions) (Del
 	}
 
 	return DeleteRepoResult{RepoID: payload.RepoID, Message: payload.Message}, nil
+}
+
+// CreateGitCredential creates a generic git credential for a repository.
+func (c *Client) CreateGitCredential(ctx context.Context, options CreateGitCredentialOptions) (*GitCredential, error) {
+	if strings.TrimSpace(options.RepoID) == "" {
+		return nil, errors.New("createGitCredential repoId is required")
+	}
+	if strings.TrimSpace(options.Password) == "" {
+		return nil, errors.New("createGitCredential password is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := c.generateJWT(options.RepoID, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	if err != nil {
+		return nil, err
+	}
+
+	body := &createGitCredentialRequest{
+		RepoID:   options.RepoID,
+		Password: options.Password,
+	}
+	if strings.TrimSpace(options.Username) != "" {
+		body.Username = options.Username
+	}
+
+	resp, err := c.api.post(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 409 {
+		return nil, errors.New("a credential already exists for this repository")
+	}
+
+	var payload struct {
+		ID string `json:"id"`
+	}
+	if err := decodeJSON(resp, &payload); err != nil {
+		return nil, err
+	}
+
+	return &GitCredential{ID: payload.ID}, nil
+}
+
+// UpdateGitCredential updates an existing generic git credential.
+func (c *Client) UpdateGitCredential(ctx context.Context, options UpdateGitCredentialOptions) (*GitCredential, error) {
+	if strings.TrimSpace(options.ID) == "" {
+		return nil, errors.New("updateGitCredential id is required")
+	}
+	if strings.TrimSpace(options.Password) == "" {
+		return nil, errors.New("updateGitCredential password is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	if err != nil {
+		return nil, err
+	}
+
+	body := &updateGitCredentialRequest{
+		ID:       options.ID,
+		Password: options.Password,
+	}
+	if strings.TrimSpace(options.Username) != "" {
+		body.Username = options.Username
+	}
+
+	resp, err := c.api.put(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return nil, errors.New("credential not found")
+	}
+
+	var payload struct {
+		ID        string `json:"id"`
+		CreatedAt string `json:"created_at,omitempty"`
+	}
+	if err := decodeJSON(resp, &payload); err != nil {
+		return nil, err
+	}
+
+	return &GitCredential{ID: payload.ID, CreatedAt: payload.CreatedAt}, nil
+}
+
+// DeleteGitCredential deletes a generic git credential.
+func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCredentialOptions) error {
+	if strings.TrimSpace(options.ID) == "" {
+		return errors.New("deleteGitCredential id is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	if err != nil {
+		return err
+	}
+
+	body := &deleteGitCredentialRequest{ID: options.ID}
+
+	resp, err := c.api.delete(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return errors.New("credential not found")
+	}
+
+	return nil
 }
 
 func (c *Client) generateJWT(repoID string, options RemoteURLOptions) (string, error) {

@@ -555,6 +555,223 @@ class TestGitStorage:
             payload = jwt.decode(token, options={"verify_signature": False})
             assert payload["exp"] - payload["iat"] == custom_ttl
 
+    @pytest.mark.asyncio
+    async def test_create_repo_generic_git_base_repo(self, git_storage_options: dict) -> None:
+        """Test creating a repository with a generic git base repo."""
+        storage = GitStorage(git_storage_options)
+
+        captured_body: dict = {}
+
+        async def mock_post(url, **kwargs):  # type: ignore[no-untyped-def]
+            captured_body.update(kwargs.get("json", {}))
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.is_success = True
+            mock_response.json.return_value = {"repo_id": "test-repo", "url": "https://test.git"}
+            return mock_response
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(side_effect=mock_post)
+
+            repo = await storage.create_repo(
+                id="test-repo",
+                base_repo={
+                    "provider": "gitlab",
+                    "owner": "myorg",
+                    "name": "myrepo",
+                    "upstream_host": "gitlab.example.com",
+                },
+            )
+            assert repo is not None
+
+        assert captured_body["base_repo"]["provider"] == "gitlab"
+        assert captured_body["base_repo"]["owner"] == "myorg"
+        assert captured_body["base_repo"]["name"] == "myrepo"
+        assert captured_body["base_repo"]["upstream_host"] == "gitlab.example.com"
+
+    @pytest.mark.asyncio
+    async def test_create_git_credential(self, git_storage_options: dict) -> None:
+        """Test creating a git credential."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {"id": "cred-123"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            result = await storage.create_git_credential(
+                repo_id="test-repo",
+                password="secret-token",
+                username="myuser",
+            )
+
+            assert result["id"] == "cred-123"
+
+            # Verify the POST request was made to the correct URL
+            mock_post.assert_called_once()
+            call_args = mock_post.call_args[0]
+            api_url = call_args[0]
+            assert api_url == "https://api.test.code.storage/api/v1/repos/git-credentials"
+
+            # Verify the body
+            call_kwargs = mock_post.call_args[1]
+            body = call_kwargs["json"]
+            assert body["repo_id"] == "test-repo"
+            assert body["password"] == "secret-token"
+            assert body["username"] == "myuser"
+
+    @pytest.mark.asyncio
+    async def test_create_git_credential_without_username(
+        self, git_storage_options: dict
+    ) -> None:
+        """Test creating a git credential without a username."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {"id": "cred-456"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            result = await storage.create_git_credential(
+                repo_id="test-repo",
+                password="secret-token",
+            )
+
+            assert result["id"] == "cred-456"
+
+            call_kwargs = mock_post.call_args[1]
+            body = call_kwargs["json"]
+            assert "username" not in body
+
+    @pytest.mark.asyncio
+    async def test_create_git_credential_conflict(self, git_storage_options: dict) -> None:
+        """Test creating a git credential when one already exists."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 409
+        mock_response.is_success = False
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ApiError, match="A credential already exists for this repository"):
+                await storage.create_git_credential(
+                    repo_id="test-repo",
+                    password="secret-token",
+                )
+
+    @pytest.mark.asyncio
+    async def test_update_git_credential(self, git_storage_options: dict) -> None:
+        """Test updating a git credential."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {"id": "cred-123", "created_at": "2024-01-01T00:00:00Z"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_put = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.put = mock_put
+
+            result = await storage.update_git_credential(
+                id="cred-123",
+                password="new-secret",
+                username="newuser",
+            )
+
+            assert result["id"] == "cred-123"
+            assert result["created_at"] == "2024-01-01T00:00:00Z"
+
+            # Verify the PUT request was made to the correct URL
+            mock_put.assert_called_once()
+            call_args = mock_put.call_args[0]
+            api_url = call_args[0]
+            assert api_url == "https://api.test.code.storage/api/v1/repos/git-credentials"
+
+            # Verify the body
+            call_kwargs = mock_put.call_args[1]
+            body = call_kwargs["json"]
+            assert body["id"] == "cred-123"
+            assert body["password"] == "new-secret"
+            assert body["username"] == "newuser"
+
+    @pytest.mark.asyncio
+    async def test_update_git_credential_not_found(self, git_storage_options: dict) -> None:
+        """Test updating a git credential that doesn't exist."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.is_success = False
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.put = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ApiError, match="Credential not found"):
+                await storage.update_git_credential(
+                    id="nonexistent-cred",
+                    password="new-secret",
+                )
+
+    @pytest.mark.asyncio
+    async def test_delete_git_credential(self, git_storage_options: dict) -> None:
+        """Test deleting a git credential."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_delete = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.delete = mock_delete
+
+            result = await storage.delete_git_credential(id="cred-123")
+
+            assert result is None
+
+            # Verify the DELETE request was made to the correct URL
+            mock_delete.assert_called_once()
+            call_args = mock_delete.call_args[0]
+            api_url = call_args[0]
+            assert api_url == "https://api.test.code.storage/api/v1/repos/git-credentials"
+
+            # Verify the body
+            call_kwargs = mock_delete.call_args[1]
+            body = call_kwargs["json"]
+            assert body["id"] == "cred-123"
+
+    @pytest.mark.asyncio
+    async def test_delete_git_credential_not_found(self, git_storage_options: dict) -> None:
+        """Test deleting a git credential that doesn't exist."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.is_success = False
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.delete = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ApiError, match="Credential not found"):
+                await storage.delete_git_credential(id="nonexistent-cred")
+
     def test_create_client_factory(self, git_storage_options: dict) -> None:
         """Test create_client factory function."""
         client = create_client(git_storage_options)

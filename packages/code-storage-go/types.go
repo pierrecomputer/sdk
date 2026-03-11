@@ -57,7 +57,13 @@ type RepoOptions struct {
 type SupportedRepoProvider string
 
 const (
-	RepoProviderGitHub SupportedRepoProvider = "github"
+	RepoProviderGitHub    SupportedRepoProvider = "github"
+	RepoProviderGitLab    SupportedRepoProvider = "gitlab"
+	RepoProviderBitbucket SupportedRepoProvider = "bitbucket"
+	RepoProviderGitea     SupportedRepoProvider = "gitea"
+	RepoProviderForgejo   SupportedRepoProvider = "forgejo"
+	RepoProviderCodeberg  SupportedRepoProvider = "codeberg"
+	RepoProviderSourceHut SupportedRepoProvider = "sr.ht"
 )
 
 // BaseRepo is a base repository definition for create repo.
@@ -96,6 +102,20 @@ type ForkBaseRepo struct {
 }
 
 func (ForkBaseRepo) isBaseRepo() {}
+
+// GenericGitBaseRepo references a repository on a generic git host
+// (GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sr.ht, etc.)
+type GenericGitBaseRepo struct {
+	Provider      SupportedRepoProvider
+	Owner         string
+	Name          string
+	DefaultBranch string
+	// UpstreamHost is the bare hostname for self-hosted instances
+	// (e.g. "gitlab.example.com"). Falls back to the provider default if empty.
+	UpstreamHost string
+}
+
+func (GenericGitBaseRepo) isBaseRepo() {}
 
 // RepoBaseInfo describes a base repo on list results.
 type RepoBaseInfo struct {
@@ -145,6 +165,34 @@ type DeleteRepoOptions struct {
 type DeleteRepoResult struct {
 	RepoID  string
 	Message string
+}
+
+// CreateGitCredentialOptions controls git credential creation.
+type CreateGitCredentialOptions struct {
+	InvocationOptions
+	RepoID   string
+	Username string
+	Password string
+}
+
+// UpdateGitCredentialOptions controls git credential updates.
+type UpdateGitCredentialOptions struct {
+	InvocationOptions
+	ID       string
+	Username string
+	Password string
+}
+
+// DeleteGitCredentialOptions controls git credential deletion.
+type DeleteGitCredentialOptions struct {
+	InvocationOptions
+	ID string
+}
+
+// GitCredential describes a git credential.
+type GitCredential struct {
+	ID        string
+	CreatedAt string
 }
 
 // GetFileOptions configures file download.

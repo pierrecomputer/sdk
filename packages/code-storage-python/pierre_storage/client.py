@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, Union, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -12,8 +12,11 @@ from pierre_storage.errors import ApiError
 from pierre_storage.repo import DEFAULT_TOKEN_TTL_SECONDS, RepoImpl
 from pierre_storage.types import (
     BaseRepo,
+    CreateGitCredentialResult,
     DeleteRepoResult,
     ForkBaseRepo,
+    GenericGitBaseRepo,
+    GitCredential,
     GitHubBaseRepo,
     GitStorageOptions,
     ListReposResult,
@@ -163,15 +166,15 @@ class GitStorage:
                     resolved_default_branch = default_branch
                     body["default_branch"] = default_branch
             else:
-                github_repo = cast(GitHubBaseRepo, base_repo)
-                # Ensure provider is set to 'github' if not provided
-                base_repo_with_provider = {
+                # Sync base repo: GitHub or generic git provider (gitlab, bitbucket, etc.)
+                sync_repo = cast(Union[GitHubBaseRepo, GenericGitBaseRepo], base_repo)
+                # Use the provider from base_repo if set, defaulting to "github"
+                body["base_repo"] = {
                     "provider": "github",
-                    **github_repo,
+                    **sync_repo,
                 }
-                body["base_repo"] = base_repo_with_provider
-                if github_repo.get("default_branch"):
-                    resolved_default_branch = github_repo["default_branch"]
+                if sync_repo.get("default_branch"):
+                    resolved_default_branch = sync_repo["default_branch"]
                 elif explicit_default_branch:
                     resolved_default_branch = default_branch
                 else:
@@ -408,6 +411,178 @@ class GitStorage:
                 repo_id=body["repo_id"],
                 message=body["message"],
             )
+
+    async def create_git_credential(
+        self,
+        *,
+        repo_id: str,
+        password: str,
+        username: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateGitCredentialResult:
+        """Create a generic git credential for a repository.
+
+        Args:
+            repo_id: Repository ID to associate the credential with
+            password: Password or token for authentication
+            username: Optional username for authentication
+            ttl: Token TTL in seconds
+
+        Returns:
+            Created credential with id
+
+        Raises:
+            ApiError: If credential creation fails or already exists
+        """
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self._generate_jwt(
+            repo_id,
+            {"permissions": ["repo:write"], "ttl": ttl},
+        )
+
+        body: Dict[str, Any] = {
+            "repo_id": repo_id,
+            "password": password,
+        }
+        if username is not None:
+            body["username"] = username
+
+        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json=body,
+                timeout=30.0,
+            )
+
+            if response.status_code == 409:
+                raise ApiError("A credential already exists for this repository", status_code=409)
+
+            if not response.is_success:
+                raise ApiError(
+                    f"Failed to create git credential: {response.status_code} {response.reason_phrase}",
+                    status_code=response.status_code,
+                    response=response,
+                )
+
+            data = response.json()
+            return CreateGitCredentialResult(id=data["id"])
+
+    async def update_git_credential(
+        self,
+        *,
+        id: str,
+        password: str,
+        username: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> GitCredential:
+        """Update an existing generic git credential.
+
+        Args:
+            id: Credential ID to update
+            password: New password or token
+            username: Optional new username
+            ttl: Token TTL in seconds
+
+        Returns:
+            Updated credential info
+
+        Raises:
+            ApiError: If credential not found or update fails
+        """
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self._generate_jwt(
+            "org",
+            {"permissions": ["repo:write"], "ttl": ttl},
+        )
+
+        body: Dict[str, Any] = {
+            "id": id,
+            "password": password,
+        }
+        if username is not None:
+            body["username"] = username
+
+        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json=body,
+                timeout=30.0,
+            )
+
+            if response.status_code == 404:
+                raise ApiError("Credential not found", status_code=404)
+
+            if not response.is_success:
+                raise ApiError(
+                    f"Failed to update git credential: {response.status_code} {response.reason_phrase}",
+                    status_code=response.status_code,
+                    response=response,
+                )
+
+            data = response.json()
+            result: GitCredential = {"id": data["id"]}
+            if data.get("created_at"):
+                result["created_at"] = data["created_at"]
+            return result
+
+    async def delete_git_credential(
+        self,
+        *,
+        id: str,
+        ttl: Optional[int] = None,
+    ) -> None:
+        """Delete a generic git credential.
+
+        Args:
+            id: Credential ID to delete
+            ttl: Token TTL in seconds
+
+        Raises:
+            ApiError: If credential not found or deletion fails
+        """
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self._generate_jwt(
+            "org",
+            {"permissions": ["repo:write"], "ttl": ttl},
+        )
+
+        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json={"id": id},
+                timeout=30.0,
+            )
+
+            if response.status_code == 404:
+                raise ApiError("Credential not found", status_code=404)
+
+            if not response.is_success:
+                raise ApiError(
+                    f"Failed to delete git credential: {response.status_code} {response.reason_phrase}",
+                    status_code=response.status_code,
+                    response=response,
+                )
 
     def get_config(self) -> GitStorageOptions:
         """Get current client configuration.

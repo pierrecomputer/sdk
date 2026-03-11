@@ -44,8 +44,10 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateGitCredentialOptions,
   CreateNoteOptions,
   CreateRepoOptions,
+  DeleteGitCredentialOptions,
   DeleteNoteOptions,
   DeleteRepoOptions,
   DeleteRepoResult,
@@ -54,6 +56,7 @@ import type {
   FileDiff,
   FilteredFile,
   FindOneOptions,
+  GenericGitBaseRepo,
   GetBranchDiffOptions,
   GetBranchDiffResponse,
   GetBranchDiffResult,
@@ -64,6 +67,8 @@ import type {
   GetNoteOptions,
   GetNoteResult,
   GetRemoteURLOptions,
+  GitCredential,
+  GitHubBaseRepo,
   GitStorageOptions,
   GrepFileMatch,
   GrepLine,
@@ -96,6 +101,7 @@ import type {
   Repo,
   RestoreCommitOptions,
   RestoreCommitResult,
+  UpdateGitCredentialOptions,
   ValidAPIVersion,
 } from './types';
 
@@ -1437,11 +1443,16 @@ export class GitStorage {
           ...(baseRepo.sha ? { sha: baseRepo.sha } : {}),
         };
       } else {
+        // Sync base repo: GitHub or generic git provider (gitlab, bitbucket, etc.)
+        const syncRepo = baseRepo as GitHubBaseRepo | GenericGitBaseRepo;
+        const { provider: _p, ...restSnakecased } = snakecaseKeys(
+          baseRepo as unknown as Record<string, unknown>
+        ) as Record<string, unknown>;
         baseRepoOptions = {
-          provider: 'github',
-          ...snakecaseKeys(baseRepo as unknown as Record<string, unknown>),
+          provider: syncRepo.provider ?? 'github',
+          ...restSnakecased,
         };
-        resolvedDefaultBranch = baseRepo.defaultBranch;
+        resolvedDefaultBranch = syncRepo.defaultBranch;
       }
     }
 
@@ -1588,6 +1599,96 @@ export class GitStorage {
       repoId: body.repo_id,
       message: body.message,
     };
+  }
+
+  /**
+   * Create a generic git credential for a repository.
+   * Used to authenticate sync operations for non-GitHub providers (GitLab, Bitbucket, etc.)
+   */
+  async createGitCredential(
+    options: CreateGitCredentialOptions
+  ): Promise<GitCredential> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(options.repoId, {
+      permissions: ['repo:write'],
+      ttl,
+    });
+
+    const body: Record<string, unknown> = {
+      repo_id: options.repoId,
+      password: options.password,
+    };
+    if (options.username !== undefined) {
+      body.username = options.username;
+    }
+
+    const resp = await this.api.post(
+      { path: 'repos/git-credentials', body },
+      jwt,
+      { allowedStatus: [409] }
+    );
+    if (resp.status === 409) {
+      throw new Error('A credential already exists for this repository');
+    }
+
+    const data = (await resp.json()) as { id: string };
+    return { id: data.id };
+  }
+
+  /**
+   * Update an existing generic git credential.
+   */
+  async updateGitCredential(
+    options: UpdateGitCredentialOptions
+  ): Promise<GitCredential> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT('org', {
+      permissions: ['repo:write'],
+      ttl,
+    });
+
+    const body: Record<string, unknown> = {
+      id: options.id,
+      password: options.password,
+    };
+    if (options.username !== undefined) {
+      body.username = options.username;
+    }
+
+    const resp = await this.api.put(
+      { path: 'repos/git-credentials', body },
+      jwt,
+      { allowedStatus: [404] }
+    );
+    if (resp.status === 404) {
+      throw new Error('Credential not found');
+    }
+
+    const data = (await resp.json()) as { id: string; created_at?: string };
+    return {
+      id: data.id,
+      ...(data.created_at ? { createdAt: data.created_at } : {}),
+    };
+  }
+
+  /**
+   * Delete a generic git credential.
+   */
+  async deleteGitCredential(options: DeleteGitCredentialOptions): Promise<void> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT('org', {
+      permissions: ['repo:write'],
+      ttl,
+    });
+
+    const resp = await this.api.delete(
+      { path: 'repos/git-credentials', body: { id: options.id } },
+      jwt,
+      { allowedStatus: [404] }
+    );
+    if (resp.status === 404) {
+      throw new Error('Credential not found');
+    }
   }
 
   /**
