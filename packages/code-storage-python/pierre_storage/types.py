@@ -65,7 +65,17 @@ class ForkBaseRepo(TypedDict, total=False):
     sha: Optional[str]
 
 
-BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo]
+class GenericGitBaseRepo(TypedDict, total=False):
+    """Base repository configuration for generic git providers (GitLab, Bitbucket, etc.)."""
+
+    provider: str  # required — one of: "gitlab", "bitbucket", "gitea", "forgejo", "codeberg", "sr.ht"
+    owner: str  # required
+    name: str  # required
+    default_branch: Optional[str]
+    upstream_host: Optional[str]  # bare hostname, e.g. "gitlab.example.com"
+
+
+BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo, GenericGitBaseRepo]
 
 
 class DeleteRepoResult(TypedDict):
@@ -73,6 +83,19 @@ class DeleteRepoResult(TypedDict):
 
     repo_id: str
     message: str
+
+
+class CreateGitCredentialResult(TypedDict):
+    """Result from creating a git credential."""
+
+    id: str
+
+
+class GitCredential(TypedDict, total=False):
+    """A git credential."""
+
+    id: str  # required
+    created_at: Optional[str]
 
 
 # Repository list types

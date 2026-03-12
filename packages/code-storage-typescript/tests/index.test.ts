@@ -2161,4 +2161,244 @@ describe('GitStorage', () => {
       });
     });
   });
+
+  describe('generic git base repo in createRepo', () => {
+    it('sends provider and upstream_host for generic git provider', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ repo_id: 'test-repo-id', url: 'https://test.git' }),
+        });
+      });
+
+      await store.createRepo({
+        baseRepo: {
+          provider: 'gitlab',
+          owner: 'myorg',
+          name: 'myrepo',
+          upstreamHost: 'gitlab.example.com',
+        },
+      });
+
+      const baseRepo = capturedBody.base_repo as Record<string, unknown>;
+      expect(baseRepo.provider).toBe('gitlab');
+      expect(baseRepo.owner).toBe('myorg');
+      expect(baseRepo.name).toBe('myrepo');
+      expect(baseRepo.upstream_host).toBe('gitlab.example.com');
+    });
+
+    it('sends provider without upstream_host when omitted', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ repo_id: 'test-repo-id', url: 'https://test.git' }),
+        });
+      });
+
+      await store.createRepo({
+        baseRepo: {
+          provider: 'gitlab',
+          owner: 'myorg',
+          name: 'myrepo',
+        },
+      });
+
+      const baseRepo = capturedBody.base_repo as Record<string, unknown>;
+      expect(baseRepo.provider).toBe('gitlab');
+      expect(baseRepo.upstream_host).toBeUndefined();
+    });
+
+    it('defaults provider to github when not set on GitHubBaseRepo', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ repo_id: 'test-repo-id', url: 'https://test.git' }),
+        });
+      });
+
+      await store.createRepo({
+        baseRepo: { owner: 'octocat', name: 'hello-world' },
+      });
+
+      const baseRepo = capturedBody.base_repo as Record<string, unknown>;
+      expect(baseRepo.provider).toBe('github');
+    });
+  });
+
+  describe('git credential methods', () => {
+    it('createGitCredential posts to repos/git-credentials', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedUrl = '';
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        capturedUrl = url;
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          statusText: 'Created',
+          json: async () => ({ id: 'cred-abc' }),
+        });
+      });
+
+      const result = await store.createGitCredential({
+        repoId: 'repo-123',
+        username: 'myuser',
+        password: 'mypassword',
+      });
+
+      expect(capturedUrl).toContain('/repos/git-credentials');
+      expect(capturedBody.repo_id).toBe('repo-123');
+      expect(capturedBody.username).toBe('myuser');
+      expect(capturedBody.password).toBe('mypassword');
+      expect(result.id).toBe('cred-abc');
+    });
+
+    it('createGitCredential sends without username when omitted', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          statusText: 'Created',
+          json: async () => ({ id: 'cred-abc' }),
+        });
+      });
+
+      await store.createGitCredential({ repoId: 'repo-123', password: 'token' });
+
+      expect(capturedBody.username).toBeUndefined();
+    });
+
+    it('createGitCredential throws on 409 conflict', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 409,
+          statusText: 'Conflict',
+          json: async () => ({}),
+        })
+      );
+
+      await expect(
+        store.createGitCredential({ repoId: 'repo-123', password: 'token' })
+      ).rejects.toThrow('A credential already exists for this repository');
+    });
+
+    it('updateGitCredential puts to repos/git-credentials', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedUrl = '';
+      let capturedMethod = '';
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        capturedUrl = url;
+        capturedMethod = init?.method as string;
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ id: 'cred-abc', created_at: '2025-01-01T00:00:00Z' }),
+        });
+      });
+
+      const result = await store.updateGitCredential({
+        id: 'cred-abc',
+        username: 'newuser',
+        password: 'newpassword',
+      });
+
+      expect(capturedMethod).toBe('PUT');
+      expect(capturedUrl).toContain('/repos/git-credentials');
+      expect(capturedBody.id).toBe('cred-abc');
+      expect(capturedBody.username).toBe('newuser');
+      expect(capturedBody.password).toBe('newpassword');
+      expect(result.id).toBe('cred-abc');
+      expect(result.createdAt).toBe('2025-01-01T00:00:00Z');
+    });
+
+    it('updateGitCredential throws on 404 not found', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          json: async () => ({}),
+        })
+      );
+
+      await expect(
+        store.updateGitCredential({ id: 'cred-abc', password: 'new' })
+      ).rejects.toThrow('Credential not found');
+    });
+
+    it('deleteGitCredential sends DELETE to repos/git-credentials', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      let capturedUrl = '';
+      let capturedMethod = '';
+      let capturedBody: Record<string, unknown> = {};
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        capturedUrl = url;
+        capturedMethod = init?.method as string;
+        capturedBody = JSON.parse(init?.body as string);
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          statusText: 'No Content',
+          json: async () => ({}),
+        });
+      });
+
+      await store.deleteGitCredential({ id: 'cred-abc' });
+
+      expect(capturedMethod).toBe('DELETE');
+      expect(capturedUrl).toContain('/repos/git-credentials');
+      expect(capturedBody.id).toBe('cred-abc');
+    });
+
+    it('deleteGitCredential throws on 404 not found', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          json: async () => ({}),
+        })
+      );
+
+      await expect(store.deleteGitCredential({ id: 'cred-abc' })).rejects.toThrow(
+        'Credential not found'
+      );
+    });
+  });
 });

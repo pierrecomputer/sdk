@@ -97,7 +97,14 @@ export interface RepoOptions {
   createdAt?: string;
 }
 
-export type SupportedRepoProvider = 'github';
+export type SupportedRepoProvider =
+  | 'github'
+  | 'gitlab'
+  | 'bitbucket'
+  | 'gitea'
+  | 'forgejo'
+  | 'codeberg'
+  | 'sr.ht';
 
 export interface PublicGitHubBaseRepoAuth {
   /**
@@ -110,11 +117,26 @@ export interface GitHubBaseRepo {
   /**
    * @default github
    */
-  provider?: SupportedRepoProvider;
+  provider?: 'github';
   owner: string;
   name: string;
   defaultBranch?: string;
   auth?: PublicGitHubBaseRepoAuth;
+}
+
+export interface GenericGitBaseRepo {
+  /**
+   * The git host provider. Must be one of the supported generic git providers.
+   */
+  provider: Exclude<SupportedRepoProvider, 'github'>;
+  owner: string;
+  name: string;
+  defaultBranch?: string;
+  /**
+   * Bare hostname for self-hosted instances (e.g. "gitlab.example.com").
+   * Falls back to the provider's default host when omitted.
+   */
+  upstreamHost?: string;
 }
 
 export interface ForkBaseRepo {
@@ -123,7 +145,31 @@ export interface ForkBaseRepo {
   sha?: string;
 }
 
-export type BaseRepo = GitHubBaseRepo | ForkBaseRepo;
+export type BaseRepo = GitHubBaseRepo | ForkBaseRepo | GenericGitBaseRepo;
+
+export interface CreateGitCredentialOptions {
+  repoId: string;
+  username?: string;
+  password: string;
+  ttl?: number;
+}
+
+export interface UpdateGitCredentialOptions {
+  id: string;
+  username?: string;
+  password: string;
+  ttl?: number;
+}
+
+export interface DeleteGitCredentialOptions {
+  id: string;
+  ttl?: number;
+}
+
+export interface GitCredential {
+  id: string;
+  createdAt?: string;
+}
 
 export interface ListReposOptions extends GitStorageInvocationOptions {
   cursor?: string;

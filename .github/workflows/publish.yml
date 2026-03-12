@@ -143,7 +143,11 @@ jobs:
       - name: Determine release tag
         id: tag
         run: |
-          VERSION=$(grep -E '^const PackageVersion = "[^"]+"' packages/code-storage-go/version.go | sed -E 's/^const PackageVersion = "([^"]+)"/\1/')
+          VERSION=$(sed -nE 's/^[[:space:]]*PackageVersion[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' packages/code-storage-go/version.go | head -n 1)
+          if [ -z "${VERSION}" ]; then
+            echo "Failed to extract PackageVersion from packages/code-storage-go/version.go" >&2
+            exit 1
+          fi
           TAG="packages/code-storage-go/v${VERSION}"
 
           if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}$"; then

@@ -10,6 +10,7 @@ type baseRepoPayload struct {
 	Provider      string       `json:"provider"`
 	Owner         string       `json:"owner"`
 	Name          string       `json:"name"`
+	UpstreamHost  string       `json:"upstream_host,omitempty"`
 	Operation     string       `json:"operation,omitempty"`
 	Auth          *authPayload `json:"auth,omitempty"`
 	Ref           string       `json:"ref,omitempty"`
@@ -152,4 +153,23 @@ type diffChunkEnvelope struct {
 type diffChunkPayload struct {
 	Data string `json:"data"`
 	EOF  bool   `json:"eof"`
+}
+
+// createGitCredentialRequest is the JSON body for CreateGitCredential.
+type createGitCredentialRequest struct {
+	RepoID   string `json:"repo_id"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password"`
+}
+
+// updateGitCredentialRequest is the JSON body for UpdateGitCredential.
+type updateGitCredentialRequest struct {
+	ID       string `json:"id"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password"`
+}
+
+// deleteGitCredentialRequest is the JSON body for DeleteGitCredential.
+type deleteGitCredentialRequest struct {
+	ID string `json:"id"`
 }

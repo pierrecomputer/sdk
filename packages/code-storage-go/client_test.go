@@ -637,3 +637,166 @@ func TestCreateRepoUserAgentHeader(t *testing.T) {
 		t.Fatalf("missing Code-Storage-Agent header")
 	}
 }
+
+func TestCreateRepoGenericGitBaseRepo(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"repo_id":"repo","url":"https://repo.git"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	_, err = client.CreateRepo(nil, CreateRepoOptions{
+		BaseRepo: GenericGitBaseRepo{
+			Provider:     RepoProviderGitLab,
+			Owner:        "myorg",
+			Name:         "myrepo",
+			UpstreamHost: "gitlab.example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create repo error: %v", err)
+	}
+
+	baseRepo, ok := receivedBody["base_repo"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected base_repo payload")
+	}
+	if baseRepo["provider"] != "gitlab" {
+		t.Fatalf("expected provider gitlab, got %v", baseRepo["provider"])
+	}
+	if baseRepo["owner"] != "myorg" {
+		t.Fatalf("expected owner myorg")
+	}
+	if baseRepo["upstream_host"] != "gitlab.example.com" {
+		t.Fatalf("expected upstream_host gitlab.example.com, got %v", baseRepo["upstream_host"])
+	}
+}
+
+func TestCreateGitCredential(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/git-credentials" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"cred-123"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	cred, err := client.CreateGitCredential(nil, CreateGitCredentialOptions{
+		RepoID:   "repo-abc",
+		Username: "user1",
+		Password: "s3cret",
+	})
+	if err != nil {
+		t.Fatalf("create credential error: %v", err)
+	}
+	if cred.ID != "cred-123" {
+		t.Fatalf("expected cred id cred-123, got %s", cred.ID)
+	}
+	if receivedBody["repo_id"] != "repo-abc" {
+		t.Fatalf("expected repo_id repo-abc")
+	}
+	if receivedBody["username"] != "user1" {
+		t.Fatalf("expected username user1")
+	}
+	if receivedBody["password"] != "s3cret" {
+		t.Fatalf("expected password s3cret")
+	}
+}
+
+func TestUpdateGitCredential(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("expected PUT, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/git-credentials" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"cred-456","created_at":"2024-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	cred, err := client.UpdateGitCredential(nil, UpdateGitCredentialOptions{
+		ID:       "cred-456",
+		Username: "user2",
+		Password: "newpassword",
+	})
+	if err != nil {
+		t.Fatalf("update credential error: %v", err)
+	}
+	if cred.ID != "cred-456" {
+		t.Fatalf("expected cred id cred-456, got %s", cred.ID)
+	}
+	if cred.CreatedAt != "2024-01-01T00:00:00Z" {
+		t.Fatalf("expected createdAt 2024-01-01T00:00:00Z, got %s", cred.CreatedAt)
+	}
+	if receivedBody["id"] != "cred-456" {
+		t.Fatalf("expected id cred-456 in request body")
+	}
+	if receivedBody["username"] != "user2" {
+		t.Fatalf("expected username user2 in request body")
+	}
+	if receivedBody["password"] != "newpassword" {
+		t.Fatalf("expected password newpassword in request body")
+	}
+}
+
+func TestDeleteGitCredential(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("expected DELETE, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/git-credentials" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&receivedBody)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	err = client.DeleteGitCredential(nil, DeleteGitCredentialOptions{
+		ID: "cred-789",
+	})
+	if err != nil {
+		t.Fatalf("delete credential error: %v", err)
+	}
+	if receivedBody["id"] != "cred-789" {
+		t.Fatalf("expected id cred-789 in request body, got %v", receivedBody["id"])
+	}
+}
