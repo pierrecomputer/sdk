@@ -551,6 +551,126 @@ func TestCreateBranchPayloadAndResponse(t *testing.T) {
 	}
 }
 
+func TestListTags(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/tags" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("cursor") != "start" || q.Get("limit") != "17" {
+			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
+		}
+		headerAgent := r.Header.Get("Code-Storage-Agent")
+		if headerAgent == "" || !strings.Contains(headerAgent, "code-storage-go-sdk/") {
+			t.Fatalf("missing Code-Storage-Agent header")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tags":[{"cursor":"c1","name":"v1.0.0","sha":"abc123"},{"cursor":"c2","name":"v1.0.1","sha":"def456"}],"next_cursor":"next","has_more":true}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListTags(nil, ListTagsOptions{Cursor: "start", Limit: 17})
+	if err != nil {
+		t.Fatalf("list tags error: %v", err)
+	}
+	if !result.HasMore || result.NextCursor != "next" {
+		t.Fatalf("unexpected pagination: %+v", result)
+	}
+	if len(result.Tags) != 2 || result.Tags[0].Name != "v1.0.0" || result.Tags[1].SHA != "def456" {
+		t.Fatalf("unexpected tags result: %+v", result)
+	}
+}
+
+func TestCreateTag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/tags" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		var body createTagRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Name != "v1.0.0" || body.Target != "0123456789abcdef0123456789abcdef01234567" {
+			t.Fatalf("unexpected create tag payload: %+v", body)
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := parseJWTFromToken(t, token)
+		if scopes, ok := claims["scopes"].([]interface{}); !ok || len(scopes) != 1 || scopes[0] != string(PermissionGitWrite) {
+			t.Fatalf("unexpected scopes: %#v", claims["scopes"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"v1.0.0","sha":"0123456789abcdef0123456789abcdef01234567","message":"tag created"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.CreateTag(nil, CreateTagOptions{
+		Name:   "v1.0.0",
+		Target: "0123456789abcdef0123456789abcdef01234567",
+	})
+	if err != nil {
+		t.Fatalf("create tag error: %v", err)
+	}
+	if result.Name != "v1.0.0" || result.Message != "tag created" {
+		t.Fatalf("unexpected create tag result: %+v", result)
+	}
+}
+
+func TestDeleteTag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/tags" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		var body deleteTagRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Name != "v1.0.0" {
+			t.Fatalf("unexpected delete tag payload: %+v", body)
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := parseJWTFromToken(t, token)
+		scopes, ok := claims["scopes"].([]interface{})
+		if !ok || len(scopes) != 2 || scopes[0] != string(PermissionGitRead) || scopes[1] != string(PermissionGitWrite) {
+			t.Fatalf("unexpected scopes: %#v", claims["scopes"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"v1.0.0","message":"tag deleted"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.DeleteTag(nil, DeleteTagOptions{Name: "v1.0.0"})
+	if err != nil {
+		t.Fatalf("delete tag error: %v", err)
+	}
+	if result.Name != "v1.0.0" || result.Message != "tag deleted" {
+		t.Fatalf("unexpected delete tag result: %+v", result)
+	}
+}
+
 func TestRestoreCommitSuccess(t *testing.T) {
 	var capturedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

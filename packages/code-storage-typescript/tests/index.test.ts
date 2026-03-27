@@ -1283,6 +1283,133 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('Repo tags', () => {
+    it('lists tags with pagination', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-list-tags' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe('/api/v1/repos/tags');
+        expect(requestUrl.searchParams.get('cursor')).toBe('start');
+        expect(requestUrl.searchParams.get('limit')).toBe('17');
+
+        const headers = init?.headers as Record<string, string>;
+        expect(headers.Authorization).toMatch(/^Bearer /);
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            tags: [
+              { cursor: 'c1', name: 'v1.0.0', sha: 'abc123' },
+              { cursor: 'c2', name: 'v1.0.1', sha: 'def456' },
+            ],
+            next_cursor: 'next',
+            has_more: true,
+          }),
+        } as any);
+      });
+
+      const result = await repo.listTags({ cursor: 'start', limit: 17 });
+
+      expect(result).toEqual({
+        tags: [
+          { cursor: 'c1', name: 'v1.0.0', sha: 'abc123' },
+          { cursor: 'c2', name: 'v1.0.1', sha: 'def456' },
+        ],
+        nextCursor: 'next',
+        hasMore: true,
+      });
+    });
+
+    it('creates and deletes tags with expected scopes', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-tags-write' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('POST');
+
+        const headers = requestInit.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['git:write']);
+
+        const body = JSON.parse(requestInit.body as string);
+        expect(body).toEqual({
+          name: 'v1.0.0',
+          target: '0123456789abcdef0123456789abcdef01234567',
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            name: 'v1.0.0',
+            sha: '0123456789abcdef0123456789abcdef01234567',
+            message: 'tag created',
+          }),
+        } as any);
+      });
+
+      const createResult = await repo.createTag({
+        name: 'v1.0.0',
+        target: '0123456789abcdef0123456789abcdef01234567',
+      });
+
+      expect(createResult).toEqual({
+        name: 'v1.0.0',
+        sha: '0123456789abcdef0123456789abcdef01234567',
+        message: 'tag created',
+      });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('DELETE');
+
+        const headers = requestInit.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['git:read', 'git:write']);
+
+        const body = JSON.parse(requestInit.body as string);
+        expect(body).toEqual({ name: 'v1.0.0' });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            name: 'v1.0.0',
+            message: 'tag deleted',
+          }),
+        } as any);
+      });
+
+      const deleteResult = await repo.deleteTag({ name: 'v1.0.0' });
+      expect(deleteResult).toEqual({
+        name: 'v1.0.0',
+        message: 'tag deleted',
+      });
+    });
+
+    it('validates tag names', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-tag-validation' });
+
+      await expect(
+        repo.createTag({ name: '', target: 'abc' })
+      ).rejects.toThrow('createTag name is required');
+      await expect(
+        repo.createTag({ name: 'refs/tags/v1.0.0', target: 'abc' })
+      ).rejects.toThrow('createTag name must not start with refs/');
+      await expect(repo.deleteTag({ name: '' })).rejects.toThrow(
+        'deleteTag name is required'
+      );
+    });
+  });
+
   describe('Repo getBranchDiff', () => {
     it('forwards ephemeralBase flag to the API params', async () => {
       const store = new GitStorage({ name: 'v0', key });
@@ -1877,6 +2004,32 @@ describe('GitStorage', () => {
         baseBranch: 'main',
         targetBranch: 'feature/test',
       });
+
+      expect(capturedHeaders).toBeDefined();
+      expect(capturedHeaders?.['Code-Storage-Agent']).toBeDefined();
+      expect(capturedHeaders?.['Code-Storage-Agent']).toMatch(
+        /code-storage-sdk\/\d+\.\d+\.\d+/
+      );
+    });
+
+    it('should include Code-Storage-Agent header in listTags API calls', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'test-tags' });
+
+      let capturedHeaders: Record<string, string> | undefined;
+      mockFetch.mockImplementationOnce((_url, init) => {
+        capturedHeaders = init?.headers as Record<string, string>;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            tags: [],
+            has_more: false,
+          }),
+        });
+      });
+
+      await repo.listTags();
 
       expect(capturedHeaders).toBeDefined();
       expect(capturedHeaders?.['Code-Storage-Agent']).toBeDefined();

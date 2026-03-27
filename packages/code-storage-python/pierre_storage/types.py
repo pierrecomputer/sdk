@@ -197,6 +197,37 @@ class CreateBranchResult(TypedDict):
     commit_sha: NotRequired[str]
 
 
+class TagInfo(TypedDict):
+    """Information about a tag."""
+
+    cursor: str
+    name: str
+    sha: str
+
+
+class ListTagsResult(TypedDict):
+    """Result from listing tags."""
+
+    tags: List[TagInfo]
+    next_cursor: Optional[str]
+    has_more: bool
+
+
+class CreateTagResult(TypedDict):
+    """Result from creating a tag."""
+
+    name: str
+    sha: str
+    message: str
+
+
+class DeleteTagResult(TypedDict):
+    """Result from deleting a tag."""
+
+    name: str
+    message: str
+
+
 # Removed: ListCommitsOptions - now uses **kwargs
 
 
@@ -563,6 +594,35 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> CreateBranchResult:
         """Create or promote a branch."""
+        ...
+
+    async def list_tags(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListTagsResult:
+        """List tags in the repository."""
+        ...
+
+    async def create_tag(
+        self,
+        *,
+        name: str,
+        target: str,
+        ttl: Optional[int] = None,
+    ) -> CreateTagResult:
+        """Create a tag."""
+        ...
+
+    async def delete_tag(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> DeleteTagResult:
+        """Delete a tag."""
         ...
 
     async def promote_ephemeral_branch(

@@ -79,6 +79,33 @@ fmt.Println(result.Files[0].LastCommitSHA)
 fmt.Println(result.Commits[result.Files[0].LastCommitSHA].Author)
 ```
 
+### Manage tags
+
+```go
+tags, err := repo.ListTags(context.Background(), storage.ListTagsOptions{Limit: 10})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(tags.Tags)
+
+createdTag, err := repo.CreateTag(context.Background(), storage.CreateTagOptions{
+	Name:   "v1.0.0",
+	Target: "0123456789abcdef0123456789abcdef01234567",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(createdTag.Message)
+
+deletedTag, err := repo.DeleteTag(context.Background(), storage.DeleteTagOptions{
+	Name: "v1.0.0",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(deletedTag.Message)
+```
+
 ### Create a commit
 
 ```go
@@ -161,5 +188,5 @@ Make sure the version in `version.go` (`PackageVersion`) matches the tag before 
 - Generate authenticated git remote URLs, including import and ephemeral variants.
 - Read files, read file metadata, download archives, list branches/commits, and run grep queries.
 - Create commits via streaming commit-pack or diff-commit endpoints.
-- Restore commits, manage git notes, and create branches.
+- Restore commits, manage git notes, create branches, and manage tags.
 - Validate webhook signatures and parse push events.

@@ -206,6 +206,21 @@ branch_result = await repo.create_branch(
 )
 print(branch_result["target_branch"], branch_result.get("commit_sha"))
 
+# List tags
+tags = await repo.list_tags(limit=10)
+print(tags["tags"])
+
+# Create a lightweight tag at a commit SHA
+tag_result = await repo.create_tag(
+    name="v1.0.0",
+    target="0123456789abcdef0123456789abcdef01234567",
+)
+print(tag_result["message"])
+
+# Delete a tag
+delete_result = await repo.delete_tag(name="v1.0.0")
+print(delete_result["message"])
+
 # List commits
 commits = await repo.list_commits(
     branch="main",  # optional

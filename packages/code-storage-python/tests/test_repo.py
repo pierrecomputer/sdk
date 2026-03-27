@@ -1006,6 +1006,103 @@ class TestRepoNoteOperations:
             assert delete_call.kwargs["json"] == {"sha": "abc123"}
 
 
+class TestRepoTagOperations:
+    """Tests for tag operations."""
+
+    @pytest.mark.asyncio
+    async def test_list_tags(self, git_storage_options: dict) -> None:
+        """Test listing tags."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        list_tags_response = MagicMock()
+        list_tags_response.status_code = 200
+        list_tags_response.is_success = True
+        list_tags_response.raise_for_status = MagicMock()
+        list_tags_response.json.return_value = {
+            "tags": [
+                {"cursor": "c1", "name": "v1.0.0", "sha": "abc123"},
+                {"cursor": "c2", "name": "v1.0.1", "sha": "def456"},
+            ],
+            "next_cursor": "next",
+            "has_more": True,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=list_tags_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.list_tags(cursor="start", limit=17)
+
+            assert result["next_cursor"] == "next"
+            assert result["has_more"] is True
+            assert result["tags"][0]["name"] == "v1.0.0"
+            assert result["tags"][1]["sha"] == "def456"
+
+            list_call = client_instance.get.call_args
+            assert "cursor=start" in list_call.args[0]
+            assert "limit=17" in list_call.args[0]
+
+    @pytest.mark.asyncio
+    async def test_create_and_delete_tag(self, git_storage_options: dict) -> None:
+        """Test creating and deleting tags."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        create_tag_response = MagicMock()
+        create_tag_response.status_code = 200
+        create_tag_response.is_success = True
+        create_tag_response.json.return_value = {
+            "name": "v1.0.0",
+            "sha": "0123456789abcdef0123456789abcdef01234567",
+            "message": "tag created",
+        }
+
+        delete_tag_response = MagicMock()
+        delete_tag_response.status_code = 200
+        delete_tag_response.is_success = True
+        delete_tag_response.json.return_value = {
+            "name": "v1.0.0",
+            "message": "tag deleted",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_response, create_tag_response])
+            client_instance.request = AsyncMock(return_value=delete_tag_response)
+
+            repo = await storage.create_repo(id="test-repo")
+
+            create_result = await repo.create_tag(
+                name="v1.0.0",
+                target="0123456789abcdef0123456789abcdef01234567",
+            )
+            assert create_result["message"] == "tag created"
+
+            delete_result = await repo.delete_tag(name="v1.0.0")
+            assert delete_result["message"] == "tag deleted"
+
+            create_call = client_instance.post.call_args_list[1]
+            assert create_call.kwargs["json"] == {
+                "name": "v1.0.0",
+                "target": "0123456789abcdef0123456789abcdef01234567",
+            }
+
+            delete_call = client_instance.request.call_args_list[0]
+            assert delete_call.args[0] == "DELETE"
+            assert delete_call.kwargs["json"] == {"name": "v1.0.0"}
+
+
 class TestRepoDiffOperations:
     """Tests for diff operations."""
 
@@ -1708,6 +1805,46 @@ class TestCodeStorageAgentHeaderInRepo:
             await repo.create_branch(base_branch="main", target_branch="feature/test")
 
             # Verify headers include Code-Storage-Agent
+            assert captured_headers is not None
+            assert "Code-Storage-Agent" in captured_headers
+            assert captured_headers["Code-Storage-Agent"] == get_user_agent()
+
+    @pytest.mark.asyncio
+    async def test_list_tags_includes_agent_header(self, git_storage_options: dict) -> None:
+        """Test that list_tags includes Code-Storage-Agent header."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock()
+        mock_response.json = MagicMock(
+            return_value={"repo_id": "test-repo", "url": "https://example.com/repo.git"}
+        )
+        mock_response.status_code = 200
+        mock_response.is_success = True
+
+        list_tags_response = MagicMock()
+        list_tags_response.json = MagicMock(return_value={"tags": [], "has_more": False})
+        list_tags_response.status_code = 200
+        list_tags_response.is_success = True
+        list_tags_response.raise_for_status = MagicMock()
+
+        captured_headers = None
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_get = AsyncMock(return_value=list_tags_response)
+
+            async def capture_get(*args, **kwargs):
+                nonlocal captured_headers
+                captured_headers = kwargs.get("headers")
+                return await mock_get(*args, **kwargs)
+
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            mock_client.return_value.__aenter__.return_value.get = capture_get
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.list_tags()
+
             assert captured_headers is not None
             assert "Code-Storage-Agent" in captured_headers
             assert captured_headers["Code-Storage-Agent"] == get_user_agent()
