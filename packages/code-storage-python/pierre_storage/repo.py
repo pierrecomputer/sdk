@@ -51,15 +51,18 @@ ZERO_DATETIME_UTC = datetime.min.replace(tzinfo=timezone.utc)
 class StreamingResponse:
     """Stream wrapper that keeps the HTTP client alive until closed."""
 
-    def __init__(self, response: httpx.Response, client: httpx.AsyncClient) -> None:
+    def __init__(self, response: httpx.Response, client: httpx.AsyncClient, stream_context: Any = None) -> None:
         self._response = response
         self._client = client
+        self._stream_context = stream_context
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._response, name)
 
     async def aclose(self) -> None:
         await self._response.aclose()
+        if self._stream_context is not None:
+            await self._stream_context.__aexit__(None, None, None)
         await self._client.aclose()
 
     async def __aenter__(self) -> "StreamingResponse":
@@ -264,7 +267,7 @@ class RepoImpl:
             await client.aclose()
             raise
 
-        return StreamingResponse(response, client)
+        return StreamingResponse(response, client, stream_context)
 
     async def get_archive_stream(
         self,
@@ -324,7 +327,7 @@ class RepoImpl:
             await client.aclose()
             raise
 
-        return StreamingResponse(response, client)
+        return StreamingResponse(response, client, stream_context)
 
     async def list_files(
         self,
