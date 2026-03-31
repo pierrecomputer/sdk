@@ -1,5 +1,6 @@
 """Repository implementation for Pierre Git Storage SDK."""
 
+import contextlib
 import warnings
 from datetime import datetime, timezone
 from types import TracebackType
@@ -51,7 +52,7 @@ ZERO_DATETIME_UTC = datetime.min.replace(tzinfo=timezone.utc)
 class StreamingResponse:
     """Stream wrapper that keeps the HTTP client alive until closed."""
 
-    def __init__(self, response: httpx.Response, client: httpx.AsyncClient, stream_context: Any = None) -> None:
+    def __init__(self, response: httpx.Response, client: httpx.AsyncClient, stream_context: Optional[contextlib.AbstractAsyncContextManager] = None) -> None:
         self._response = response
         self._client = client
         self._stream_context = stream_context
