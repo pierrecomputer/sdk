@@ -214,6 +214,24 @@ const branches = await repo.listBranches({
 });
 console.log(branches.branches);
 
+// List tags
+const tags = await repo.listTags({
+  limit: 10,
+  cursor: undefined, // for pagination
+});
+console.log(tags.tags);
+
+// Create a lightweight tag at a commit SHA
+const createdTag = await repo.createTag({
+  name: 'v1.0.0',
+  target: '0123456789abcdef0123456789abcdef01234567',
+});
+console.log(createdTag.message);
+
+// Delete a tag
+const deletedTag = await repo.deleteTag({ name: 'v1.0.0' });
+console.log(deletedTag.message);
+
 // List commits
 const commits = await repo.listCommits({
   branch: 'main', // optional

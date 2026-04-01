@@ -141,6 +141,29 @@ export const createBranchResponseSchema = z.object({
   commit_sha: z.string().nullable().optional(),
 });
 
+export const tagInfoSchema = z.object({
+  cursor: z.string(),
+  name: z.string(),
+  sha: z.string(),
+});
+
+export const listTagsResponseSchema = z.object({
+  tags: z.array(tagInfoSchema),
+  next_cursor: z.string().nullable().optional(),
+  has_more: z.boolean(),
+});
+
+export const createTagResponseSchema = z.object({
+  name: z.string(),
+  sha: z.string(),
+  message: z.string(),
+});
+
+export const deleteTagResponseSchema = z.object({
+  name: z.string(),
+  message: z.string(),
+});
+
 export const refUpdateResultSchema = z.object({
   branch: z.string(),
   old_sha: z.string(),
@@ -244,6 +267,10 @@ export type GetCommitDiffResponseRaw = z.infer<typeof commitDiffResponseSchema>;
 export type CreateBranchResponseRaw = z.infer<
   typeof createBranchResponseSchema
 >;
+export type RawTagInfo = z.infer<typeof tagInfoSchema>;
+export type ListTagsResponseRaw = z.infer<typeof listTagsResponseSchema>;
+export type CreateTagResponseRaw = z.infer<typeof createTagResponseSchema>;
+export type DeleteTagResponseRaw = z.infer<typeof deleteTagResponseSchema>;
 export type CommitPackAckRaw = z.infer<typeof commitPackAckSchema>;
 export type RestoreCommitAckRaw = z.infer<typeof restoreCommitAckSchema>;
 export type GrepResponseRaw = z.infer<typeof grepResponseSchema>;

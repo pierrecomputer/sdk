@@ -294,6 +294,50 @@ func (r *Repo) ListBranches(ctx context.Context, options ListBranchesOptions) (L
 	return result, nil
 }
 
+// ListTags lists tags.
+func (r *Repo) ListTags(ctx context.Context, options ListTagsOptions) (ListTagsResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return ListTagsResult{}, err
+	}
+
+	params := url.Values{}
+	if options.Cursor != "" {
+		params.Set("cursor", options.Cursor)
+	}
+	if options.Limit > 0 {
+		params.Set("limit", itoa(options.Limit))
+	}
+	if len(params) == 0 {
+		params = nil
+	}
+
+	resp, err := r.client.api.get(ctx, "repos/tags", params, jwtToken, nil)
+	if err != nil {
+		return ListTagsResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload listTagsResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return ListTagsResult{}, err
+	}
+
+	result := ListTagsResult{HasMore: payload.HasMore}
+	if payload.NextCursor != "" {
+		result.NextCursor = payload.NextCursor
+	}
+	for _, tag := range payload.Tags {
+		result.Tags = append(result.Tags, TagInfo{
+			Cursor: tag.Cursor,
+			Name:   tag.Name,
+			SHA:    tag.SHA,
+		})
+	}
+	return result, nil
+}
+
 // ListCommits lists commits.
 func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (ListCommitsResult, error) {
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -766,6 +810,80 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 		CommitSHA:         payload.CommitSHA,
 	}
 	return result, nil
+}
+
+// CreateTag creates a tag.
+func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateTagResult, error) {
+	name := strings.TrimSpace(options.Name)
+	if name == "" {
+		return CreateTagResult{}, errors.New("createTag name is required")
+	}
+	if strings.HasPrefix(name, "refs/") {
+		return CreateTagResult{}, errors.New("createTag name must not start with refs/")
+	}
+
+	target := strings.TrimSpace(options.Target)
+	if target == "" {
+		return CreateTagResult{}, errors.New("createTag target is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl})
+	if err != nil {
+		return CreateTagResult{}, err
+	}
+
+	body := &createTagRequest{Name: name, Target: target}
+	resp, err := r.client.api.post(ctx, "repos/tags", nil, body, jwtToken, nil)
+	if err != nil {
+		return CreateTagResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload createTagResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return CreateTagResult{}, err
+	}
+
+	return CreateTagResult{
+		Name:    payload.Name,
+		SHA:     payload.SHA,
+		Message: payload.Message,
+	}, nil
+}
+
+// DeleteTag deletes a tag.
+func (r *Repo) DeleteTag(ctx context.Context, options DeleteTagOptions) (DeleteTagResult, error) {
+	name := strings.TrimSpace(options.Name)
+	if name == "" {
+		return DeleteTagResult{}, errors.New("deleteTag name is required")
+	}
+	if strings.HasPrefix(name, "refs/") {
+		return DeleteTagResult{}, errors.New("deleteTag name must not start with refs/")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead, PermissionGitWrite}, TTL: ttl})
+	if err != nil {
+		return DeleteTagResult{}, err
+	}
+
+	body := &deleteTagRequest{Name: name}
+	resp, err := r.client.api.delete(ctx, "repos/tags", nil, body, jwtToken, nil)
+	if err != nil {
+		return DeleteTagResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload deleteTagResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return DeleteTagResult{}, err
+	}
+
+	return DeleteTagResult{
+		Name:    payload.Name,
+		Message: payload.Message,
+	}, nil
 }
 
 // RestoreCommit restores a commit into a branch.

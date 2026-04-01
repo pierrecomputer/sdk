@@ -3,6 +3,8 @@
  */
 import type {
   CreateBranchResponseRaw,
+  CreateTagResponseRaw,
+  DeleteTagResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
   ListBranchesResponseRaw,
@@ -10,6 +12,7 @@ import type {
   ListFilesResponseRaw,
   ListFilesWithMetadataResponseRaw,
   ListReposResponseRaw,
+  ListTagsResponseRaw,
   NoteReadResponseRaw,
   NoteWriteResponseRaw,
   RawBranchInfo as SchemaRawBranchInfo,
@@ -20,6 +23,7 @@ import type {
   RawFilteredFile as SchemaRawFilteredFile,
   RawRepoBaseInfo as SchemaRawRepoBaseInfo,
   RawRepoInfo as SchemaRawRepoInfo,
+  RawTagInfo as SchemaRawTagInfo,
 } from './schemas';
 
 export interface OverrideableGitStorageOptions {
@@ -57,7 +61,10 @@ export interface Repo {
     options?: ListFilesWithMetadataOptions
   ): Promise<ListFilesWithMetadataResult>;
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
+  listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
+  createTag(options: CreateTagOptions): Promise<CreateTagResult>;
+  deleteTag(options: DeleteTagOptions): Promise<DeleteTagResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
@@ -319,6 +326,51 @@ export interface CreateBranchResult {
   targetBranch: string;
   targetIsEphemeral: boolean;
   commitSha?: string;
+}
+
+export interface ListTagsOptions extends GitStorageInvocationOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+export type RawTagInfo = SchemaRawTagInfo;
+
+export interface TagInfo {
+  cursor: string;
+  name: string;
+  sha: string;
+}
+
+export type ListTagsResponse = ListTagsResponseRaw;
+
+export interface ListTagsResult {
+  tags: TagInfo[];
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
+export interface CreateTagOptions extends GitStorageInvocationOptions {
+  name: string;
+  target: string;
+}
+
+export type CreateTagResponse = CreateTagResponseRaw;
+
+export interface CreateTagResult {
+  name: string;
+  sha: string;
+  message: string;
+}
+
+export interface DeleteTagOptions extends GitStorageInvocationOptions {
+  name: string;
+}
+
+export type DeleteTagResponse = DeleteTagResponseRaw;
+
+export interface DeleteTagResult {
+  name: string;
+  message: string;
 }
 
 // List Commits API types

@@ -100,6 +100,15 @@ type createBranchRequest struct {
 	TargetIsEphemeral bool   `json:"target_is_ephemeral,omitempty"`
 }
 
+type createTagRequest struct {
+	Name   string `json:"name"`
+	Target string `json:"target"`
+}
+
+type deleteTagRequest struct {
+	Name string `json:"name"`
+}
+
 // commitMetadataPayload is the JSON body for commit metadata.
 type commitMetadataPayload struct {
 	TargetBranch    string             `json:"target_branch"`

@@ -141,6 +141,29 @@ type createBranchResponse struct {
 	CommitSHA         string `json:"commit_sha"`
 }
 
+type listTagsResponse struct {
+	Tags       []tagInfoRaw `json:"tags"`
+	NextCursor string       `json:"next_cursor"`
+	HasMore    bool         `json:"has_more"`
+}
+
+type tagInfoRaw struct {
+	Cursor string `json:"cursor"`
+	Name   string `json:"name"`
+	SHA    string `json:"sha"`
+}
+
+type createTagResponse struct {
+	Name    string `json:"name"`
+	SHA     string `json:"sha"`
+	Message string `json:"message"`
+}
+
+type deleteTagResponse struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+
 type grepResponse struct {
 	Query struct {
 		Pattern       string `json:"pattern"`

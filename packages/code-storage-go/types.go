@@ -302,6 +302,53 @@ type CreateBranchResult struct {
 	CommitSHA         string
 }
 
+// ListTagsOptions configures list tags.
+type ListTagsOptions struct {
+	InvocationOptions
+	Cursor string
+	Limit  int
+}
+
+// TagInfo describes a tag.
+type TagInfo struct {
+	Cursor string
+	Name   string
+	SHA    string
+}
+
+// ListTagsResult describes tags list.
+type ListTagsResult struct {
+	Tags       []TagInfo
+	NextCursor string
+	HasMore    bool
+}
+
+// CreateTagOptions configures tag creation.
+type CreateTagOptions struct {
+	InvocationOptions
+	Name   string
+	Target string
+}
+
+// CreateTagResult describes tag creation result.
+type CreateTagResult struct {
+	Name    string
+	SHA     string
+	Message string
+}
+
+// DeleteTagOptions configures tag deletion.
+type DeleteTagOptions struct {
+	InvocationOptions
+	Name string
+}
+
+// DeleteTagResult describes tag deletion result.
+type DeleteTagResult struct {
+	Name    string
+	Message string
+}
+
 // ListCommitsOptions configures list commits.
 type ListCommitsOptions struct {
 	InvocationOptions

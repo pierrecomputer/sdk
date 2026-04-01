@@ -19,6 +19,8 @@ import {
   branchDiffResponseSchema,
   commitDiffResponseSchema,
   createBranchResponseSchema,
+  createTagResponseSchema,
+  deleteTagResponseSchema,
   errorEnvelopeSchema,
   grepResponseSchema,
   listBranchesResponseSchema,
@@ -26,6 +28,7 @@ import {
   listFilesResponseSchema,
   listFilesWithMetadataResponseSchema,
   listReposResponseSchema,
+  listTagsResponseSchema,
   noteReadResponseSchema,
   noteWriteResponseSchema,
   restoreCommitAckSchema,
@@ -44,9 +47,15 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateTagOptions,
+  CreateTagResponse,
+  CreateTagResult,
   CreateGitCredentialOptions,
   CreateNoteOptions,
   CreateRepoOptions,
+  DeleteTagOptions,
+  DeleteTagResponse,
+  DeleteTagResult,
   DeleteGitCredentialOptions,
   DeleteNoteOptions,
   DeleteRepoOptions,
@@ -88,6 +97,9 @@ import type {
   ListReposOptions,
   ListReposResponse,
   ListReposResult,
+  ListTagsOptions,
+  ListTagsResponse,
+  ListTagsResult,
   NoteWriteResult,
   PullUpstreamOptions,
   RawBranchInfo,
@@ -96,11 +108,13 @@ import type {
   RawFileWithMetadata,
   RawFileDiff,
   RawFilteredFile,
+  RawTagInfo,
   RefUpdate,
   RepoOptions,
   Repo,
   RestoreCommitOptions,
   RestoreCommitResult,
+  TagInfo,
   UpdateGitCredentialOptions,
   ValidAPIVersion,
 } from './types';
@@ -441,6 +455,37 @@ function transformCreateBranchResult(
     targetBranch: raw.target_branch,
     targetIsEphemeral: raw.target_is_ephemeral,
     commitSha: raw.commit_sha ?? undefined,
+  };
+}
+
+function transformTagInfo(raw: RawTagInfo): TagInfo {
+  return {
+    cursor: raw.cursor,
+    name: raw.name,
+    sha: raw.sha,
+  };
+}
+
+function transformListTagsResult(raw: ListTagsResponse): ListTagsResult {
+  return {
+    tags: raw.tags.map(transformTagInfo),
+    nextCursor: raw.next_cursor ?? undefined,
+    hasMore: raw.has_more,
+  };
+}
+
+function transformCreateTagResult(raw: CreateTagResponse): CreateTagResult {
+  return {
+    name: raw.name,
+    sha: raw.sha,
+    message: raw.message,
+  };
+}
+
+function transformDeleteTagResult(raw: DeleteTagResponse): DeleteTagResult {
+  return {
+    name: raw.name,
+    message: raw.message,
   };
 }
 
@@ -794,6 +839,36 @@ class RepoImpl implements Repo {
 
     const raw = listBranchesResponseSchema.parse(await response.json());
     return transformListBranchesResult({
+      ...raw,
+      next_cursor: raw.next_cursor ?? undefined,
+    });
+  }
+
+  async listTags(options?: ListTagsOptions): Promise<ListTagsResult> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const cursor = options?.cursor;
+    const limit = options?.limit;
+
+    let params: Record<string, string> | undefined;
+
+    if (typeof cursor === 'string' || typeof limit === 'number') {
+      params = {};
+      if (typeof cursor === 'string') {
+        params.cursor = cursor;
+      }
+      if (typeof limit === 'number') {
+        params.limit = limit.toString();
+      }
+    }
+
+    const response = await this.api.get({ path: 'repos/tags', params }, jwt);
+    const raw = listTagsResponseSchema.parse(await response.json());
+    return transformListTagsResult({
       ...raw,
       next_cursor: raw.next_cursor ?? undefined,
     });
@@ -1213,6 +1288,57 @@ class RepoImpl implements Repo {
     );
     const raw = createBranchResponseSchema.parse(await response.json());
     return transformCreateBranchResult(raw);
+  }
+
+  async createTag(options: CreateTagOptions): Promise<CreateTagResult> {
+    const name = options?.name?.trim();
+    if (!name) {
+      throw new Error('createTag name is required');
+    }
+    if (name.startsWith('refs/')) {
+      throw new Error('createTag name must not start with refs/');
+    }
+
+    const target = options?.target?.trim();
+    if (!target) {
+      throw new Error('createTag target is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:write'],
+      ttl,
+    });
+
+    const response = await this.api.post(
+      { path: 'repos/tags', body: { name, target } },
+      jwt
+    );
+    const raw = createTagResponseSchema.parse(await response.json());
+    return transformCreateTagResult(raw);
+  }
+
+  async deleteTag(options: DeleteTagOptions): Promise<DeleteTagResult> {
+    const name = options?.name?.trim();
+    if (!name) {
+      throw new Error('deleteTag name is required');
+    }
+    if (name.startsWith('refs/')) {
+      throw new Error('deleteTag name must not start with refs/');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read', 'git:write'],
+      ttl,
+    });
+
+    const response = await this.api.delete(
+      { path: 'repos/tags', body: { name } },
+      jwt
+    );
+    const raw = deleteTagResponseSchema.parse(await response.json());
+    return transformDeleteTagResult(raw);
   }
 
   async restoreCommit(
