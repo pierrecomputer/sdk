@@ -1098,6 +1098,41 @@ class TestPublicJWTHelper:
         assert payload["scopes"] == ["git:write", "git:read", "repo:write"]
         assert payload["exp"] - payload["iat"] == 7200
 
+    def test_generate_jwt_with_ops(self, test_key: str) -> None:
+        """Test JWT generation with policy operations."""
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+            ops=["no-force-push"],
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert payload["ops"] == ["no-force-push"]
+
+    def test_generate_jwt_without_ops(self, test_key: str) -> None:
+        """Test JWT generation omits ops when not provided."""
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert "ops" not in payload
+
+    def test_generate_jwt_with_empty_ops(self, test_key: str) -> None:
+        """Test JWT generation omits ops when empty list."""
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+            ops=[],
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert "ops" not in payload
+
     def test_generate_jwt_default_ttl(self, test_key: str) -> None:
         """Test JWT generation uses 1 year default TTL."""
         token = generate_jwt(

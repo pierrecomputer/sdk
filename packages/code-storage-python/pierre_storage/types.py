@@ -41,6 +41,15 @@ class GitStorageOptions(TypedDict, total=False):
     default_ttl: Optional[int]
 
 
+# Op is a policy operation included in the JWT.
+Op = str
+
+OP_NO_FORCE_PUSH: Op = "no-force-push"
+
+# Ops is a list of policy operations.
+Ops = List[Op]
+
+
 class PublicGitHubBaseRepoAuth(TypedDict):
     """Authentication mode for GitHub base repositories."""
 
@@ -508,6 +517,7 @@ class Repo(Protocol):
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get the remote URL for the repository."""
         ...
@@ -517,6 +527,7 @@ class Repo(Protocol):
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get the import remote URL for the repository."""
         ...
@@ -526,6 +537,7 @@ class Repo(Protocol):
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get the ephemeral remote URL for the repository."""
         ...

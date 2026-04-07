@@ -1831,6 +1831,42 @@ describe('GitStorage', () => {
       expect(jwt1).not.toBe(jwt2);
     });
 
+    it('should include ops in JWT when provided', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      const url = await repo.getRemoteURL({
+        ops: ['no-force-push'],
+      });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload.ops).toEqual(['no-force-push']);
+    });
+
+    it('should not include ops in JWT when not provided', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+      const url = await repo.getRemoteURL();
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload).not.toHaveProperty('ops');
+    });
+
+    it('should not include ops in JWT when empty array', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+      const url = await repo.getRemoteURL({ ops: [] });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload).not.toHaveProperty('ops');
+    });
+
     it('should include repo ID in URL path and JWT payload', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const customRepoId = 'my-custom-repo';

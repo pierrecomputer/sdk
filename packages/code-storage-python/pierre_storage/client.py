@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -608,6 +608,7 @@ class GitStorage:
         """
         permissions = ["git:write", "git:read"]
         ttl: int = 31536000  # 1 year default
+        ops: Optional[List[str]] = None
 
         if options:
             if "permissions" in options:
@@ -616,6 +617,8 @@ class GitStorage:
                 option_ttl = options["ttl"]
                 if isinstance(option_ttl, int):
                     ttl = option_ttl
+            if "ops" in options:
+                ops = options["ops"]
         elif "default_ttl" in self.options:
             default_ttl = self.options["default_ttl"]
             if isinstance(default_ttl, int):
@@ -627,6 +630,7 @@ class GitStorage:
             repo_id,
             permissions,
             ttl,
+            ops,
         )
 
 

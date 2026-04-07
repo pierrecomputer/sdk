@@ -1849,6 +1849,7 @@ export class GitStorage {
       scopes: permissions,
       iat: now,
       exp: now + ttl,
+      ...(options?.ops && options.ops.length > 0 ? { ops: options.ops } : {}),
     };
 
     // Sign the JWT with the key as the secret

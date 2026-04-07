@@ -13,6 +13,7 @@ def generate_jwt(
     repo_id: str,
     scopes: Optional[List[str]] = None,
     ttl: int = 31536000,  # 1 year default
+    ops: Optional[List[str]] = None,
 ) -> str:
     """Generate a JWT token for Git storage authentication.
 
@@ -22,6 +23,7 @@ def generate_jwt(
         repo_id: Repository identifier
         scopes: List of permission scopes (defaults to ['git:write', 'git:read'])
         ttl: Time-to-live in seconds (defaults to 1 year)
+        ops: List of policy operations (e.g., ['no-force-push'])
 
     Returns:
         Signed JWT token string
@@ -41,6 +43,8 @@ def generate_jwt(
         "iat": now,
         "exp": now + ttl,
     }
+    if ops:
+        payload["ops"] = ops
 
     # Load the private key and determine algorithm
     try:

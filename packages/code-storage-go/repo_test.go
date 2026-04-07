@@ -67,6 +67,42 @@ func TestImportRemoteURL(t *testing.T) {
 	}
 }
 
+func TestRemoteURLOps(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, StorageBaseURL: "acme.code.storage"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo-1", DefaultBranch: "main", client: client}
+
+	t.Run("includes ops in JWT when provided", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{
+			Ops: Ops{OpNoForcePush},
+		})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		ops, ok := claims["ops"].([]interface{})
+		if !ok {
+			t.Fatalf("expected ops claim to be a list")
+		}
+		if len(ops) != 1 || ops[0] != "no-force-push" {
+			t.Fatalf("unexpected ops: %v", ops)
+		}
+	})
+
+	t.Run("omits ops from JWT when not provided", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		if _, ok := claims["ops"]; ok {
+			t.Fatalf("expected no ops claim")
+		}
+	})
+}
+
 func TestListFilesEphemeral(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/files" {

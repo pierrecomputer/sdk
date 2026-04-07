@@ -167,12 +167,14 @@ class RepoImpl:
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
+            ops: List of policy operations (e.g., ["no-force-push"])
 
         Returns:
             Git remote URL with embedded JWT
@@ -182,6 +184,8 @@ class RepoImpl:
             options["permissions"] = permissions
         if ttl is not None:
             options["ttl"] = ttl
+        if ops is not None:
+            options["ops"] = ops
 
         jwt_token = self.generate_jwt(self._id, options if options else None)
         url = f"https://t:{jwt_token}@{self.storage_base_url}/{self._id}.git"
@@ -192,17 +196,19 @@ class RepoImpl:
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get import remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
+            ops: List of policy operations (e.g., ["no-force-push"])
 
         Returns:
             Git remote URL with embedded JWT pointing to import namespace
         """
-        url = await self.get_remote_url(permissions=permissions, ttl=ttl)
+        url = await self.get_remote_url(permissions=permissions, ttl=ttl, ops=ops)
         return url.replace(".git", "+import.git")
 
     async def get_ephemeral_remote_url(
@@ -210,17 +216,19 @@ class RepoImpl:
         *,
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[list[str]] = None,
     ) -> str:
         """Get ephemeral remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
+            ops: List of policy operations (e.g., ["no-force-push"])
 
         Returns:
             Git remote URL with embedded JWT pointing to ephemeral namespace
         """
-        url = await self.get_remote_url(permissions=permissions, ttl=ttl)
+        url = await self.get_remote_url(permissions=permissions, ttl=ttl, ops=ops)
         return url.replace(".git", "+ephemeral.git")
 
     async def get_file_stream(
