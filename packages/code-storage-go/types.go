@@ -30,10 +30,21 @@ type Options struct {
 	HTTPClient     *http.Client
 }
 
+// Op is a policy operation included in the JWT.
+type Op = string
+
+const (
+	OpNoForcePush Op = "no-force-push"
+)
+
+// Ops is a list of policy operations.
+type Ops []Op
+
 // RemoteURLOptions configure token generation for remote URLs.
 type RemoteURLOptions struct {
 	Permissions []Permission
 	TTL         time.Duration
+	Ops         Ops
 }
 
 // InvocationOptions holds common request options.

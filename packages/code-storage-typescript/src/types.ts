@@ -41,9 +41,18 @@ export interface GitStorageOptions extends OverrideableGitStorageOptions {
 
 export type ValidAPIVersion = 1;
 
+/** A policy operation included in the JWT. */
+export type Op = string;
+
+export const OP_NO_FORCE_PUSH: Op = 'no-force-push';
+
+/** A list of policy operations. */
+export type Ops = Op[];
+
 export interface GetRemoteURLOptions {
   permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
   ttl?: number;
+  ops?: Ops;
 }
 
 export interface Repo {
