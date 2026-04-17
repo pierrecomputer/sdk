@@ -1255,9 +1255,10 @@ class RepoImpl implements Repo {
   async createBranch(
     options: CreateBranchOptions
   ): Promise<CreateBranchResult> {
-    const baseBranch = options?.baseBranch?.trim();
-    if (!baseBranch) {
-      throw new Error('createBranch baseBranch is required');
+    const baseRef = options?.baseRef?.trim() || undefined;
+    const baseBranch = options?.baseBranch?.trim() || undefined;
+    if (!baseRef && !baseBranch) {
+      throw new Error('createBranch baseRef or baseBranch is required');
     }
     const targetBranch = options?.targetBranch?.trim();
     if (!targetBranch) {
@@ -1271,9 +1272,13 @@ class RepoImpl implements Repo {
     });
 
     const body: Record<string, unknown> = {
-      base_branch: baseBranch,
       target_branch: targetBranch,
     };
+    if (baseRef) {
+      body.base_ref = baseRef;
+    } else {
+      body.base_branch = baseBranch;
+    }
 
     if (options.baseIsEphemeral === true) {
       body.base_is_ephemeral = true;

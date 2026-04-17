@@ -276,14 +276,17 @@ const commitDiff = await repo.getCommitDiff({
 console.log(commitDiff.stats);
 console.log(commitDiff.files);
 
-// Create a new branch from an existing one
+// Create a new branch from an existing ref
 const branch = await repo.createBranch({
-  baseBranch: 'main',
+  baseRef: 'refs/heads/main',
   targetBranch: 'feature/demo',
   // baseIsEphemeral: true,
   // targetIsEphemeral: true,
 });
 console.log(branch.targetBranch, branch.commitSha);
+
+// `baseBranch` is still accepted for backwards compatibility, but deprecated.
+// Prefer `baseRef` for new code.
 
 // Create a commit using the streaming helper
 const fs = await import('node:fs/promises');

@@ -299,6 +299,8 @@ type ListBranchesResult struct {
 // CreateBranchOptions configures branch creation.
 type CreateBranchOptions struct {
 	InvocationOptions
+	BaseRef string
+	// Deprecated: use BaseRef instead.
 	BaseBranch        string
 	TargetBranch      string
 	BaseIsEphemeral   bool

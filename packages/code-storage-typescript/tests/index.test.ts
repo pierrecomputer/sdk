@@ -1178,7 +1178,7 @@ describe('GitStorage', () => {
   });
 
   describe('Repo createBranch', () => {
-    it('posts to create branch endpoint and returns parsed result', async () => {
+    it('posts baseRef to create branch endpoint and returns parsed result', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({ id: 'repo-create-branch' });
 
@@ -1196,7 +1196,7 @@ describe('GitStorage', () => {
 
         const body = JSON.parse(requestInit.body as string);
         expect(body).toEqual({
-          base_branch: 'main',
+          base_ref: 'refs/heads/main',
           base_is_ephemeral: true,
           target_branch: 'feature/demo',
           target_is_ephemeral: true,
@@ -1216,8 +1216,8 @@ describe('GitStorage', () => {
       });
 
       const result = await repo.createBranch({
-        baseBranch: 'main',
-        targetBranch: 'feature/demo',
+        baseRef: ' refs/heads/main ',
+        targetBranch: ' feature/demo ',
         baseIsEphemeral: true,
         targetIsEphemeral: true,
       });
@@ -1227,6 +1227,65 @@ describe('GitStorage', () => {
         targetBranch: 'feature/demo',
         targetIsEphemeral: true,
         commitSha: 'abc123',
+      });
+    });
+
+    it('falls back to deprecated baseBranch when baseRef is absent', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-create-branch-fallback' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        expect(body).toEqual({
+          base_branch: 'main',
+          target_branch: 'feature/demo',
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            message: 'branch created',
+            target_branch: 'feature/demo',
+            target_is_ephemeral: false,
+          }),
+        } as any);
+      });
+
+      await repo.createBranch({
+        baseBranch: ' main ',
+        targetBranch: 'feature/demo',
+      });
+    });
+
+    it('prefers baseRef when both baseRef and baseBranch are provided', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-create-branch-precedence' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        expect(body).toEqual({
+          base_ref: 'refs/heads/main',
+          target_branch: 'feature/demo',
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            message: 'branch created',
+            target_branch: 'feature/demo',
+            target_is_ephemeral: false,
+          }),
+        } as any);
+      });
+
+      await repo.createBranch({
+        baseRef: 'refs/heads/main',
+        baseBranch: 'main',
+        targetBranch: 'feature/demo',
       });
     });
 
@@ -1254,7 +1313,7 @@ describe('GitStorage', () => {
       });
 
       const result = await repo.createBranch({
-        baseBranch: 'main',
+        baseRef: 'refs/heads/main',
         targetBranch: 'feature/demo',
         ttl: 600,
       });
@@ -1267,18 +1326,26 @@ describe('GitStorage', () => {
       });
     });
 
-    it('requires both base and target branches', async () => {
+    it('requires an effective base source and target branch', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({
         id: 'repo-create-branch-validation',
       });
 
       await expect(
-        repo.createBranch({ baseBranch: '', targetBranch: 'feature/demo' })
-      ).rejects.toThrow('createBranch baseBranch is required');
+        repo.createBranch({ baseRef: '', targetBranch: 'feature/demo' })
+      ).rejects.toThrow('createBranch baseRef or baseBranch is required');
 
       await expect(
-        repo.createBranch({ baseBranch: 'main', targetBranch: '' })
+        repo.createBranch({
+          baseRef: '   ',
+          baseBranch: ' ',
+          targetBranch: 'feature/demo',
+        })
+      ).rejects.toThrow('createBranch baseRef or baseBranch is required');
+
+      await expect(
+        repo.createBranch({ baseRef: 'refs/heads/main', targetBranch: '' })
       ).rejects.toThrow('createBranch targetBranch is required');
     });
   });

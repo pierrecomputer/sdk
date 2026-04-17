@@ -322,7 +322,9 @@ export interface ListBranchesResult {
 
 // Create Branch API types
 export interface CreateBranchOptions extends GitStorageInvocationOptions {
-  baseBranch: string;
+  baseRef?: string;
+  /** @deprecated Use baseRef instead. */
+  baseBranch?: string;
   targetBranch: string;
   baseIsEphemeral?: boolean;
   targetIsEphemeral?: boolean;

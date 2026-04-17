@@ -599,13 +599,17 @@ class Repo(Protocol):
     async def create_branch(
         self,
         *,
-        base_branch: str,
+        base_ref: Optional[str] = None,
+        base_branch: Optional[str] = None,
         target_branch: str,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
     ) -> CreateBranchResult:
-        """Create or promote a branch."""
+        """Create or promote a branch.
+
+        base_branch is deprecated; prefer base_ref.
+        """
         ...
 
     async def list_tags(

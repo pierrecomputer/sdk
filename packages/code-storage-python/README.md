@@ -198,7 +198,7 @@ print(branches["branches"])
 
 # Create or promote a branch (synchronous Temporal workflow)
 branch_result = await repo.create_branch(
-    base_branch="main",
+    base_ref="main",
     target_branch="feature/preview",
     base_is_ephemeral=False,   # set True when the base lives in the ephemeral namespace
     target_is_ephemeral=True,  # set True to create an ephemeral branch
@@ -465,6 +465,9 @@ result = await repo.promote_ephemeral_branch(
 print(result["target_branch"])  # "feature/awesome-change"
 ```
 
+`promote_ephemeral_branch()` keeps its branch-oriented `base_branch` parameter.
+Use `create_branch(base_ref=...)` for new code when you need to choose the base.
+
 **Key points about ephemeral branches:**
 
 - Ephemeral branches are stored separately from regular branches
@@ -669,7 +672,8 @@ class Repo:
     async def create_branch(
         self,
         *,
-        base_branch: str,
+        base_ref: Optional[str] = None,
+        base_branch: Optional[str] = None,  # deprecated
         target_branch: str,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
