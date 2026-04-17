@@ -286,9 +286,7 @@ class TestRepoFileOperations:
             assert params.get("ref") == ["feature/demo"]
 
     @pytest.mark.asyncio
-    async def test_list_files_with_metadata_ephemeral_flag(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_files_with_metadata_ephemeral_flag(self, git_storage_options: dict) -> None:
         """Ensure ephemeral flag propagates to list files with metadata."""
         storage = GitStorage(git_storage_options)
 
@@ -392,9 +390,7 @@ class TestRepoFileOperations:
             )
 
     @pytest.mark.asyncio
-    async def test_list_files_with_metadata_custom_ttl(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_files_with_metadata_custom_ttl(self, git_storage_options: dict) -> None:
         """Ensure custom TTL propagates to list files with metadata JWT."""
         storage = GitStorage(git_storage_options)
         custom_ttl = 900
@@ -624,8 +620,8 @@ class TestRepoBranchOperations:
             assert result["has_more"] is True
 
     @pytest.mark.asyncio
-    async def test_create_branch(self, git_storage_options: dict) -> None:
-        """Test creating a branch using the REST API."""
+    async def test_create_branch_prefers_base_ref(self, git_storage_options: dict) -> None:
+        """Test creating a branch prefers the new base_ref payload."""
         storage = GitStorage(git_storage_options)
 
         create_repo_response = MagicMock()
@@ -651,7 +647,7 @@ class TestRepoBranchOperations:
 
             repo = await storage.create_repo(id="test-repo")
             result = await repo.create_branch(
-                base_branch="main",
+                base_ref="main",
                 target_branch="feature/demo",
                 target_is_ephemeral=True,
             )
@@ -661,14 +657,175 @@ class TestRepoBranchOperations:
             assert result["target_is_ephemeral"] is True
             assert result["commit_sha"] == "abc123"
 
-            # Ensure the API call was issued with the expected payload
             assert client_instance.post.await_count == 2
             branch_call = client_instance.post.await_args_list[1]
             assert branch_call.args[0].endswith("/api/v1/repos/branches/create")
             payload = branch_call.kwargs["json"]
-            assert payload["base_branch"] == "main"
+            assert payload["base_ref"] == "main"
+            assert "base_branch" not in payload
             assert payload["target_branch"] == "feature/demo"
             assert payload["target_is_ephemeral"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_branch_falls_back_to_deprecated_base_branch(
+        self, git_storage_options: dict
+    ) -> None:
+        """Test create_branch still supports deprecated base_branch."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        create_branch_response = MagicMock()
+        create_branch_response.status_code = 200
+        create_branch_response.is_success = True
+        create_branch_response.json.return_value = {
+            "message": "branch created",
+            "target_branch": "feature/demo",
+            "target_is_ephemeral": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(
+                side_effect=[create_repo_response, create_branch_response]
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            with pytest.warns(DeprecationWarning, match="base_branch is deprecated"):
+                result = await repo.create_branch(
+                    base_branch=" main ",
+                    target_branch=" feature/demo ",
+                )
+
+            assert result["target_branch"] == "feature/demo"
+            branch_call = client_instance.post.await_args_list[1]
+            payload = branch_call.kwargs["json"]
+            assert payload["base_branch"] == "main"
+            assert "base_ref" not in payload
+            assert payload["target_branch"] == "feature/demo"
+
+    @pytest.mark.asyncio
+    async def test_create_branch_prefers_base_ref_when_both_are_provided(
+        self, git_storage_options: dict
+    ) -> None:
+        """Test create_branch prefers base_ref over deprecated base_branch."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        create_branch_response = MagicMock()
+        create_branch_response.status_code = 200
+        create_branch_response.is_success = True
+        create_branch_response.json.return_value = {
+            "message": "branch created",
+            "target_branch": "feature/demo",
+            "target_is_ephemeral": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(
+                side_effect=[create_repo_response, create_branch_response]
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            with pytest.warns(DeprecationWarning, match="base_branch is deprecated"):
+                await repo.create_branch(
+                    base_ref="refs/tags/v1.2.3",
+                    base_branch="main",
+                    target_branch="feature/demo",
+                )
+
+            payload = client_instance.post.await_args_list[1].kwargs["json"]
+            assert payload["base_ref"] == "refs/tags/v1.2.3"
+            assert "base_branch" not in payload
+
+    @pytest.mark.asyncio
+    async def test_create_branch_blank_base_ref_falls_back_to_base_branch(
+        self, git_storage_options: dict
+    ) -> None:
+        """Blank base_ref should be treated as missing after trimming."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        create_branch_response = MagicMock()
+        create_branch_response.status_code = 200
+        create_branch_response.is_success = True
+        create_branch_response.json.return_value = {
+            "message": "branch created",
+            "target_branch": "feature/demo",
+            "target_is_ephemeral": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(
+                side_effect=[create_repo_response, create_branch_response]
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            with pytest.warns(DeprecationWarning, match="base_branch is deprecated"):
+                await repo.create_branch(
+                    base_ref="   ",
+                    base_branch="main",
+                    target_branch="feature/demo",
+                )
+
+            payload = client_instance.post.await_args_list[1].kwargs["json"]
+            assert payload["base_branch"] == "main"
+            assert "base_ref" not in payload
+
+    @pytest.mark.asyncio
+    async def test_create_branch_requires_effective_base(self, git_storage_options: dict) -> None:
+        """create_branch requires a non-blank base_ref or base_branch."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ValueError, match="base_ref or base_branch is required"):
+                await repo.create_branch(
+                    base_ref="  ",
+                    base_branch=" ",
+                    target_branch="feature/demo",
+                )
+
+    @pytest.mark.asyncio
+    async def test_create_branch_requires_target_branch(self, git_storage_options: dict) -> None:
+        """create_branch still requires a non-blank target branch."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ValueError, match="target_branch is required"):
+                await repo.create_branch(base_ref="main", target_branch="  ")
 
     @pytest.mark.asyncio
     async def test_promote_ephemeral_branch_defaults(self, git_storage_options: dict) -> None:
@@ -706,7 +863,7 @@ class TestRepoBranchOperations:
             branch_call = client_instance.post.await_args_list[1]
             assert branch_call.args[0].endswith("/api/v1/repos/branches/create")
             payload = branch_call.kwargs["json"]
-            assert payload["base_branch"] == "ephemeral/demo"
+            assert payload["base_ref"] == "ephemeral/demo"
             assert payload["target_branch"] == "ephemeral/demo"
             assert payload["base_is_ephemeral"] is True
             assert payload["target_is_ephemeral"] is False
@@ -749,7 +906,7 @@ class TestRepoBranchOperations:
             assert client_instance.post.await_count == 2
             branch_call = client_instance.post.await_args_list[1]
             payload = branch_call.kwargs["json"]
-            assert payload["base_branch"] == "ephemeral/demo"
+            assert payload["base_ref"] == "ephemeral/demo"
             assert payload["target_branch"] == "feature/final-demo"
             assert payload["base_is_ephemeral"] is True
             assert payload["target_is_ephemeral"] is False
@@ -777,7 +934,7 @@ class TestRepoBranchOperations:
 
             with pytest.raises(ApiError) as exc_info:
                 await repo.create_branch(
-                    base_branch="main",
+                    base_ref="main",
                     target_branch="feature/demo",
                 )
 
@@ -1802,7 +1959,7 @@ class TestCodeStorageAgentHeaderInRepo:
             mock_client.return_value.__aenter__.return_value.post = capture_post
 
             repo = await storage.create_repo(id="test-repo")
-            await repo.create_branch(base_branch="main", target_branch="feature/test")
+            await repo.create_branch(base_ref="main", target_branch="feature/test")
 
             # Verify headers include Code-Storage-Agent
             assert captured_headers is not None

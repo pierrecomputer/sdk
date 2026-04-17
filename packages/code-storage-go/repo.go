@@ -770,10 +770,11 @@ func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) er
 
 // CreateBranch creates a new branch.
 func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (CreateBranchResult, error) {
+	baseRef := strings.TrimSpace(options.BaseRef)
 	baseBranch := strings.TrimSpace(options.BaseBranch)
 	targetBranch := strings.TrimSpace(options.TargetBranch)
-	if baseBranch == "" {
-		return CreateBranchResult{}, errors.New("createBranch baseBranch is required")
+	if baseRef == "" && baseBranch == "" {
+		return CreateBranchResult{}, errors.New("createBranch baseRef or baseBranch is required")
 	}
 	if targetBranch == "" {
 		return CreateBranchResult{}, errors.New("createBranch targetBranch is required")
@@ -786,10 +787,14 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 	}
 
 	body := &createBranchRequest{
-		BaseBranch:        baseBranch,
 		TargetBranch:      targetBranch,
 		BaseIsEphemeral:   options.BaseIsEphemeral,
 		TargetIsEphemeral: options.TargetIsEphemeral,
+	}
+	if baseRef != "" {
+		body.BaseRef = baseRef
+	} else {
+		body.BaseBranch = baseBranch
 	}
 
 	resp, err := r.client.api.post(ctx, "repos/branches/create", nil, body, jwtToken, nil)

@@ -112,6 +112,15 @@ def normalize_diff_state(raw_state: str) -> DiffFileState:
     return state_map.get(leading, DiffFileState.UNKNOWN)
 
 
+def normalize_optional_ref(value: Optional[str]) -> Optional[str]:
+    """Normalize optional branch/ref inputs by trimming blanks to None."""
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    return normalized or None
+
+
 class RepoImpl:
     """Implementation of repository operations."""
 
@@ -514,20 +523,39 @@ class RepoImpl:
     async def create_branch(
         self,
         *,
-        base_branch: str,
+        base_ref: Optional[str] = None,
+        base_branch: Optional[str] = None,
         target_branch: str,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
     ) -> CreateBranchResult:
-        """Create or promote a branch."""
-        base_branch_clean = base_branch.strip()
+        """Create or promote a branch.
+
+        Args:
+            base_ref: Preferred base ref (branch, tag, or commit SHA)
+            base_branch: Deprecated branch-only base name
+            target_branch: Target branch name
+            base_is_ephemeral: Whether the base ref lives in the ephemeral namespace
+            target_is_ephemeral: Whether to create the target in the ephemeral namespace
+            ttl: Token TTL in seconds
+        """
+        base_ref_clean = normalize_optional_ref(base_ref)
+        base_branch_clean = normalize_optional_ref(base_branch)
         target_branch_clean = target_branch.strip()
 
-        if not base_branch_clean:
-            raise ValueError("create_branch base_branch is required")
+        effective_base = base_ref_clean or base_branch_clean
+        if effective_base is None:
+            raise ValueError("create_branch base_ref or base_branch is required")
         if not target_branch_clean:
             raise ValueError("create_branch target_branch is required")
+
+        if base_branch_clean is not None:
+            warnings.warn(
+                "create_branch base_branch is deprecated; use base_ref instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
@@ -536,11 +564,14 @@ class RepoImpl:
         )
 
         payload: Dict[str, Any] = {
-            "base_branch": base_branch_clean,
             "target_branch": target_branch_clean,
             "base_is_ephemeral": bool(base_is_ephemeral),
             "target_is_ephemeral": bool(target_is_ephemeral),
         }
+        if base_ref_clean is not None:
+            payload["base_ref"] = base_ref_clean
+        else:
+            payload["base_branch"] = base_branch_clean
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches/create"
 
@@ -750,19 +781,14 @@ class RepoImpl:
         ttl: Optional[int] = None,
     ) -> CreateBranchResult:
         """Promote an ephemeral branch to a persistent target branch."""
-        if base_branch is None:
+        base_clean = normalize_optional_ref(base_branch)
+        if base_clean is None:
             raise ValueError("promote_ephemeral_branch base_branch is required")
 
-        base_clean = base_branch.strip()
-        if not base_clean:
-            raise ValueError("promote_ephemeral_branch base_branch is required")
-
-        target_clean = target_branch.strip() if target_branch is not None else base_clean
-        if not target_clean:
-            raise ValueError("promote_ephemeral_branch target_branch is required")
+        target_clean = normalize_optional_ref(target_branch) or base_clean
 
         return await self.create_branch(
-            base_branch=base_clean,
+            base_ref=base_clean,
             target_branch=target_clean,
             base_is_ephemeral=True,
             target_is_ephemeral=False,
