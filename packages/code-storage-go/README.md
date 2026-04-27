@@ -114,6 +114,22 @@ if err != nil {
 fmt.Println(deletedBranch.Message)
 ```
 
+### Merge branches
+
+```go
+result, err := repo.Merge(context.Background(), storage.MergeOptions{
+	SourceBranch:      "feature",
+	SourceIsEphemeral: true,
+	TargetBranch:      "main",
+	Strategy:          storage.MergeStrategyMerge,
+	Author:            &storage.CommitSignature{Name: "Merge Bot", Email: "merge@example.com"},
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(result.Result, result.Target.NewSHA)
+```
+
 ### Create a commit
 
 ```go
@@ -196,5 +212,5 @@ Make sure the version in `version.go` (`PackageVersion`) matches the tag before 
 - Generate authenticated git remote URLs, including import and ephemeral variants.
 - Read files, read file metadata, download archives, list branches/commits, and run grep queries.
 - Create commits via streaming commit-pack or diff-commit endpoints.
-- Restore commits, manage git notes, create branches, and manage tags.
+- Restore commits, merge branches, manage git notes, create branches, and manage tags.
 - Validate webhook signatures and parse push events.

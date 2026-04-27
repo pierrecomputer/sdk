@@ -292,6 +292,30 @@ console.log(deletedBranch.message);
 // `baseBranch` is still accepted for backwards compatibility, but deprecated.
 // Prefer `baseRef` for new code.
 
+
+// Merge one branch into another. Source and target can independently be
+// ephemeral branches.
+const mergeResult = await repo.merge({
+  sourceBranch: 'feature/demo',
+  sourceIsEphemeral: true,
+  targetBranch: 'main',
+  targetIsEphemeral: false,
+  expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional guard
+  strategy: 'merge', // 'merge' | 'ff_only' | 'ff_prefer'
+  commitMessage: 'Merge feature/demo', // optional
+  author: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
+  committer: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
+  allowUnrelatedHistories: false, // optional
+});
+console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', or 'unknown'
+console.log(mergeResult.commitSha, mergeResult.target.newSha);
+
+// repo.merge() requires sourceBranch, targetBranch, and strategy. It returns
+// camelCase metadata for the source tip, target update, merge base (when
+// reported), and number of promoted commits. A backend conflict response
+// (HTTP 409) is surfaced as an API error with the response body preserved for
+// callers that need conflict_paths or merge_base_sha.
+
 // Create a commit using the streaming helper
 const fs = await import('node:fs/promises');
 const result = await repo

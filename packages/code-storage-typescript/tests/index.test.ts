@@ -1350,6 +1350,169 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('Repo merge', () => {
+    it('posts merge request and returns transformed response', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe('/api/v1/repos/merge');
+
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('POST');
+
+        const headers = requestInit.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['git:write']);
+
+        const body = JSON.parse(requestInit.body as string);
+        expect(body).toEqual({
+          source_branch: 'feature',
+          source_is_ephemeral: true,
+          target_branch: 'main',
+          target_is_ephemeral: false,
+          expected_target_sha: 'abc123',
+          commit_message: 'Merge feature',
+          author: { name: 'Bot', email: 'bot@example.com' },
+          committer: { name: 'Committer', email: 'committer@example.com' },
+          strategy: 'merge',
+          allow_unrelated_histories: false,
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            result: 'merge_commit',
+            commit_sha: 'merge-sha',
+            tree_sha: 'tree-sha',
+            source: { branch: 'feature', ephemeral: true, sha: 'source-sha' },
+            target: {
+              branch: 'main',
+              ephemeral: false,
+              old_sha: 'abc123',
+              new_sha: 'merge-sha',
+            },
+            merge_base_sha: 'base-sha',
+            promoted_commits: 2,
+          }),
+        } as any);
+      });
+
+      const result = await repo.merge({
+        sourceBranch: ' feature ',
+        sourceIsEphemeral: true,
+        targetBranch: ' main ',
+        targetIsEphemeral: false,
+        expectedTargetSha: ' abc123 ',
+        commitMessage: ' Merge feature ',
+        author: { name: ' Bot ', email: ' bot@example.com ' },
+        committer: { name: ' Committer ', email: ' committer@example.com ' },
+        strategy: 'merge',
+        allowUnrelatedHistories: false,
+      });
+
+      expect(result).toEqual({
+        result: 'merge_commit',
+        commitSha: 'merge-sha',
+        treeSha: 'tree-sha',
+        source: { branch: 'feature', ephemeral: true, sha: 'source-sha' },
+        target: {
+          branch: 'main',
+          ephemeral: false,
+          oldSha: 'abc123',
+          newSha: 'merge-sha',
+        },
+        mergeBaseSha: 'base-sha',
+        promotedCommits: 2,
+      });
+    });
+
+    it('omits blank optional string fields from merge request', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge-minimal' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        expect(body).toEqual({
+          source_branch: 'feature',
+          target_branch: 'main',
+          strategy: 'ff_prefer',
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            result: 'fast_forward',
+            commit_sha: 'target-sha',
+            tree_sha: 'tree-sha',
+            source: { branch: 'feature', ephemeral: false, sha: 'target-sha' },
+            target: {
+              branch: 'main',
+              ephemeral: false,
+              old_sha: 'old-sha',
+              new_sha: 'target-sha',
+            },
+            promoted_commits: 1,
+          }),
+        } as any);
+      });
+
+      await repo.merge({
+        sourceBranch: 'feature',
+        targetBranch: 'main',
+        expectedTargetSha: ' ',
+        commitMessage: '',
+        strategy: 'ff_prefer',
+      });
+    });
+
+    it('validates merge inputs locally', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge-validation' });
+
+      await expect(
+        repo.merge({ sourceBranch: '', targetBranch: 'main', strategy: 'merge' })
+      ).rejects.toThrow('merge sourceBranch is required');
+      await expect(
+        repo.merge({ sourceBranch: 'feature', targetBranch: '', strategy: 'merge' })
+      ).rejects.toThrow('merge targetBranch is required');
+      await expect(
+        repo.merge({ sourceBranch: 'feature', targetBranch: 'main', strategy: '' as any })
+      ).rejects.toThrow('merge strategy is required');
+      await expect(
+        repo.merge({
+          sourceBranch: 'feature',
+          targetBranch: 'main',
+          strategy: 'squash' as any,
+        })
+      ).rejects.toThrow('merge strategy must be merge, ff_only, or ff_prefer');
+      await expect(
+        repo.merge({
+          sourceBranch: 'feature',
+          targetBranch: 'main',
+          strategy: 'merge',
+          author: { name: '', email: 'bot@example.com' },
+        })
+      ).rejects.toThrow('merge author name and email are required when provided');
+      await expect(
+        repo.merge({
+          sourceBranch: 'feature',
+          targetBranch: 'main',
+          strategy: 'merge',
+          committer: { name: 'Bot', email: ' ' },
+        })
+      ).rejects.toThrow(
+        'merge committer name and email are required when provided'
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Repo tags', () => {
     it('lists tags with pagination', async () => {
       const store = new GitStorage({ name: 'v0', key });

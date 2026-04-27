@@ -101,6 +101,20 @@ type createBranchRequest struct {
 	TargetIsEphemeral bool   `json:"target_is_ephemeral,omitempty"`
 }
 
+// mergeRequest is the JSON body for Merge.
+type mergeRequest struct {
+	SourceBranch            string      `json:"source_branch"`
+	SourceIsEphemeral       bool        `json:"source_is_ephemeral,omitempty"`
+	TargetBranch            string      `json:"target_branch"`
+	TargetIsEphemeral       bool        `json:"target_is_ephemeral,omitempty"`
+	ExpectedTargetSHA       string      `json:"expected_target_sha,omitempty"`
+	CommitMessage           string      `json:"commit_message,omitempty"`
+	Author                  *authorInfo `json:"author,omitempty"`
+	Committer               *authorInfo `json:"committer,omitempty"`
+	Strategy                string      `json:"strategy"`
+	AllowUnrelatedHistories bool        `json:"allow_unrelated_histories,omitempty"`
+}
+
 type createTagRequest struct {
 	Name   string `json:"name"`
 	Target string `json:"target"`

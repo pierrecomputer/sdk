@@ -4,7 +4,7 @@ import contextlib
 import warnings
 from datetime import datetime, timezone
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 from urllib.parse import urlencode
 
 import httpx
@@ -23,8 +23,8 @@ from pierre_storage.types import (
     CommitResult,
     CommitSignature,
     CreateBranchResult,
-    CreateTagResult,
     CreateCommitOptions,
+    CreateTagResult,
     DeleteBranchResult,
     DeleteTagResult,
     DiffFileState,
@@ -42,6 +42,8 @@ from pierre_storage.types import (
     ListFilesResult,
     ListFilesWithMetadataResult,
     ListTagsResult,
+    MergeBranchesResult,
+    MergeStrategy,
     NoteReadResult,
     NoteWriteResult,
     RefUpdate,
@@ -120,6 +122,31 @@ def normalize_optional_ref(value: Optional[str]) -> Optional[str]:
 
     normalized = value.strip()
     return normalized or None
+
+
+def normalize_optional_string(value: Optional[str]) -> Optional[str]:
+    """Normalize optional string inputs by trimming blanks to None."""
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    return normalized or None
+
+
+def normalize_optional_signature(
+    value: Optional[CommitSignature],
+    field_name: Literal["author", "committer"],
+) -> Optional[CommitSignature]:
+    """Validate and normalize an optional git signature."""
+    if value is None:
+        return None
+
+    name = (value.get("name") or "").strip()
+    email = (value.get("email") or "").strip()
+    if not name or not email:
+        raise ValueError(f"merge {field_name} name and email are required")
+
+    return {"name": name, "email": email}
 
 
 class RepoImpl:
@@ -665,6 +692,121 @@ class RepoImpl:
                 "name": data["name"],
                 "message": data["message"],
             }
+
+    async def merge(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        strategy: MergeStrategy,
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        expected_target_sha: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        committer: Optional[CommitSignature] = None,
+        allow_unrelated_histories: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> MergeBranchesResult:
+        """Merge a source branch into a target branch."""
+        source_branch_clean = source_branch.strip()
+        target_branch_clean = target_branch.strip()
+        strategy_clean = strategy.strip()
+
+        if not source_branch_clean:
+            raise ValueError("merge source_branch is required")
+        if not target_branch_clean:
+            raise ValueError("merge target_branch is required")
+        if not strategy_clean:
+            raise ValueError("merge strategy is required")
+        if strategy_clean not in {"merge", "ff_only", "ff_prefer"}:
+            raise ValueError("merge strategy must be one of merge, ff_only, ff_prefer")
+
+        payload: Dict[str, Any] = {
+            "source_branch": source_branch_clean,
+            "target_branch": target_branch_clean,
+            "strategy": strategy_clean,
+        }
+        if source_is_ephemeral is not None:
+            payload["source_is_ephemeral"] = bool(source_is_ephemeral)
+        if target_is_ephemeral is not None:
+            payload["target_is_ephemeral"] = bool(target_is_ephemeral)
+
+        expected_target_sha_clean = normalize_optional_string(expected_target_sha)
+        if expected_target_sha_clean is not None:
+            payload["expected_target_sha"] = expected_target_sha_clean
+
+        commit_message_clean = normalize_optional_string(commit_message)
+        if commit_message_clean is not None:
+            payload["commit_message"] = commit_message_clean
+
+        author_clean = normalize_optional_signature(author, "author")
+        if author_clean is not None:
+            payload["author"] = author_clean
+
+        committer_clean = normalize_optional_signature(committer, "committer")
+        if committer_clean is not None:
+            payload["committer"] = committer_clean
+
+        if allow_unrelated_histories is not None:
+            payload["allow_unrelated_histories"] = bool(allow_unrelated_histories)
+
+        ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
+        jwt = self.generate_jwt(
+            self._id,
+            {"permissions": ["git:write"], "ttl": ttl_value},
+        )
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json=payload,
+                timeout=180.0,
+            )
+
+            if response.status_code != 200:
+                message = "Merge failed"
+                try:
+                    error_data = response.json()
+                    if isinstance(error_data, dict) and error_data.get("message"):
+                        message = str(error_data["message"])
+                    elif isinstance(error_data, dict) and error_data.get("error"):
+                        message = str(error_data["error"])
+                    else:
+                        message = f"{message} with HTTP {response.status_code}"
+                except Exception:
+                    message = f"{message} with HTTP {response.status_code}"
+                raise ApiError(message, status_code=response.status_code, response=response)
+
+            data = response.json()
+            result: MergeBranchesResult = {
+                "result": data["result"],
+                "commit_sha": data["commit_sha"],
+                "tree_sha": data["tree_sha"],
+                "source": {
+                    "branch": data["source"]["branch"],
+                    "ephemeral": data["source"]["ephemeral"],
+                    "sha": data["source"]["sha"],
+                },
+                "target": {
+                    "branch": data["target"]["branch"],
+                    "ephemeral": data["target"]["ephemeral"],
+                    "old_sha": data["target"]["old_sha"],
+                    "new_sha": data["target"]["new_sha"],
+                },
+                "promoted_commits": data["promoted_commits"],
+            }
+            merge_base_sha = data.get("merge_base_sha")
+            if merge_base_sha:
+                result["merge_base_sha"] = merge_base_sha
+            return result
 
     async def list_tags(
         self,

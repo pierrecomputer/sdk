@@ -29,6 +29,7 @@ import {
   listFilesResponseSchema,
   listFilesWithMetadataResponseSchema,
   listReposResponseSchema,
+  mergeResponseSchema,
   listTagsResponseSchema,
   noteReadResponseSchema,
   noteWriteResponseSchema,
@@ -101,6 +102,9 @@ import type {
   ListReposOptions,
   ListReposResponse,
   ListReposResult,
+  MergeOptions,
+  MergeResponse,
+  MergeResult,
   ListTagsOptions,
   ListTagsResponse,
   ListTagsResult,
@@ -459,6 +463,27 @@ function transformCreateBranchResult(
     targetBranch: raw.target_branch,
     targetIsEphemeral: raw.target_is_ephemeral,
     commitSha: raw.commit_sha ?? undefined,
+  };
+}
+
+function transformMergeResult(raw: MergeResponse): MergeResult {
+  return {
+    result: raw.result,
+    commitSha: raw.commit_sha,
+    treeSha: raw.tree_sha,
+    source: {
+      branch: raw.source.branch,
+      ephemeral: raw.source.ephemeral,
+      sha: raw.source.sha,
+    },
+    target: {
+      branch: raw.target.branch,
+      ephemeral: raw.target.ephemeral,
+      oldSha: raw.target.old_sha,
+      newSha: raw.target.new_sha,
+    },
+    mergeBaseSha: raw.merge_base_sha ?? undefined,
+    promotedCommits: raw.promoted_commits,
   };
 }
 
@@ -1331,6 +1356,83 @@ class RepoImpl implements Repo {
     );
     const raw = deleteBranchResponseSchema.parse(await response.json());
     return transformDeleteBranchResult(raw);
+  }
+
+  async merge(options: MergeOptions): Promise<MergeResult> {
+    const sourceBranch = options?.sourceBranch?.trim();
+    if (!sourceBranch) {
+      throw new Error('merge sourceBranch is required');
+    }
+
+    const targetBranch = options?.targetBranch?.trim();
+    if (!targetBranch) {
+      throw new Error('merge targetBranch is required');
+    }
+
+    const strategy = options?.strategy?.trim();
+    if (!strategy) {
+      throw new Error('merge strategy is required');
+    }
+    if (strategy !== 'merge' && strategy !== 'ff_only' && strategy !== 'ff_prefer') {
+      throw new Error('merge strategy must be merge, ff_only, or ff_prefer');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:write'],
+      ttl,
+    });
+
+    const body: Record<string, unknown> = {
+      source_branch: sourceBranch,
+      target_branch: targetBranch,
+      strategy,
+    };
+
+    if (typeof options.sourceIsEphemeral === 'boolean') {
+      body.source_is_ephemeral = options.sourceIsEphemeral;
+    }
+    if (typeof options.targetIsEphemeral === 'boolean') {
+      body.target_is_ephemeral = options.targetIsEphemeral;
+    }
+
+    const expectedTargetSha = options.expectedTargetSha?.trim();
+    if (expectedTargetSha) {
+      body.expected_target_sha = expectedTargetSha;
+    }
+
+    const commitMessage = options.commitMessage?.trim();
+    if (commitMessage) {
+      body.commit_message = commitMessage;
+    }
+
+    if (options.author) {
+      const authorName = options.author.name?.trim();
+      const authorEmail = options.author.email?.trim();
+      if (!authorName || !authorEmail) {
+        throw new Error('merge author name and email are required when provided');
+      }
+      body.author = { name: authorName, email: authorEmail };
+    }
+
+    if (options.committer) {
+      const committerName = options.committer.name?.trim();
+      const committerEmail = options.committer.email?.trim();
+      if (!committerName || !committerEmail) {
+        throw new Error(
+          'merge committer name and email are required when provided'
+        );
+      }
+      body.committer = { name: committerName, email: committerEmail };
+    }
+
+    if (typeof options.allowUnrelatedHistories === 'boolean') {
+      body.allow_unrelated_histories = options.allowUnrelatedHistories;
+    }
+
+    const response = await this.api.post({ path: 'repos/merge', body }, jwt);
+    const raw = mergeResponseSchema.parse(await response.json());
+    return transformMergeResult(raw);
   }
 
   async createTag(options: CreateTagOptions): Promise<CreateTagResult> {

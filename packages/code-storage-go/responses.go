@@ -141,6 +141,29 @@ type createBranchResponse struct {
 	CommitSHA         string `json:"commit_sha"`
 }
 
+type mergeResponse struct {
+	Result          string         `json:"result"`
+	CommitSHA       string         `json:"commit_sha"`
+	TreeSHA         string         `json:"tree_sha"`
+	Source          mergeSourceRaw `json:"source"`
+	Target          mergeTargetRaw `json:"target"`
+	MergeBaseSHA    string         `json:"merge_base_sha,omitempty"`
+	PromotedCommits int            `json:"promoted_commits"`
+}
+
+type mergeSourceRaw struct {
+	Branch    string `json:"branch"`
+	Ephemeral bool   `json:"ephemeral"`
+	SHA       string `json:"sha"`
+}
+
+type mergeTargetRaw struct {
+	Branch    string `json:"branch"`
+	Ephemeral bool   `json:"ephemeral"`
+	OldSHA    string `json:"old_sha"`
+	NewSHA    string `json:"new_sha"`
+}
+
 type listTagsResponse struct {
 	Tags       []tagInfoRaw `json:"tags"`
 	NextCursor string       `json:"next_cursor"`

@@ -327,6 +327,66 @@ type DeleteBranchResult struct {
 	Message string
 }
 
+// MergeStrategy selects how Repo.Merge reconciles source into target.
+type MergeStrategy string
+
+const (
+	MergeStrategyMerge    MergeStrategy = "merge"
+	MergeStrategyFFOnly   MergeStrategy = "ff_only"
+	MergeStrategyFFPrefer MergeStrategy = "ff_prefer"
+)
+
+// MergeOptions configures branch merge operations.
+type MergeOptions struct {
+	InvocationOptions
+	SourceBranch            string
+	SourceIsEphemeral       bool
+	TargetBranch            string
+	TargetIsEphemeral       bool
+	ExpectedTargetSHA       string
+	CommitMessage           string
+	Author                  *CommitSignature
+	Committer               *CommitSignature
+	Strategy                MergeStrategy
+	AllowUnrelatedHistories bool
+}
+
+// MergeResultStatus describes a merge operation outcome.
+type MergeResultStatus string
+
+const (
+	MergeResultMergeCommit MergeResultStatus = "merge_commit"
+	MergeResultFastForward MergeResultStatus = "fast_forward"
+	MergeResultNoOp        MergeResultStatus = "no_op"
+	MergeResultUnknown     MergeResultStatus = "unknown"
+)
+
+// MergeRef describes a merge source ref.
+type MergeRef struct {
+	Branch    string
+	Ephemeral bool
+	SHA       string
+}
+
+// MergeTargetRef describes a merge target ref update.
+type MergeTargetRef struct {
+	Branch    string
+	Ephemeral bool
+	OldSHA    string
+	NewSHA    string
+}
+
+// MergeResult describes merge results.
+type MergeResult struct {
+	Result          MergeResultStatus
+	CommitSHA       string
+	TreeSHA         string
+	Source          MergeRef
+	Target          MergeTargetRef
+	MergeBaseSHA    string
+	PromotedCommits int
+}
+
 // ListTagsOptions configures list tags.
 type ListTagsOptions struct {
 	InvocationOptions

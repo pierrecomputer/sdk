@@ -141,6 +141,29 @@ export const createBranchResponseSchema = z.object({
   commit_sha: z.string().nullable().optional(),
 });
 
+export const mergeRefSchema = z.object({
+  branch: z.string(),
+  ephemeral: z.boolean(),
+  sha: z.string(),
+});
+
+export const mergeTargetSchema = z.object({
+  branch: z.string(),
+  ephemeral: z.boolean(),
+  old_sha: z.string(),
+  new_sha: z.string(),
+});
+
+export const mergeResponseSchema = z.object({
+  result: z.enum(['merge_commit', 'fast_forward', 'no_op', 'unknown']),
+  commit_sha: z.string(),
+  tree_sha: z.string(),
+  source: mergeRefSchema,
+  target: mergeTargetSchema,
+  merge_base_sha: z.string().optional(),
+  promoted_commits: z.number(),
+});
+
 export const tagInfoSchema = z.object({
   cursor: z.string(),
   name: z.string(),
@@ -272,6 +295,7 @@ export type GetCommitDiffResponseRaw = z.infer<typeof commitDiffResponseSchema>;
 export type CreateBranchResponseRaw = z.infer<
   typeof createBranchResponseSchema
 >;
+export type MergeResponseRaw = z.infer<typeof mergeResponseSchema>;
 export type RawTagInfo = z.infer<typeof tagInfoSchema>;
 export type ListTagsResponseRaw = z.infer<typeof listTagsResponseSchema>;
 export type CreateTagResponseRaw = z.infer<typeof createTagResponseSchema>;

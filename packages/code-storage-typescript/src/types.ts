@@ -13,6 +13,7 @@ import type {
   ListFilesResponseRaw,
   ListFilesWithMetadataResponseRaw,
   ListReposResponseRaw,
+  MergeResponseRaw,
   ListTagsResponseRaw,
   NoteReadResponseRaw,
   NoteWriteResponseRaw,
@@ -84,6 +85,7 @@ export interface Repo {
   grep(options: GrepOptions): Promise<GrepResult>;
   pullUpstream(options?: PullUpstreamOptions): Promise<void>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
+  merge(options: MergeOptions): Promise<MergeResult>;
   createBranch(options: CreateBranchOptions): Promise<CreateBranchResult>;
   deleteBranch(options: DeleteBranchOptions): Promise<DeleteBranchResult>;
   createCommit(options: CreateCommitOptions): CommitBuilder;
@@ -749,6 +751,52 @@ export interface CommitResult {
   packBytes: number;
   blobCount: number;
   refUpdate: RefUpdate;
+}
+
+export type MergeStrategy = 'merge' | 'ff_only' | 'ff_prefer';
+
+export type MergeResultLabel =
+  | 'merge_commit'
+  | 'fast_forward'
+  | 'no_op'
+  | 'unknown';
+
+export interface MergeOptions extends GitStorageInvocationOptions {
+  sourceBranch: string;
+  sourceIsEphemeral?: boolean;
+  targetBranch: string;
+  targetIsEphemeral?: boolean;
+  expectedTargetSha?: string;
+  commitMessage?: string;
+  author?: CommitSignature;
+  committer?: CommitSignature;
+  strategy: MergeStrategy;
+  allowUnrelatedHistories?: boolean;
+}
+
+export type MergeResponse = MergeResponseRaw;
+
+export interface MergeSourceResult {
+  branch: string;
+  ephemeral: boolean;
+  sha: string;
+}
+
+export interface MergeTargetResult {
+  branch: string;
+  ephemeral: boolean;
+  oldSha: string;
+  newSha: string;
+}
+
+export interface MergeResult {
+  result: MergeResultLabel;
+  commitSha: string;
+  treeSha: string;
+  source: MergeSourceResult;
+  target: MergeTargetResult;
+  mergeBaseSha?: string;
+  promotedCommits: number;
 }
 
 export interface RestoreCommitOptions extends GitStorageInvocationOptions {
