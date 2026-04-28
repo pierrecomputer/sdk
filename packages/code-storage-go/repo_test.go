@@ -707,6 +707,64 @@ func TestDeleteTag(t *testing.T) {
 	}
 }
 
+func TestDeleteBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/branches" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		var body deleteBranchRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Name != "feature/old-onboarding" {
+			t.Fatalf("unexpected delete branch payload: %+v", body)
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := parseJWTFromToken(t, token)
+		scopes, ok := claims["scopes"].([]interface{})
+		if !ok || len(scopes) != 1 || scopes[0] != string(PermissionGitWrite) {
+			t.Fatalf("unexpected scopes: %#v", claims["scopes"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"feature/old-onboarding","message":"branch deleted"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "feature/old-onboarding"})
+	if err != nil {
+		t.Fatalf("delete branch error: %v", err)
+	}
+	if result.Name != "feature/old-onboarding" || result.Message != "branch deleted" {
+		t.Fatalf("unexpected delete branch result: %+v", result)
+	}
+}
+
+func TestDeleteBranchValidation(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: "http://unused"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "  "}); err == nil ||
+		!strings.Contains(err.Error(), "deleteBranch name is required") {
+		t.Fatalf("expected name-required error, got %v", err)
+	}
+	if _, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "refs/heads/feature/demo"}); err == nil ||
+		!strings.Contains(err.Error(), "deleteBranch name must not start with refs/") {
+		t.Fatalf("expected refs/ rejection, got %v", err)
+	}
+}
+
 func TestRestoreCommitSuccess(t *testing.T) {
 	var capturedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -237,6 +237,13 @@ class DeleteTagResult(TypedDict):
     message: str
 
 
+class DeleteBranchResult(TypedDict):
+    """Result from deleting a branch."""
+
+    name: str
+    message: str
+
+
 # Removed: ListCommitsOptions - now uses **kwargs
 
 
@@ -610,6 +617,15 @@ class Repo(Protocol):
 
         base_branch is deprecated; prefer base_ref.
         """
+        ...
+
+    async def delete_branch(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> DeleteBranchResult:
+        """Delete a branch."""
         ...
 
     async def list_tags(

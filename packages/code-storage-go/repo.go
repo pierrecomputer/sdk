@@ -817,6 +817,40 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 	return result, nil
 }
 
+// DeleteBranch deletes a branch.
+func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (DeleteBranchResult, error) {
+	name := strings.TrimSpace(options.Name)
+	if name == "" {
+		return DeleteBranchResult{}, errors.New("deleteBranch name is required")
+	}
+	if strings.HasPrefix(name, "refs/") {
+		return DeleteBranchResult{}, errors.New("deleteBranch name must not start with refs/")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl})
+	if err != nil {
+		return DeleteBranchResult{}, err
+	}
+
+	body := &deleteBranchRequest{Name: name}
+	resp, err := r.client.api.delete(ctx, "repos/branches", nil, body, jwtToken, nil)
+	if err != nil {
+		return DeleteBranchResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload deleteBranchResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return DeleteBranchResult{}, err
+	}
+
+	return DeleteBranchResult{
+		Name:    payload.Name,
+		Message: payload.Message,
+	}, nil
+}
+
 // CreateTag creates a tag.
 func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateTagResult, error) {
 	name := strings.TrimSpace(options.Name)

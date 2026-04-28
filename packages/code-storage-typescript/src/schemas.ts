@@ -164,6 +164,11 @@ export const deleteTagResponseSchema = z.object({
   message: z.string(),
 });
 
+export const deleteBranchResponseSchema = z.object({
+  name: z.string(),
+  message: z.string(),
+});
+
 export const refUpdateResultSchema = z.object({
   branch: z.string(),
   old_sha: z.string(),
@@ -271,6 +276,9 @@ export type RawTagInfo = z.infer<typeof tagInfoSchema>;
 export type ListTagsResponseRaw = z.infer<typeof listTagsResponseSchema>;
 export type CreateTagResponseRaw = z.infer<typeof createTagResponseSchema>;
 export type DeleteTagResponseRaw = z.infer<typeof deleteTagResponseSchema>;
+export type DeleteBranchResponseRaw = z.infer<
+  typeof deleteBranchResponseSchema
+>;
 export type CommitPackAckRaw = z.infer<typeof commitPackAckSchema>;
 export type RestoreCommitAckRaw = z.infer<typeof restoreCommitAckSchema>;
 export type GrepResponseRaw = z.infer<typeof grepResponseSchema>;

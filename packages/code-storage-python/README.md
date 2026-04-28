@@ -206,6 +206,10 @@ branch_result = await repo.create_branch(
 )
 print(branch_result["target_branch"], branch_result.get("commit_sha"))
 
+# Delete a branch (default branch deletion is rejected)
+delete_branch_result = await repo.delete_branch(name="feature/old-onboarding")
+print(delete_branch_result["message"])
+
 # List tags
 tags = await repo.list_tags(limit=10)
 print(tags["tags"])
@@ -680,6 +684,13 @@ class Repo:
         ttl: Optional[int] = None,
     ) -> CreateBranchResult: ...
 
+    async def delete_branch(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> DeleteBranchResult: ...
+
     async def promote_ephemeral_branch(
         self,
         *,
@@ -767,6 +778,7 @@ from pierre_storage.types import (
     GetBranchDiffResult,
     GetCommitDiffResult,
     CreateBranchResult,
+    DeleteBranchResult,
     RestoreCommitResult,
     RefUpdate,
     # ... and more

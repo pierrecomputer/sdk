@@ -110,6 +110,10 @@ type deleteTagRequest struct {
 	Name string `json:"name"`
 }
 
+type deleteBranchRequest struct {
+	Name string `json:"name"`
+}
+
 // commitMetadataPayload is the JSON body for commit metadata.
 type commitMetadataPayload struct {
 	TargetBranch    string             `json:"target_branch"`

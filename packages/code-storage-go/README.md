@@ -104,6 +104,14 @@ if err != nil {
 	log.Fatal(err)
 }
 fmt.Println(deletedTag.Message)
+
+deletedBranch, err := repo.DeleteBranch(context.Background(), storage.DeleteBranchOptions{
+	Name: "feature/old-onboarding",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(deletedBranch.Message)
 ```
 
 ### Create a commit

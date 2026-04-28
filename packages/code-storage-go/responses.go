@@ -164,6 +164,11 @@ type deleteTagResponse struct {
 	Message string `json:"message"`
 }
 
+type deleteBranchResponse struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+
 type grepResponse struct {
 	Query struct {
 		Pattern       string `json:"pattern"`

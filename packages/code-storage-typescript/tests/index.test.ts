@@ -1477,6 +1477,55 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('Repo deleteBranch', () => {
+    it('sends DELETE with git:write scope and parses the response', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-delete-branch' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('DELETE');
+
+        const headers = requestInit.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['git:write']);
+
+        const body = JSON.parse(requestInit.body as string);
+        expect(body).toEqual({ name: 'feature/old-onboarding' });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            name: 'feature/old-onboarding',
+            message: 'branch deleted',
+          }),
+        } as any);
+      });
+
+      const result = await repo.deleteBranch({
+        name: 'feature/old-onboarding',
+      });
+      expect(result).toEqual({
+        name: 'feature/old-onboarding',
+        message: 'branch deleted',
+      });
+    });
+
+    it('validates branch names', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-delete-branch-validation' });
+
+      await expect(repo.deleteBranch({ name: '' })).rejects.toThrow(
+        'deleteBranch name is required'
+      );
+      await expect(
+        repo.deleteBranch({ name: 'refs/heads/feature/demo' })
+      ).rejects.toThrow('deleteBranch name must not start with refs/');
+    });
+  });
+
   describe('Repo getBranchDiff', () => {
     it('forwards ephemeralBase flag to the API params', async () => {
       const store = new GitStorage({ name: 'v0', key });

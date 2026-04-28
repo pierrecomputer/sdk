@@ -20,6 +20,7 @@ import {
   commitDiffResponseSchema,
   createBranchResponseSchema,
   createTagResponseSchema,
+  deleteBranchResponseSchema,
   deleteTagResponseSchema,
   errorEnvelopeSchema,
   grepResponseSchema,
@@ -53,6 +54,9 @@ import type {
   CreateGitCredentialOptions,
   CreateNoteOptions,
   CreateRepoOptions,
+  DeleteBranchOptions,
+  DeleteBranchResponse,
+  DeleteBranchResult,
   DeleteTagOptions,
   DeleteTagResponse,
   DeleteTagResult,
@@ -483,6 +487,15 @@ function transformCreateTagResult(raw: CreateTagResponse): CreateTagResult {
 }
 
 function transformDeleteTagResult(raw: DeleteTagResponse): DeleteTagResult {
+  return {
+    name: raw.name,
+    message: raw.message,
+  };
+}
+
+function transformDeleteBranchResult(
+  raw: DeleteBranchResponse
+): DeleteBranchResult {
   return {
     name: raw.name,
     message: raw.message,
@@ -1293,6 +1306,31 @@ class RepoImpl implements Repo {
     );
     const raw = createBranchResponseSchema.parse(await response.json());
     return transformCreateBranchResult(raw);
+  }
+
+  async deleteBranch(
+    options: DeleteBranchOptions
+  ): Promise<DeleteBranchResult> {
+    const name = options?.name?.trim();
+    if (!name) {
+      throw new Error('deleteBranch name is required');
+    }
+    if (name.startsWith('refs/')) {
+      throw new Error('deleteBranch name must not start with refs/');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:write'],
+      ttl,
+    });
+
+    const response = await this.api.delete(
+      { path: 'repos/branches', body: { name } },
+      jwt
+    );
+    const raw = deleteBranchResponseSchema.parse(await response.json());
+    return transformDeleteBranchResult(raw);
   }
 
   async createTag(options: CreateTagOptions): Promise<CreateTagResult> {
