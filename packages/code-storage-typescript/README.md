@@ -285,6 +285,10 @@ const branch = await repo.createBranch({
 });
 console.log(branch.targetBranch, branch.commitSha);
 
+// Delete a branch (default branch deletion is rejected)
+const deletedBranch = await repo.deleteBranch({ name: 'feature/demo' });
+console.log(deletedBranch.message);
+
 // `baseBranch` is still accepted for backwards compatibility, but deprecated.
 // Prefer `baseRef` for new code.
 

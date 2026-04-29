@@ -315,6 +315,18 @@ type CreateBranchResult struct {
 	CommitSHA         string
 }
 
+// DeleteBranchOptions configures branch deletion.
+type DeleteBranchOptions struct {
+	InvocationOptions
+	Name string
+}
+
+// DeleteBranchResult describes branch deletion result.
+type DeleteBranchResult struct {
+	Name    string
+	Message string
+}
+
 // ListTagsOptions configures list tags.
 type ListTagsOptions struct {
 	InvocationOptions

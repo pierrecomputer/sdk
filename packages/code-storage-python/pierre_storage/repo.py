@@ -25,6 +25,7 @@ from pierre_storage.types import (
     CreateBranchResult,
     CreateTagResult,
     CreateCommitOptions,
+    DeleteBranchResult,
     DeleteTagResult,
     DiffFileState,
     FileDiff,
@@ -610,6 +611,60 @@ class RepoImpl:
             if commit_sha:
                 result["commit_sha"] = commit_sha
             return result
+
+    async def delete_branch(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> DeleteBranchResult:
+        """Delete a branch."""
+        name_clean = name.strip()
+        if not name_clean:
+            raise ValueError("delete_branch name is required")
+        if name_clean.startswith("refs/"):
+            raise ValueError("delete_branch name must not start with refs/")
+
+        ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
+        jwt = self.generate_jwt(
+            self._id,
+            {"permissions": ["git:write"], "ttl": ttl_value},
+        )
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                "DELETE",
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json={"name": name_clean},
+                timeout=30.0,
+            )
+
+            if response.status_code != 200:
+                message = "Delete branch failed"
+                try:
+                    error_data = response.json()
+                    if isinstance(error_data, dict) and error_data.get("message"):
+                        message = str(error_data["message"])
+                    elif isinstance(error_data, dict) and error_data.get("error"):
+                        message = str(error_data["error"])
+                    else:
+                        message = f"{message} with HTTP {response.status_code}"
+                except Exception:
+                    message = f"{message} with HTTP {response.status_code}"
+                raise ApiError(message, status_code=response.status_code, response=response)
+
+            data = response.json()
+            return {
+                "name": data["name"],
+                "message": data["message"],
+            }
 
     async def list_tags(
         self,

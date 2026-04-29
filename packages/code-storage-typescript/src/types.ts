@@ -4,6 +4,7 @@
 import type {
   CreateBranchResponseRaw,
   CreateTagResponseRaw,
+  DeleteBranchResponseRaw,
   DeleteTagResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
@@ -84,6 +85,7 @@ export interface Repo {
   pullUpstream(options?: PullUpstreamOptions): Promise<void>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   createBranch(options: CreateBranchOptions): Promise<CreateBranchResult>;
+  deleteBranch(options: DeleteBranchOptions): Promise<DeleteBranchResult>;
   createCommit(options: CreateCommitOptions): CommitBuilder;
   createCommitFromDiff(
     options: CreateCommitFromDiffOptions
@@ -337,6 +339,17 @@ export interface CreateBranchResult {
   targetBranch: string;
   targetIsEphemeral: boolean;
   commitSha?: string;
+}
+
+export interface DeleteBranchOptions extends GitStorageInvocationOptions {
+  name: string;
+}
+
+export type DeleteBranchResponse = DeleteBranchResponseRaw;
+
+export interface DeleteBranchResult {
+  name: string;
+  message: string;
 }
 
 export interface ListTagsOptions extends GitStorageInvocationOptions {
