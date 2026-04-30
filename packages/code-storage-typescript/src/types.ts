@@ -8,6 +8,7 @@ import type {
   DeleteTagResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
+  GetCommitResponseRaw,
   ListBranchesResponseRaw,
   ListCommitsResponseRaw,
   ListFilesResponseRaw,
@@ -74,6 +75,7 @@ export interface Repo {
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
   listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
+  getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
   createTag(options: CreateTagOptions): Promise<CreateTagResult>;
   deleteTag(options: DeleteTagOptions): Promise<DeleteTagResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
@@ -425,6 +427,17 @@ export interface ListCommitsResult {
   commits: CommitInfo[];
   nextCursor?: string;
   hasMore: boolean;
+}
+
+// Get Commit API types
+export interface GetCommitOptions extends GitStorageInvocationOptions {
+  sha: string;
+}
+
+export type GetCommitResponse = GetCommitResponseRaw;
+
+export interface GetCommitResult {
+  commit: CommitInfo;
 }
 
 // Git notes API types

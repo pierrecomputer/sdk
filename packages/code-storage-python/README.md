@@ -250,6 +250,10 @@ commits = await repo.list_commits(
 )
 print(commits["commits"])
 
+# Get a single commit's metadata (no diff)
+result = await repo.get_commit(sha="abc123...")
+print(result["commit"]["message"], result["commit"]["author_name"])
+
 # Read a git note for a commit
 note = await repo.get_note(sha="abc123...")
 print(note["note"])
@@ -740,6 +744,13 @@ class Repo:
         cursor: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult: ...
+
+    async def get_commit(
+        self,
+        *,
+        sha: str,
+        ttl: Optional[int] = None,
+    ) -> GetCommitResult: ...
 
     async def get_branch_diff(
         self,

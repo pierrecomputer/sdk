@@ -461,6 +461,17 @@ type ListCommitsResult struct {
 	HasMore    bool
 }
 
+// GetCommitOptions configures a single-commit metadata lookup.
+type GetCommitOptions struct {
+	InvocationOptions
+	SHA string
+}
+
+// GetCommitResult is the result returned by Repo.GetCommit.
+type GetCommitResult struct {
+	Commit CommitInfo
+}
+
 // NoteAuthor identifies note author.
 type NoteAuthor struct {
 	Name  string

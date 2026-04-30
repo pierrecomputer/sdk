@@ -1316,6 +1316,55 @@ func TestListCommitsUserAgentHeader(t *testing.T) {
 	}
 }
 
+func TestGetCommit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/commit" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("sha"); got != "abc123" {
+			t.Fatalf("unexpected sha query: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.GetCommit(nil, GetCommitOptions{SHA: "abc123"})
+	if err != nil {
+		t.Fatalf("get commit error: %v", err)
+	}
+	if result.Commit.SHA != "abc123" {
+		t.Fatalf("unexpected sha: %q", result.Commit.SHA)
+	}
+	if result.Commit.Message != "feat: add endpoint" {
+		t.Fatalf("unexpected message: %q", result.Commit.Message)
+	}
+	if result.Commit.AuthorName != "Jane Doe" || result.Commit.AuthorEmail != "jane@example.com" {
+		t.Fatalf("unexpected author: %+v", result.Commit)
+	}
+	if result.Commit.RawDate != "2024-01-15T14:32:18Z" || result.Commit.Date.IsZero() {
+		t.Fatalf("unexpected date: %+v", result.Commit)
+	}
+}
+
+func TestGetCommitRequiresSHA(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: "https://example.invalid"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.GetCommit(nil, GetCommitOptions{}); err == nil {
+		t.Fatalf("expected error for empty sha")
+	}
+}
+
 func intPtr(value int) *int {
 	return &value
 }

@@ -43,6 +43,10 @@ type listCommitsResponse struct {
 	HasMore    bool            `json:"has_more"`
 }
 
+type getCommitResponse struct {
+	Commit commitInfoRaw `json:"commit"`
+}
+
 type commitInfoRaw struct {
 	SHA            string `json:"sha"`
 	Message        string `json:"message"`

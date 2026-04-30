@@ -53,6 +53,10 @@ export const listCommitsResponseSchema = z.object({
   has_more: z.boolean(),
 });
 
+export const getCommitResponseSchema = z.object({
+  commit: commitInfoRawSchema,
+});
+
 export const repoBaseInfoSchema = z.object({
   provider: z.string(),
   owner: z.string(),
@@ -283,6 +287,7 @@ export type ListBranchesResponseRaw = z.infer<
 >;
 export type RawCommitInfo = z.infer<typeof commitInfoRawSchema>;
 export type ListCommitsResponseRaw = z.infer<typeof listCommitsResponseSchema>;
+export type GetCommitResponseRaw = z.infer<typeof getCommitResponseSchema>;
 export type RawRepoBaseInfo = z.infer<typeof repoBaseInfoSchema>;
 export type RawRepoInfo = z.infer<typeof repoInfoSchema>;
 export type ListReposResponseRaw = z.infer<typeof listReposResponseSchema>;
