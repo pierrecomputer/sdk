@@ -10,6 +10,11 @@ description: >
 MCP server: https://code.storage/docs/mcp
 Docs index: https://code.storage/docs/llms.txt
 
+Official SDKs (in this repository):
+- TypeScript / JavaScript: `@pierre/storage` (npm)
+- Python: `pierre-storage` (PyPI; import `pierre_storage`)
+- Go: `github.com/pierrecomputer/sdk/packages/code-storage-go`
+
 # ENVIRONMENT SETUP
 
 ## Required Environment Variables
@@ -36,15 +41,29 @@ Every request requires a JWT signed with your private key. Tokens are per-reposi
 ```json
 {
   "iss": "your-org",          // Organization identifier
-  "sub": "agent-id",          // Agent/pipeline identity (for logging)
+  "sub": "@pierre/storage",   // Subject (the SDKs set this to the package name)
   "repo": "team/project",     // Repository the token grants access to
   "scopes": ["git:read", "git:write"],
+  "ops": ["no-force-push"],   // Optional policy operations (see below)
   "iat": 1723453189,
   "exp": 1723456789
 }
 ```
 
-JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 also supported)
+JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
+
+### Policy Operations (`ops`)
+
+The optional `ops` claim narrows what a token may do at the protocol layer. The
+SDKs expose the canonical constant for force-push prevention:
+
+| Op string        | SDK constant                                                              | Effect                                                |
+|------------------|---------------------------------------------------------------------------|-------------------------------------------------------|
+| `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush` | Rejects force pushes / non-fast-forward ref updates. |
+
+Pass via the SDK `getRemoteURL` / `getEphemeralRemoteURL` / `getImportRemoteURL`
+helpers (`{ ops: [OP_NO_FORCE_PUSH] }`) or include the `ops` array directly when
+minting a JWT manually.
 
 ### Permission Scopes
 
@@ -75,6 +94,7 @@ Username is always `t`. Password is the JWT.
 | Create branch                 | POST     | `/repos/branches/create`          | `git:write`     |
 | List branches                 | GET      | `/repos/branches`                 | `git:read`      |
 | Get branch diff               | GET      | `/repos/branches/diff`            | `git:read`      |
+| Merge branches                | POST     | `/repos/merge`                    | `git:write`     |
 | Delete branch                 | DELETE   | `/repos/branches`                 | `git:write`     |
 | **COMMITS**                   |          |                                   |                 |
 | Create commit (file blobs)    | POST     | `/repos/commit-pack`              | `git:write`     |
@@ -96,14 +116,14 @@ Username is always `t`. Password is the JWT.
 | Create note on commit         | POST     | `/repos/notes` (action:"add")     | `git:write`     |
 | Append to note                | POST     | `/repos/notes` (action:"append")  | `git:write`     |
 | Get note for commit           | GET      | `/repos/notes?sha=SHA`            | `git:read`      |
-| Delete note                   | DELETE   | `/repos/notes` (action:"remove")  | `git:write`     |
+| Delete note                   | DELETE   | `/repos/notes`                    | `git:write`     |
 | **GIT SYNC**                  |          |                                   |                 |
 | Pull from upstream            | POST     | `/repos/pull-upstream`            | `git:write`     |
 | Detach upstream               | DELETE   | `/repos/base`                     | `git:write`     |
 | **GENERIC GIT SYNC**          |          |                                   |                 |
-| Create Git credential         | POST     | `/repos/git-credentials`          | authenticated   |
-| Update Git credential         | PUT      | `/repos/git-credentials`          | authenticated   |
-| Delete Git credential         | DELETE   | `/repos/git-credentials`          | authenticated   |
+| Create Git credential         | POST     | `/repos/git-credentials`          | `repo:write`    |
+| Update Git credential         | PUT      | `/repos/git-credentials`          | `repo:write`    |
+| Delete Git credential         | DELETE   | `/repos/git-credentials`          | `repo:write`    |
 
 All endpoints: `BASE_URL = https://api.{org}.code.storage/api/v1`
 All requests: `Authorization: Bearer $CODE_STORAGE_TOKEN`
@@ -140,15 +160,30 @@ curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
 }
 ```
 
-Generic providers include `gitlab`, `bitbucket`, `gitea`, `forgejo`, `codeberg`, `sr.ht`, and `sourcehut`.
+Generic providers: `gitlab`, `bitbucket`, `gitea`, `forgejo`, `codeberg`, `sr.ht`.
 For self-hosted providers, include `upstream_host`, for example `"upstream_host": "git.example.com"`.
 After creating a generic Git Sync repository, store upstream credentials with `/repos/git-credentials`.
+
+**With public GitHub (no GitHub App install required):**
+```json
+{
+  "default_branch": "main",
+  "base_repo": {
+    "provider": "github",
+    "owner": "octocat",
+    "name": "Hello-World",
+    "default_branch": "main",
+    "auth": { "auth_type": "public" }
+  }
+}
+```
 
 **Fork from existing Code Storage repo:**
 ```json
 {
   "base_repo": {
-    "provider": "code.storage",
+    "provider": "code",
+    "owner": "ORG_NAME",
     "name": "source-repo-id",
     "operation": "fork",
     "ref": "main",
@@ -156,15 +191,17 @@ After creating a generic Git Sync repository, store upstream credentials with `/
   }
 }
 ```
-Forking also supports `sha` to pin an exact source commit; `sha` overrides `ref`.
+`provider` for forks is the literal string `"code"`. Forking also supports `sha`
+to pin an exact source commit; `sha` overrides `ref`. `owner` is the
+organization name (the same value used as the JWT `iss`).
 
-Response `201`: `{ "repo_id": "...", "http_url": "team/project", "message": "..." }`
+Response `201`: `{ "repo_id": "...", "message": "..." }`
 Errors: `401` bad JWT/scope, `409` repo already exists or upstream already configured, `412` GitHub App config required for authenticated GitHub sync
 
 ## POST/PUT/DELETE /repos/git-credentials — Manage Generic Git Sync Credentials
 
 Use this endpoint family for generic HTTPS Git providers such as GitLab, Bitbucket, Gitea,
-Forgejo, Codeberg, SourceHut, and self-hosted remotes.
+Forgejo, Codeberg, sr.ht, and self-hosted remotes.
 
 ```bash
 # Create credential
@@ -207,8 +244,9 @@ curl "$CODE_STORAGE_BASE_URL/repo" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Repository identified from JWT `repo` claim.
-Response: `{ "repo_id", "url", "default_branch", "created_at", "base_repo?" }`
+Repository identified from JWT `repo` claim. Returns `404` when the repo does not exist.
+Response: `{ "default_branch", "created_at", "base_repo?" }` (the SDKs read
+`default_branch` and `created_at`; additional fields may be present.)
 
 ## DELETE /repos/delete — Delete Repository
 
@@ -226,10 +264,12 @@ Errors: `403` missing scope, `404` not found, `409` already deleted
 curl "$CODE_STORAGE_BASE_URL/repos/branches/create" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"base_branch":"main","target_branch":"feature/x","base_is_ephemeral":false,"target_is_ephemeral":false}'
+  -d '{"base_ref":"refs/heads/main","target_branch":"feature/x","base_is_ephemeral":false,"target_is_ephemeral":false}'
 ```
 
-Optional: `force` (bool), `preferred_base` (string), `base_is_ephemeral`, `target_is_ephemeral`
+Required: `target_branch` plus one of `base_ref` (preferred — accepts `refs/heads/...`,
+plain branch names, or commit SHAs) or `base_branch` (deprecated alias).
+Optional: `base_is_ephemeral`, `target_is_ephemeral`.
 Response: `{ "message", "target_branch", "target_is_ephemeral", "commit_sha" }`
 
 ## GET /repos/branches — List Branches
@@ -251,6 +291,31 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches/diff?branch=BRANCH&base=main&path=sr
 Params: `branch`(required), `base`, `ephemeral`, `ephemeral_base`, `path` (repeatable)
 Response: `{ "branch", "base", "stats": {files,additions,deletions,changes}, "files": [...], "filtered_files": [...] }`
 State codes in `files[].state`: `A`=added, `M`=modified, `D`=deleted, `R`=renamed
+
+## POST /repos/merge — Merge Branches
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/merge" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_branch": "feature/demo",
+    "target_branch": "main",
+    "strategy": "merge",
+    "source_is_ephemeral": false,
+    "target_is_ephemeral": false,
+    "commit_message": "Merge feature/demo",
+    "author": {"name": "Merge Bot", "email": "merge@example.com"}
+  }'
+```
+
+Required: `source_branch`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
+Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
+`commit_message`, `author`, `committer`, `allow_unrelated_histories`.
+Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"unknown",
+  "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
+  "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
+Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
 ## DELETE /repos/branches — Delete Branch
 
@@ -314,14 +379,19 @@ Large files (>500KB) or binary files appear in `filtered_files` without diff con
 
 ## POST /repos/restore-commit — Restore Branch to Commit
 
-Content-Type: `application/x-ndjson`
+Content-Type: `application/json`. Body wraps the metadata in a `metadata` envelope:
 
-```
-{"metadata":{"target_branch":"main","target_commit_sha":"abc123...","author":{"name":"Bot","email":"bot@x.com"},"commit_message":"Rollback"}}
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/restore-commit" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"metadata":{"target_branch":"main","target_commit_sha":"abc123...","author":{"name":"Bot","email":"bot@x.com"},"commit_message":"Rollback"}}'
 ```
 
-Optional: `expected_head_sha` (guard), `committer`
-Response: same schema as commit-pack result.
+Required metadata fields: `target_branch`, `target_commit_sha`, `author` (`name`+`email`).
+Optional: `commit_message`, `expected_head_sha` (guard), `committer`.
+Response: same schema as commit-pack result. Failed ref updates surface as
+`RefUpdateError` in the SDKs (status, message, ref details preserved).
 
 ## GET /repos/files — List Files
 
@@ -407,7 +477,8 @@ If the repository is synced to GitHub, tag create/delete triggers sync automatic
 
 ## Notes Endpoints (POST/GET/DELETE /repos/notes)
 
-All use same endpoint; differentiated by `action` field.
+POST creates or appends, differentiated by the `action` field (`"add"` or
+`"append"`). DELETE does not take an `action`.
 
 ```bash
 # Create note
@@ -417,7 +488,8 @@ curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
 
 # Append to note
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
-  -d '{"sha":"COMMIT_SHA","action":"append","note":"\nDeployed to staging",...}'
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sha":"COMMIT_SHA","action":"append","note":"\nDeployed to staging","author":{"name":"CI","email":"ci@x.com"}}'
 
 # Get note
 curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA" \
@@ -425,18 +497,24 @@ curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA" \
 
 # Delete note
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X DELETE \
-  -d '{"sha":"COMMIT_SHA","action":"remove","author":{...}}'
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sha":"COMMIT_SHA","author":{"name":"CI","email":"ci@x.com"}}'
 ```
 
-Response: `{ "sha", "target_ref": "refs/notes/commits", "new_ref_sha", "result": { "success", "status" } }`
+Optional fields on writes: `expected_ref_sha` (optimistic guard), `author` (`name`+`email`).
+Write response: `{ "sha", "target_ref": "refs/notes/commits", "base_commit?", "new_ref_sha", "result": { "success", "status", "message?" } }`
+Read response: `{ "sha", "note", "ref_sha" }`
 
 ## POST /repos/pull-upstream — Sync from Upstream
 
 ```bash
 curl "$CODE_STORAGE_BASE_URL/repos/pull-upstream" -X POST \
-  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'                # or '{"ref":"main"}' to scope the sync to one ref
 ```
 
+Optional body: `{ "ref": "BRANCH_OR_REF" }` to limit the pull to a single ref.
 Returns `202 Accepted`. Sync is async. Only works if repo was created with `base_repo`.
 Works for GitHub App sync and generic HTTPS Git Sync providers with stored credentials.
 
@@ -536,7 +614,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/files?ref=preview/pr-42&ephemeral=true" \
 curl "$CODE_STORAGE_BASE_URL/repos/branches/create" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"base_branch":"preview/pr-42","target_branch":"feature/new-ui","base_is_ephemeral":true,"target_is_ephemeral":false}'
+  -d '{"base_ref":"preview/pr-42","target_branch":"feature/new-ui","base_is_ephemeral":true,"target_is_ephemeral":false}'
 ```
 
 ## PROCEDURE 4: Fork + Customize (Template Pattern)
@@ -552,7 +630,7 @@ export CODE_STORAGE_TOKEN="$(mint_jwt --repo users/alice/my-project --scope repo
 curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"base_repo\":{\"provider\":\"code.storage\",\"name\":\"templates/starter\",\"operation\":\"fork\",\"ref\":\"main\",\"auth\":{\"token\":\"$SOURCE_TOKEN\"}}}"
+  -d "{\"base_repo\":{\"provider\":\"code\",\"owner\":\"$ORG_NAME\",\"name\":\"templates/starter\",\"operation\":\"fork\",\"ref\":\"main\",\"auth\":{\"token\":\"$SOURCE_TOKEN\"}}}"
 
 # Step 3 — Customize with a commit
 export CODE_STORAGE_TOKEN="$(mint_jwt --repo users/alice/my-project --scope git:write)"
@@ -577,7 +655,7 @@ curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
   -d '{"default_branch":"main","base_repo":{"provider":"github","owner":"my-org","name":"my-repo","default_branch":"main"}}'
 
 # Or create with a generic provider, then store credentials.
-# Provider values include gitlab, bitbucket, gitea, forgejo, codeberg, sr.ht, and sourcehut.
+# Provider values: gitlab, bitbucket, gitea, forgejo, codeberg, sr.ht.
 # For self-hosted remotes, include upstream_host in base_repo.
 curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
@@ -623,7 +701,40 @@ curl "$CODE_STORAGE_BASE_URL/repos/diff-commit" -X POST \
   -H "Content-Type: application/x-ndjson" --data-binary @-
 ```
 
-## PROCEDURE 7: Rollback a Branch
+## PROCEDURE 7: Mint a Force-Push-Prevented Remote URL (SDK)
+
+**Goal:** Hand out a clone/push URL that cannot rewrite history.
+
+```typescript
+import { GitStorage, OP_NO_FORCE_PUSH } from '@pierre/storage';
+
+const store = new GitStorage({ name: process.env.ORG_NAME!, key: process.env.PIERRE_PRIVATE_KEY! });
+const repo = store.repo({ id: 'team/project' });
+const safeRemote = await repo.getRemoteURL({
+  permissions: ['git:write'],
+  ttl: 3600,
+  ops: [OP_NO_FORCE_PUSH],
+});
+// git push to safeRemote — non-fast-forward updates are rejected.
+```
+
+```python
+from pierre_storage import GitStorage, OP_NO_FORCE_PUSH
+
+store = GitStorage(name=ORG_NAME, key=PIERRE_PRIVATE_KEY)
+repo = store.repo(id="team/project")
+safe_remote = await repo.get_remote_url(
+    permissions=["git:write"],
+    ttl=3600,
+    ops=[OP_NO_FORCE_PUSH],
+)
+```
+
+The same `ops` array also works on `getEphemeralRemoteURL` and
+`getImportRemoteURL`. When minting JWTs by hand, add `"ops": ["no-force-push"]`
+to the payload before signing.
+
+## PROCEDURE 8: Rollback a Branch
 
 **Goal:** Reset a branch to a known-good commit SHA.
 
@@ -633,11 +744,10 @@ curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 
 # Step 2 — Restore branch to that commit
-printf '%s\n' \
-  '{"metadata":{"target_branch":"main","target_commit_sha":"GOOD_SHA","author":{"name":"Agent","email":"agent@x.com"},"commit_message":"Rollback to stable"}}' | \
 curl "$CODE_STORAGE_BASE_URL/repos/restore-commit" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
-  -H "Content-Type: application/x-ndjson" --data-binary @-
+  -H "Content-Type: application/json" \
+  -d '{"metadata":{"target_branch":"main","target_commit_sha":"GOOD_SHA","author":{"name":"Agent","email":"agent@x.com"},"commit_message":"Rollback to stable"}}'
 ```
 
 # ERROR HANDLING GUIDE
@@ -719,3 +829,5 @@ git push origin feature-branch
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
+| Policy ops (`ops`)    | JWT-level guards. `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. |
+| Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`. 409 on conflict.       |
