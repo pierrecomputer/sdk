@@ -16,3 +16,9 @@ SDKS:
  - Go
 
 [SDK DOCUMENTATION](https://code.storage/docs/reference/sdk)
+
+~~~
+
+TO USE AGENT SKILLS:
+
+npx skills add pierrecomputer/sdk
