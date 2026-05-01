@@ -23,6 +23,7 @@ import {
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
   errorEnvelopeSchema,
+  getCommitResponseSchema,
   grepResponseSchema,
   listBranchesResponseSchema,
   listCommitsResponseSchema,
@@ -77,6 +78,9 @@ import type {
   GetCommitDiffOptions,
   GetCommitDiffResponse,
   GetCommitDiffResult,
+  GetCommitOptions,
+  GetCommitResponse,
+  GetCommitResult,
   GetFileOptions,
   GetNoteOptions,
   GetNoteResult,
@@ -344,6 +348,12 @@ function transformListCommitsResult(
     commits: raw.commits.map(transformCommitInfo),
     nextCursor: raw.next_cursor ?? undefined,
     hasMore: raw.has_more,
+  };
+}
+
+function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
+  return {
+    commit: transformCommitInfo(raw.commit),
   };
 }
 
@@ -941,6 +951,27 @@ class RepoImpl implements Repo {
       ...raw,
       next_cursor: raw.next_cursor ?? undefined,
     });
+  }
+
+  async getCommit(options: GetCommitOptions): Promise<GetCommitResult> {
+    const sha = options?.sha?.trim();
+    if (!sha) {
+      throw new Error('getCommit sha is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const response = await this.api.get(
+      { path: 'repos/commit', params: { sha } },
+      jwt
+    );
+
+    const raw = getCommitResponseSchema.parse(await response.json());
+    return transformGetCommitResult(raw);
   }
 
   async getNote(options: GetNoteOptions): Promise<GetNoteResult> {

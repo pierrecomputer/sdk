@@ -100,6 +100,7 @@ Username is always `t`. Password is the JWT.
 | Create commit (file blobs)    | POST     | `/repos/commit-pack`              | `git:write`     |
 | Create commit from diff/patch | POST     | `/repos/diff-commit`              | `git:write`     |
 | List commits                  | GET      | `/repos/commits`                  | `git:read`      |
+| Get commit                    | GET      | `/repos/commit`                   | `git:read`      |
 | Get commit diff               | GET      | `/repos/diff`                     | `git:read`      |
 | Restore branch to commit      | POST     | `/repos/restore-commit`           | `git:write`     |
 | **FILES**                     |          |                                   |                 |
@@ -365,6 +366,18 @@ curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20&cursor=CURSOR" \
 ```
 
 Response: `{ "commits": [{ "sha", "message", "author_name", "author_email", "date" }], "next_cursor", "has_more" }`
+
+## GET /repos/commit — Get Commit
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/commit?sha=COMMIT_SHA" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Params: `sha` (required — full SHA, short SHA, branch name, or any revision Git
+can resolve). Returns commit metadata only; use `/repos/diff` for the diff.
+Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date" } }`
+Errors: `400` missing/blank `sha`, `404` commit not found.
 
 ## GET /repos/diff — Get Commit Diff
 

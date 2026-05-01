@@ -268,6 +268,12 @@ class ListCommitsResult(TypedDict):
     has_more: bool
 
 
+class GetCommitResult(TypedDict):
+    """Result from fetching metadata for a single commit."""
+
+    commit: CommitInfo
+
+
 # Git notes types
 class NoteReadResult(TypedDict):
     """Result from reading a git note."""
@@ -742,6 +748,15 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in the repository."""
+        ...
+
+    async def get_commit(
+        self,
+        *,
+        sha: str,
+        ttl: Optional[int] = None,
+    ) -> GetCommitResult:
+        """Fetch metadata for a single commit (no diff)."""
         ...
 
     async def get_note(

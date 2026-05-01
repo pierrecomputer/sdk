@@ -34,6 +34,7 @@ from pierre_storage.types import (
     FilteredFile,
     GetBranchDiffResult,
     GetCommitDiffResult,
+    GetCommitResult,
     GrepFileMatch,
     GrepLine,
     GrepResult,
@@ -1059,6 +1060,60 @@ class RepoImpl:
                 "next_cursor": data.get("next_cursor"),
                 "has_more": data["has_more"],
             }
+
+    async def get_commit(
+        self,
+        *,
+        sha: str,
+        ttl: Optional[int] = None,
+    ) -> GetCommitResult:
+        """Get metadata for a single commit, without computing its diff.
+
+        Args:
+            sha: Commit SHA (or any revision git can resolve, e.g. branch
+                name or short SHA).
+            ttl: Token TTL in seconds.
+
+        Returns:
+            Commit metadata under the ``commit`` key.
+        """
+        sha_clean = sha.strip()
+        if not sha_clean:
+            raise ValueError("get_commit sha is required")
+
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+
+        url = (
+            f"{self.api_base_url}/api/v{self.api_version}/repos/commit"
+            f"?{urlencode({'sha': sha_clean})}"
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            commit_raw = data["commit"]
+            date = datetime.fromisoformat(commit_raw["date"].replace("Z", "+00:00"))
+            commit: CommitInfo = {
+                "sha": commit_raw["sha"],
+                "message": commit_raw["message"],
+                "author_name": commit_raw["author_name"],
+                "author_email": commit_raw["author_email"],
+                "committer_name": commit_raw["committer_name"],
+                "committer_email": commit_raw["committer_email"],
+                "date": date,
+                "raw_date": commit_raw["date"],
+            }
+            return {"commit": commit}
 
     async def get_note(
         self,

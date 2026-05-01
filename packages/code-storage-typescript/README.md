@@ -240,6 +240,10 @@ const commits = await repo.listCommits({
 });
 console.log(commits.commits);
 
+// Get a single commit's metadata (no diff)
+const { commit } = await repo.getCommit({ sha: 'abc123...' });
+console.log(commit.message, commit.authorName);
+
 // Read a git note for a commit
 const note = await repo.getNote({ sha: 'abc123...' });
 console.log(note.note);
@@ -510,6 +514,7 @@ interface Repo {
   ): Promise<ListFilesWithMetadataResult>;
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
+  getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
@@ -684,6 +689,15 @@ interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+}
+
+interface GetCommitOptions {
+  sha: string;
+  ttl?: number;
+}
+
+interface GetCommitResult {
+  commit: CommitInfo;
 }
 
 interface GetBranchDiffOptions {

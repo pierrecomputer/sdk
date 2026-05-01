@@ -1211,6 +1211,131 @@ class TestRepoCommitOperations:
             assert result["commits"][0]["message"] == "Initial commit"
 
     @pytest.mark.asyncio
+    async def test_get_commit(self, git_storage_options: dict) -> None:
+        """Test fetching a single commit's metadata."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commit_response = MagicMock()
+        commit_response.status_code = 200
+        commit_response.is_success = True
+        commit_response.raise_for_status = MagicMock()
+        commit_response.json.return_value = {
+            "commit": {
+                "sha": "abc123",
+                "message": "feat: add endpoint",
+                "author_name": "Jane Doe",
+                "author_email": "jane@example.com",
+                "committer_name": "Jane Doe",
+                "committer_email": "jane@example.com",
+                "date": "2024-01-15T14:32:18Z",
+            },
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=commit_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.get_commit(sha="abc123")
+
+            commit = result["commit"]
+            assert commit["sha"] == "abc123"
+            assert commit["message"] == "feat: add endpoint"
+            assert commit["author_name"] == "Jane Doe"
+            assert commit["author_email"] == "jane@example.com"
+            assert commit["committer_name"] == "Jane Doe"
+            assert commit["committer_email"] == "jane@example.com"
+            assert commit["raw_date"] == "2024-01-15T14:32:18Z"
+            assert isinstance(commit["date"], datetime)
+            assert commit["date"] == datetime(2024, 1, 15, 14, 32, 18, tzinfo=timezone.utc)
+
+            called_url = client_instance.get.call_args.args[0]
+            parsed = urlparse(called_url)
+            assert parsed.path.endswith("/api/v1/repos/commit")
+            assert parse_qs(parsed.query) == {"sha": ["abc123"]}
+
+            headers = client_instance.get.call_args.kwargs["headers"]
+            assert headers["Code-Storage-Agent"] == get_user_agent()
+            token = headers["Authorization"].replace("Bearer ", "")
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["scopes"] == ["git:read"]
+            assert payload["repo"] == "test-repo"
+
+    @pytest.mark.asyncio
+    async def test_get_commit_trims_sha_and_honors_ttl(self, git_storage_options: dict) -> None:
+        """get_commit should strip surrounding whitespace and apply ttl override."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commit_response = MagicMock()
+        commit_response.status_code = 200
+        commit_response.is_success = True
+        commit_response.raise_for_status = MagicMock()
+        commit_response.json.return_value = {
+            "commit": {
+                "sha": "abc123",
+                "message": "msg",
+                "author_name": "A",
+                "author_email": "a@example.com",
+                "committer_name": "A",
+                "committer_email": "a@example.com",
+                "date": "2024-01-15T14:32:18Z",
+            },
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=commit_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.get_commit(sha="  abc123  ", ttl=600)
+
+            called_url = client_instance.get.call_args.args[0]
+            parsed = urlparse(called_url)
+            assert parse_qs(parsed.query) == {"sha": ["abc123"]}
+
+            headers = client_instance.get.call_args.kwargs["headers"]
+            token = headers["Authorization"].replace("Bearer ", "")
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["exp"] - payload["iat"] == 600
+
+    @pytest.mark.asyncio
+    async def test_get_commit_requires_sha(self, git_storage_options: dict) -> None:
+        """get_commit should reject blank or whitespace-only sha values."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock()
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ValueError, match="get_commit sha is required"):
+                await repo.get_commit(sha="")
+
+            with pytest.raises(ValueError, match="get_commit sha is required"):
+                await repo.get_commit(sha="   ")
+
+            client_instance.get.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_restore_commit(self, git_storage_options: dict) -> None:
         """Test restoring to a previous commit."""
         storage = GitStorage(git_storage_options)

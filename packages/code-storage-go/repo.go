@@ -391,6 +391,47 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	return result, nil
 }
 
+// GetCommit returns metadata for a single commit without computing its diff.
+func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetCommitResult, error) {
+	sha := strings.TrimSpace(options.SHA)
+	if sha == "" {
+		return GetCommitResult{}, errors.New("getCommit sha is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return GetCommitResult{}, err
+	}
+
+	params := url.Values{}
+	params.Set("sha", sha)
+
+	resp, err := r.client.api.get(ctx, "repos/commit", params, jwtToken, nil)
+	if err != nil {
+		return GetCommitResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload getCommitResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return GetCommitResult{}, err
+	}
+
+	return GetCommitResult{
+		Commit: CommitInfo{
+			SHA:            payload.Commit.SHA,
+			Message:        payload.Commit.Message,
+			AuthorName:     payload.Commit.AuthorName,
+			AuthorEmail:    payload.Commit.AuthorEmail,
+			CommitterName:  payload.Commit.CommitterName,
+			CommitterEmail: payload.Commit.CommitterEmail,
+			Date:           parseTime(payload.Commit.Date),
+			RawDate:        payload.Commit.Date,
+		},
+	}, nil
+}
+
 // GetNote reads a git note.
 func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResult, error) {
 	sha := strings.TrimSpace(options.SHA)
