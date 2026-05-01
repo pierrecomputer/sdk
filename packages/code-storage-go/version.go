@@ -2,7 +2,7 @@ package storage
 
 const (
 	PackageName    = "code-storage-go-sdk"
-	PackageVersion = "0.4.2"
+	PackageVersion = "0.4.3"
 )
 
 func userAgent() string {

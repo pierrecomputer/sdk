@@ -200,8 +200,8 @@ fmt.Println(repo.ID)
 Because this Go module lives in a monorepo, git tags must be prefixed with the module's subdirectory path:
 
 ```bash
-git tag packages/code-storage-go/v0.2.2
-git push origin packages/code-storage-go/v0.2.2
+git tag packages/code-storage-go/v0.4.3
+git push origin packages/code-storage-go/v0.4.3
 ```
 
 Make sure the version in `version.go` (`PackageVersion`) matches the tag before tagging.
