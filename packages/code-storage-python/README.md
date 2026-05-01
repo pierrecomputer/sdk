@@ -210,6 +210,23 @@ print(branch_result["target_branch"], branch_result.get("commit_sha"))
 delete_branch_result = await repo.delete_branch(name="feature/old-onboarding")
 print(delete_branch_result["message"])
 
+# Merge one branch into another
+merge_result = await repo.merge(
+    source_branch="feature/preview",
+    source_is_ephemeral=True,   # optional; source branch can live in ephemeral namespace
+    target_branch="main",
+    target_is_ephemeral=False,  # optional; target branch can independently be ephemeral
+    strategy="merge",           # one of: "merge", "ff_only", "ff_prefer"
+    expected_target_sha="abc123",  # optional optimistic concurrency check
+    commit_message="Merge feature/preview",  # optional
+    author={"name": "Bot", "email": "bot@example.com"},  # optional
+    committer={"name": "Bot", "email": "bot@example.com"},  # optional
+    allow_unrelated_histories=False,  # optional
+    ttl=900,  # optional JWT TTL in seconds
+)
+print(merge_result["result"], merge_result["commit_sha"])
+print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
+
 # List tags
 tags = await repo.list_tags(limit=10)
 print(tags["tags"])
@@ -690,6 +707,22 @@ class Repo:
         name: str,
         ttl: Optional[int] = None,
     ) -> DeleteBranchResult: ...
+
+    async def merge(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        strategy: Literal["merge", "ff_only", "ff_prefer"],
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        expected_target_sha: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        committer: Optional[CommitSignature] = None,
+        allow_unrelated_histories: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> MergeBranchesResult: ...
 
     async def promote_ephemeral_branch(
         self,

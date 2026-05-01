@@ -417,6 +417,54 @@ class CreateCommitOptions(TypedDict, total=False):
     ttl: int
 
 
+MergeStrategy = Literal["merge", "ff_only", "ff_prefer"]
+MergeResultLabel = Literal["merge_commit", "fast_forward", "no_op", "unknown"]
+
+
+class MergeBranchesOptions(TypedDict, total=False):
+    """Options for merging repository branches."""
+
+    source_branch: str  # required
+    source_is_ephemeral: bool
+    target_branch: str  # required
+    target_is_ephemeral: bool
+    expected_target_sha: str
+    commit_message: str
+    author: CommitSignature
+    committer: CommitSignature
+    strategy: MergeStrategy  # required
+    allow_unrelated_histories: bool
+
+
+class MergeSourceResult(TypedDict):
+    """Source branch details from a merge result."""
+
+    branch: str
+    ephemeral: bool
+    sha: str
+
+
+class MergeTargetResult(TypedDict):
+    """Target branch details from a merge result."""
+
+    branch: str
+    ephemeral: bool
+    old_sha: str
+    new_sha: str
+
+
+class MergeBranchesResult(TypedDict):
+    """Result from merging repository branches."""
+
+    result: MergeResultLabel
+    commit_sha: str
+    tree_sha: str
+    source: MergeSourceResult
+    target: MergeTargetResult
+    merge_base_sha: NotRequired[str]
+    promoted_commits: int
+
+
 # Removed: CommitFileOptions - now uses **kwargs with explicit mode parameter
 
 
@@ -626,6 +674,24 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> DeleteBranchResult:
         """Delete a branch."""
+        ...
+
+    async def merge(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        strategy: MergeStrategy,
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        expected_target_sha: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        committer: Optional[CommitSignature] = None,
+        allow_unrelated_histories: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> MergeBranchesResult:
+        """Merge a source branch into a target branch."""
         ...
 
     async def list_tags(

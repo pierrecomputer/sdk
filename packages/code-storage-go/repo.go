@@ -851,6 +851,99 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 	}, nil
 }
 
+// Merge merges a source branch into a target branch.
+func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, error) {
+	sourceBranch := strings.TrimSpace(options.SourceBranch)
+	if sourceBranch == "" {
+		return MergeResult{}, errors.New("merge sourceBranch is required")
+	}
+	targetBranch := strings.TrimSpace(options.TargetBranch)
+	if targetBranch == "" {
+		return MergeResult{}, errors.New("merge targetBranch is required")
+	}
+	strategy := MergeStrategy(strings.TrimSpace(string(options.Strategy)))
+	if strategy == "" {
+		return MergeResult{}, errors.New("merge strategy is required")
+	}
+	if strategy != MergeStrategyMerge && strategy != MergeStrategyFFOnly && strategy != MergeStrategyFFPrefer {
+		return MergeResult{}, errors.New("merge strategy is invalid")
+	}
+
+	body := &mergeRequest{
+		SourceBranch:            sourceBranch,
+		SourceIsEphemeral:       options.SourceIsEphemeral,
+		TargetBranch:            targetBranch,
+		TargetIsEphemeral:       options.TargetIsEphemeral,
+		Strategy:                string(strategy),
+		AllowUnrelatedHistories: options.AllowUnrelatedHistories,
+	}
+	if expectedTargetSHA := strings.TrimSpace(options.ExpectedTargetSHA); expectedTargetSHA != "" {
+		body.ExpectedTargetSHA = expectedTargetSHA
+	}
+	if commitMessage := strings.TrimSpace(options.CommitMessage); commitMessage != "" {
+		body.CommitMessage = commitMessage
+	}
+	if options.Author != nil {
+		author, err := mergeSignaturePayload("author", options.Author)
+		if err != nil {
+			return MergeResult{}, err
+		}
+		body.Author = author
+	}
+	if options.Committer != nil {
+		committer, err := mergeSignaturePayload("committer", options.Committer)
+		if err != nil {
+			return MergeResult{}, err
+		}
+		body.Committer = committer
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl})
+	if err != nil {
+		return MergeResult{}, err
+	}
+
+	resp, err := r.client.api.post(ctx, "repos/merge", nil, body, jwtToken, nil)
+	if err != nil {
+		return MergeResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload mergeResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return MergeResult{}, err
+	}
+
+	return MergeResult{
+		Result:    MergeResultStatus(payload.Result),
+		CommitSHA: payload.CommitSHA,
+		TreeSHA:   payload.TreeSHA,
+		Source: MergeRef{
+			Branch:    payload.Source.Branch,
+			Ephemeral: payload.Source.Ephemeral,
+			SHA:       payload.Source.SHA,
+		},
+		Target: MergeTargetRef{
+			Branch:    payload.Target.Branch,
+			Ephemeral: payload.Target.Ephemeral,
+			OldSHA:    payload.Target.OldSHA,
+			NewSHA:    payload.Target.NewSHA,
+		},
+		MergeBaseSHA:    payload.MergeBaseSHA,
+		PromotedCommits: payload.PromotedCommits,
+	}, nil
+}
+
+func mergeSignaturePayload(field string, signature *CommitSignature) (*authorInfo, error) {
+	name := strings.TrimSpace(signature.Name)
+	email := strings.TrimSpace(signature.Email)
+	if name == "" || email == "" {
+		return nil, errors.New("merge " + field + " name and email are required when provided")
+	}
+	return &authorInfo{Name: name, Email: email}, nil
+}
+
 // CreateTag creates a tag.
 func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateTagResult, error) {
 	name := strings.TrimSpace(options.Name)

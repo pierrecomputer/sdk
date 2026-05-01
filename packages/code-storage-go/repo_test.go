@@ -272,6 +272,207 @@ func TestCreateBranchTTL(t *testing.T) {
 	}
 }
 
+func TestMergeRequestAndResponse(t *testing.T) {
+	var captured map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/merge" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := parseJWTFromToken(t, token)
+		scopes, ok := claims["scopes"].([]interface{})
+		if !ok || len(scopes) != 1 || scopes[0] != "git:write" {
+			t.Fatalf("unexpected scopes: %v", claims["scopes"])
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":"merge_commit","commit_sha":"commit123","tree_sha":"tree123","source":{"branch":"feature","ephemeral":true,"sha":"source123"},"target":{"branch":"main","ephemeral":false,"old_sha":"old123","new_sha":"new123"},"merge_base_sha":"base123","promoted_commits":2}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+	author := &CommitSignature{Name: " Bot ", Email: " bot@example.com "}
+	committer := &CommitSignature{Name: "Commit Bot", Email: "commit@example.com"}
+
+	result, err := repo.Merge(nil, MergeOptions{
+		SourceBranch:            " feature ",
+		SourceIsEphemeral:       true,
+		TargetBranch:            " main ",
+		TargetIsEphemeral:       false,
+		ExpectedTargetSHA:       " old123 ",
+		CommitMessage:           " Merge feature ",
+		Author:                  author,
+		Committer:               committer,
+		Strategy:                MergeStrategyMerge,
+		AllowUnrelatedHistories: true,
+	})
+	if err != nil {
+		t.Fatalf("merge error: %v", err)
+	}
+
+	if captured["source_branch"] != "feature" {
+		t.Fatalf("unexpected source_branch: %v", captured["source_branch"])
+	}
+	if captured["source_is_ephemeral"] != true {
+		t.Fatalf("unexpected source_is_ephemeral: %v", captured["source_is_ephemeral"])
+	}
+	if captured["target_branch"] != "main" {
+		t.Fatalf("unexpected target_branch: %v", captured["target_branch"])
+	}
+	if _, ok := captured["target_is_ephemeral"]; ok {
+		t.Fatalf("target_is_ephemeral should be omitted when false")
+	}
+	if captured["expected_target_sha"] != "old123" {
+		t.Fatalf("unexpected expected_target_sha: %v", captured["expected_target_sha"])
+	}
+	if captured["commit_message"] != "Merge feature" {
+		t.Fatalf("unexpected commit_message: %v", captured["commit_message"])
+	}
+	if captured["strategy"] != "merge" {
+		t.Fatalf("unexpected strategy: %v", captured["strategy"])
+	}
+	if captured["allow_unrelated_histories"] != true {
+		t.Fatalf("unexpected allow_unrelated_histories: %v", captured["allow_unrelated_histories"])
+	}
+	authorPayload, ok := captured["author"].(map[string]interface{})
+	if !ok || authorPayload["name"] != "Bot" || authorPayload["email"] != "bot@example.com" {
+		t.Fatalf("unexpected author: %#v", captured["author"])
+	}
+	committerPayload, ok := captured["committer"].(map[string]interface{})
+	if !ok || committerPayload["name"] != "Commit Bot" || committerPayload["email"] != "commit@example.com" {
+		t.Fatalf("unexpected committer: %#v", captured["committer"])
+	}
+
+	expected := MergeResult{
+		Result:          MergeResultMergeCommit,
+		CommitSHA:       "commit123",
+		TreeSHA:         "tree123",
+		Source:          MergeRef{Branch: "feature", Ephemeral: true, SHA: "source123"},
+		Target:          MergeTargetRef{Branch: "main", Ephemeral: false, OldSHA: "old123", NewSHA: "new123"},
+		MergeBaseSHA:    "base123",
+		PromotedCommits: 2,
+	}
+	if result != expected {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestMergeOmitsOptionalFields(t *testing.T) {
+	var captured map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/merge" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":"fast_forward","commit_sha":"new","tree_sha":"tree","source":{"branch":"feature","ephemeral":false,"sha":"new"},"target":{"branch":"main","ephemeral":true,"old_sha":"old","new_sha":"new"},"promoted_commits":1}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.Merge(nil, MergeOptions{
+		SourceBranch:      "feature",
+		TargetBranch:      "main",
+		TargetIsEphemeral: true,
+		Strategy:          MergeStrategyFFPrefer,
+	})
+	if err != nil {
+		t.Fatalf("merge error: %v", err)
+	}
+	for _, key := range []string{"source_is_ephemeral", "expected_target_sha", "commit_message", "author", "committer", "allow_unrelated_histories"} {
+		if _, ok := captured[key]; ok {
+			t.Fatalf("expected %s to be omitted", key)
+		}
+	}
+	if captured["target_is_ephemeral"] != true {
+		t.Fatalf("unexpected target_is_ephemeral: %v", captured["target_is_ephemeral"])
+	}
+	if result.Result != MergeResultFastForward || !result.Target.Ephemeral || result.MergeBaseSHA != "" {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestMergeValidation(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: "https://api.example.com"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	cases := []struct {
+		name    string
+		options MergeOptions
+		want    string
+	}{
+		{name: "missing_source", options: MergeOptions{TargetBranch: "main", Strategy: MergeStrategyMerge}, want: "merge sourceBranch is required"},
+		{name: "missing_target", options: MergeOptions{SourceBranch: "feature", Strategy: MergeStrategyMerge}, want: "merge targetBranch is required"},
+		{name: "missing_strategy", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main"}, want: "merge strategy is required"},
+		{name: "invalid_strategy", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategy("squash")}, want: "merge strategy is invalid"},
+		{name: "invalid_author", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge, Author: &CommitSignature{Name: "", Email: "bot@example.com"}}, want: "merge author name and email are required when provided"},
+		{name: "invalid_committer", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge, Committer: &CommitSignature{Name: "Bot", Email: ""}}, want: "merge committer name and email are required when provided"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := repo.Merge(nil, tc.options)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("expected %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestMergeConflictPreservesBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/merge" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"merge conflict","conflict_paths":["README.md"],"merge_base_sha":"base123"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	_, err = repo.Merge(nil, MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge})
+	if err == nil {
+		t.Fatalf("expected conflict error")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	body, ok := apiErr.Body.(map[string]interface{})
+	if !ok || body["error"] != "merge conflict" || body["merge_base_sha"] != "base123" {
+		t.Fatalf("unexpected error body: %#v", apiErr.Body)
+	}
+	paths, ok := body["conflict_paths"].([]interface{})
+	if !ok || len(paths) != 1 || paths[0] != "README.md" {
+		t.Fatalf("unexpected conflict paths: %#v", body["conflict_paths"])
+	}
+}
+
 func TestRestoreCommitConflict(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/restore-commit" {

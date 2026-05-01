@@ -666,6 +666,216 @@ class TestRepoBranchOperations:
             assert payload["target_branch"] == "feature/demo"
             assert payload["target_is_ephemeral"] is True
 
+
+    @pytest.mark.asyncio
+    async def test_merge_posts_body_and_parses_response(self, git_storage_options: dict) -> None:
+        """Test merging branches posts the expected body and parses the response."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        merge_response = MagicMock()
+        merge_response.status_code = 200
+        merge_response.is_success = True
+        merge_response.json.return_value = {
+            "result": "merge_commit",
+            "commit_sha": "merge123",
+            "tree_sha": "tree123",
+            "source": {"branch": "feature", "ephemeral": True, "sha": "source123"},
+            "target": {
+                "branch": "main",
+                "ephemeral": False,
+                "old_sha": "old123",
+                "new_sha": "merge123",
+            },
+            "merge_base_sha": "base123",
+            "promoted_commits": 2,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_repo_response, merge_response])
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.merge(
+                source_branch=" feature ",
+                source_is_ephemeral=True,
+                target_branch=" main ",
+                target_is_ephemeral=False,
+                expected_target_sha=" old123 ",
+                commit_message=" merge feature ",
+                author={"name": " Bot ", "email": " bot@example.com "},
+                committer={"name": " Commit Bot ", "email": " commit@example.com "},
+                strategy="merge",
+                allow_unrelated_histories=False,
+                ttl=900,
+            )
+
+            assert result == {
+                "result": "merge_commit",
+                "commit_sha": "merge123",
+                "tree_sha": "tree123",
+                "source": {"branch": "feature", "ephemeral": True, "sha": "source123"},
+                "target": {
+                    "branch": "main",
+                    "ephemeral": False,
+                    "old_sha": "old123",
+                    "new_sha": "merge123",
+                },
+                "merge_base_sha": "base123",
+                "promoted_commits": 2,
+            }
+
+            assert client_instance.post.await_count == 2
+            merge_call = client_instance.post.await_args_list[1]
+            assert merge_call.args[0].endswith("/api/v1/repos/merge")
+            assert merge_call.kwargs["json"] == {
+                "source_branch": "feature",
+                "source_is_ephemeral": True,
+                "target_branch": "main",
+                "target_is_ephemeral": False,
+                "expected_target_sha": "old123",
+                "commit_message": "merge feature",
+                "author": {"name": "Bot", "email": "bot@example.com"},
+                "committer": {"name": "Commit Bot", "email": "commit@example.com"},
+                "strategy": "merge",
+                "allow_unrelated_histories": False,
+            }
+            headers = merge_call.kwargs["headers"]
+            token = headers["Authorization"].replace("Bearer ", "")
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["scopes"] == ["git:write"]
+            assert payload["exp"] - payload["iat"] == 900
+
+    @pytest.mark.asyncio
+    async def test_merge_omits_blank_optional_fields(self, git_storage_options: dict) -> None:
+        """Blank optional merge fields should be omitted from the request body."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        merge_response = MagicMock()
+        merge_response.status_code = 200
+        merge_response.is_success = True
+        merge_response.json.return_value = {
+            "result": "fast_forward",
+            "commit_sha": "ff123",
+            "tree_sha": "tree123",
+            "source": {"branch": "feature", "ephemeral": False, "sha": "ff123"},
+            "target": {
+                "branch": "main",
+                "ephemeral": False,
+                "old_sha": "old123",
+                "new_sha": "ff123",
+            },
+            "promoted_commits": 1,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_repo_response, merge_response])
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.merge(
+                source_branch="feature",
+                target_branch="main",
+                strategy="ff_prefer",
+                expected_target_sha=" ",
+                commit_message=None,
+            )
+
+            assert "merge_base_sha" not in result
+            payload = client_instance.post.await_args_list[1].kwargs["json"]
+            assert payload == {
+                "source_branch": "feature",
+                "target_branch": "main",
+                "strategy": "ff_prefer",
+            }
+
+    @pytest.mark.asyncio
+    async def test_merge_conflict_keeps_response_body(self, git_storage_options: dict) -> None:
+        """Merge conflicts should surface the API error and retain the response body."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        conflict_body = {
+            "error": "merge conflict",
+            "conflict_paths": ["README.md"],
+            "merge_base_sha": "base123",
+        }
+        merge_response = MagicMock()
+        merge_response.status_code = 409
+        merge_response.is_success = False
+        merge_response.json.return_value = conflict_body
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_repo_response, merge_response])
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ApiError, match="merge conflict") as exc_info:
+                await repo.merge(source_branch="feature", target_branch="main", strategy="merge")
+
+            assert exc_info.value.status_code == 409
+            assert exc_info.value.response is merge_response
+            assert exc_info.value.response.json() == conflict_body
+
+    @pytest.mark.asyncio
+    async def test_merge_validation(self, git_storage_options: dict) -> None:
+        """Test merge validates required fields and optional signatures locally."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ValueError, match="source_branch is required"):
+                await repo.merge(source_branch=" ", target_branch="main", strategy="merge")
+
+            with pytest.raises(ValueError, match="target_branch is required"):
+                await repo.merge(source_branch="feature", target_branch=" ", strategy="merge")
+
+            with pytest.raises(ValueError, match="strategy is required"):
+                await repo.merge(source_branch="feature", target_branch="main", strategy=" ")
+
+            with pytest.raises(ValueError, match="strategy must be one of merge, ff_only, ff_prefer"):
+                await repo.merge(source_branch="feature", target_branch="main", strategy="squash")
+
+            with pytest.raises(ValueError, match="author name and email are required"):
+                await repo.merge(
+                    source_branch="feature",
+                    target_branch="main",
+                    strategy="merge",
+                    author={"name": "Bot", "email": " "},
+                )
+
+            with pytest.raises(ValueError, match="committer name and email are required"):
+                await repo.merge(
+                    source_branch="feature",
+                    target_branch="main",
+                    strategy="merge",
+                    committer={"name": " ", "email": "bot@example.com"},
+                )
+
+            assert client_instance.post.await_count == 1
     @pytest.mark.asyncio
     async def test_create_branch_falls_back_to_deprecated_base_branch(
         self, git_storage_options: dict
