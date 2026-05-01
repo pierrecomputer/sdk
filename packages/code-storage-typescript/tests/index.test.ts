@@ -219,6 +219,105 @@ describe('GitStorage', () => {
     });
   });
 
+  it('fetches a single commit with getCommit', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-get-commit' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
+      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+      expect(payload.scopes).toEqual(['git:read']);
+      expect(payload.repo).toBe('repo-get-commit');
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          commit: {
+            sha: 'abc123',
+            message: 'feat: add endpoint',
+            author_name: 'Jane Doe',
+            author_email: 'jane@example.com',
+            committer_name: 'Jane Doe',
+            committer_email: 'jane@example.com',
+            date: '2024-01-15T14:32:18Z',
+          },
+        }),
+      } as any);
+    });
+
+    const result = await repo.getCommit({ sha: 'abc123' });
+    expect(result.commit.sha).toBe('abc123');
+    expect(result.commit.message).toBe('feat: add endpoint');
+    expect(result.commit.authorName).toBe('Jane Doe');
+    expect(result.commit.authorEmail).toBe('jane@example.com');
+    expect(result.commit.committerName).toBe('Jane Doe');
+    expect(result.commit.committerEmail).toBe('jane@example.com');
+    expect(result.commit.rawDate).toBe('2024-01-15T14:32:18Z');
+    expect(result.commit.date).toBeInstanceOf(Date);
+    expect(result.commit.date.toISOString()).toBe('2024-01-15T14:32:18.000Z');
+  });
+
+  it('trims sha and honors ttl override on getCommit', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-get-commit-ttl' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
+      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+      expect(payload.scopes).toEqual(['git:read']);
+      expect(payload.exp - payload.iat).toBe(600);
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          commit: {
+            sha: 'abc123',
+            message: 'msg',
+            author_name: 'A',
+            author_email: 'a@example.com',
+            committer_name: 'A',
+            committer_email: 'a@example.com',
+            date: '2024-01-15T14:32:18Z',
+          },
+        }),
+      } as any);
+    });
+
+    const result = await repo.getCommit({ sha: '  abc123  ', ttl: 600 });
+    expect(result.commit.sha).toBe('abc123');
+  });
+
+  it('rejects getCommit when sha is missing or blank', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-get-commit-validation' });
+
+    await expect(
+      // @ts-expect-error - exercising runtime validation when sha is omitted
+      repo.getCommit({})
+    ).rejects.toThrow('getCommit sha is required');
+
+    await expect(repo.getCommit({ sha: '' })).rejects.toThrow(
+      'getCommit sha is required'
+    );
+
+    await expect(repo.getCommit({ sha: '   ' })).rejects.toThrow(
+      'getCommit sha is required'
+    );
+  });
+
   it('sends note payloads with createNote, appendNote, and deleteNote', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-notes-write' });
