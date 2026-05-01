@@ -100,7 +100,7 @@ Username is always `t`. Password is the JWT.
 | Create commit (file blobs)    | POST     | `/repos/commit-pack`              | `git:write`     |
 | Create commit from diff/patch | POST     | `/repos/diff-commit`              | `git:write`     |
 | List commits                  | GET      | `/repos/commits`                  | `git:read`      |
-| Get commit                    | GET      | `/repos/commit?sha=SHA`           | `git:read`      |
+| Get commit                    | GET      | `/repos/commit`                   | `git:read`      |
 | Get commit diff               | GET      | `/repos/diff`                     | `git:read`      |
 | Restore branch to commit      | POST     | `/repos/restore-commit`           | `git:write`     |
 | **FILES**                     |          |                                   |                 |
