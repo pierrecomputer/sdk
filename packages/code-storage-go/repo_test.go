@@ -1368,3 +1368,117 @@ func TestGetCommitRequiresSHA(t *testing.T) {
 func intPtr(value int) *int {
 	return &value
 }
+
+func TestBlame(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/blame" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if got := q.Get("path"); got != "src/x.go" {
+			t.Fatalf("unexpected path query: %q", got)
+		}
+		if got := q.Get("ref"); got != "main" {
+			t.Fatalf("unexpected ref query: %q", got)
+		}
+		if got := q.Get("start_line"); got != "10" {
+			t.Fatalf("unexpected start_line query: %q", got)
+		}
+		if got := q.Get("end_line"); got != "20" {
+			t.Fatalf("unexpected end_line query: %q", got)
+		}
+		if got := q.Get("detect_moves"); got != "true" {
+			t.Fatalf("unexpected detect_moves query: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"ref": "main",
+			"path": "src/x.go",
+			"commit": "aaa111",
+			"lines": [
+				{"line_number": 10, "commit_sha": "bbb222", "original_line_number": 5, "original_path": "src/x.go", "text": "package main"},
+				{"line_number": 11, "commit_sha": "ccc333", "original_line_number": 11, "original_path": "src/old.go", "text": "import \"fmt\""}
+			],
+			"commits": {
+				"bbb222": {"previous_commit_sha": "zzz000", "author_name": "Alice", "author_email": "alice@example.com", "author_time": "2024-01-15T14:32:18Z", "committer_name": "Alice", "committer_email": "alice@example.com", "committer_time": "2024-01-15T14:32:18Z", "summary": "init"},
+				"ccc333": {"author_name": "Bob", "author_email": "bob@example.com", "author_time": "2024-02-20T09:00:00Z", "committer_name": "Bob", "committer_email": "bob@example.com", "committer_time": "2024-02-20T09:00:00Z", "summary": "fix"}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.GetBlame(nil, BlameOptions{
+		Path:        "src/x.go",
+		Ref:         "main",
+		StartLine:   10,
+		EndLine:     20,
+		DetectMoves: true,
+	})
+	if err != nil {
+		t.Fatalf("blame error: %v", err)
+	}
+	if result.Ref != "main" || result.Path != "src/x.go" || result.Commit != "aaa111" {
+		t.Fatalf("unexpected top-level fields: %+v", result)
+	}
+	if len(result.Lines) != 2 {
+		t.Fatalf("unexpected line count: %d", len(result.Lines))
+	}
+	if result.Lines[0].CommitSHA != "bbb222" || result.Lines[0].LineNumber != 10 {
+		t.Fatalf("unexpected first line: %+v", result.Lines[0])
+	}
+	if result.Lines[1].OriginalPath != "src/old.go" {
+		t.Fatalf("unexpected original_path: %q", result.Lines[1].OriginalPath)
+	}
+	commit := result.Commits["bbb222"]
+	if commit.AuthorName != "Alice" || commit.PreviousCommitSHA != "zzz000" {
+		t.Fatalf("unexpected commit metadata: %+v", commit)
+	}
+	if commit.AuthorTime.IsZero() || commit.RawAuthorTime != "2024-01-15T14:32:18Z" {
+		t.Fatalf("unexpected author time: %+v", commit)
+	}
+}
+
+func TestBlameOmitsEmptyParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("path") != "src/x.go" {
+			t.Fatalf("expected path query")
+		}
+		for _, key := range []string{"ref", "ephemeral", "start_line", "end_line", "detect_moves"} {
+			if _, ok := q[key]; ok {
+				t.Fatalf("unexpected %q in query: %v", key, q.Get(key))
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ref":"main","path":"src/x.go","commit":"sha","lines":[],"commits":{}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.GetBlame(nil, BlameOptions{Path: "src/x.go"}); err != nil {
+		t.Fatalf("blame error: %v", err)
+	}
+}
+
+func TestBlameRequiresPath(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: "https://example.invalid"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.GetBlame(nil, BlameOptions{}); err == nil {
+		t.Fatalf("expected error for empty path")
+	}
+}

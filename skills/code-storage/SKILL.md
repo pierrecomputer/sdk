@@ -107,6 +107,7 @@ Username is always `t`. Password is the JWT.
 | List files at ref             | GET      | `/repos/files`                    | `git:read`      |
 | List files with metadata      | GET      | `/repos/files/metadata`           | `git:read`      |
 | Get file content (stream)     | GET      | `/repos/file`                     | `git:read`      |
+| Blame file at ref             | GET      | `/repos/blame`                    | `git:read`      |
 | Search content (grep)         | POST     | `/repos/grep`                     | `git:read`      |
 | Download archive (tar.gz)     | POST     | `/repos/archive`                  | `git:read`      |
 | **TAGS**                      |          |                                   |                 |
@@ -435,6 +436,44 @@ curl "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
 ```
 
 Response: raw file bytes (streaming), `Content-Type` set appropriately.
+
+## GET /repos/blame — Blame File
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&start_line=10&end_line=30&detect_moves=true" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Params: `path` (required — repository-relative file path), `ref` (branch, tag, or
+SHA; defaults to the repository default branch), `ephemeral` (resolve `ref` from
+the ephemeral namespace), `start_line`/`end_line` (1-based inclusive; both zero
+blames the whole file), `detect_moves` (follow renames and copies).
+Response:
+```json
+{
+  "ref": "main",
+  "path": "src/main.go",
+  "commit": "<resolved sha>",
+  "lines": [{
+    "line_number": 1,
+    "commit_sha": "...",
+    "original_line_number": 1,
+    "original_path": "src/main.go",
+    "text": "..."
+  }],
+  "commits": {
+    "<sha>": {
+      "previous_commit_sha": "...",
+      "author_name": "...", "author_email": "...", "author_time": "...",
+      "committer_name": "...", "committer_email": "...", "committer_time": "...",
+      "summary": "..."
+    }
+  }
+}
+```
+The top-level `commit` is the SHA the input ref resolved to. The `commits` map
+holds per-commit metadata for every authoring commit referenced by `lines[]`,
+deduped by SHA. Errors: `400` missing/invalid params, `404` ref/path not found.
 
 ## POST /repos/grep — Search Content (Beta)
 

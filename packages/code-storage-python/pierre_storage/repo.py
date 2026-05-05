@@ -16,6 +16,9 @@ from pierre_storage.commit import (
 )
 from pierre_storage.errors import ApiError, RefUpdateError, infer_ref_update_reason
 from pierre_storage.types import (
+    BlameCommit,
+    BlameLine,
+    BlameResult,
     BranchInfo,
     CommitBuilder,
     CommitInfo,
@@ -1114,6 +1117,109 @@ class RepoImpl:
                 "raw_date": commit_raw["date"],
             }
             return {"commit": commit}
+
+    async def get_blame(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        detect_moves: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> BlameResult:
+        """Return per-line authorship for a file at a ref.
+
+        Args:
+            path: Repository-relative file path to blame.
+            ref: Branch, tag, or commit SHA to blame at. Defaults to the
+                repository default branch.
+            ephemeral: Resolve ``ref`` from the ephemeral namespace.
+            start_line: 1-based inclusive start line. Both ``start_line`` and
+                ``end_line`` zero blames the whole file.
+            end_line: 1-based inclusive end line.
+            detect_moves: Follow the file across renames and copies.
+            ttl: Token TTL in seconds.
+
+        Returns:
+            Per-line attribution plus a deduped commits map.
+        """
+        path_clean = path.strip()
+        if not path_clean:
+            raise ValueError("get_blame path is required")
+
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+
+        params: Dict[str, str] = {"path": path_clean}
+        if ref is not None and ref.strip():
+            params["ref"] = ref.strip()
+        if ephemeral:
+            params["ephemeral"] = "true"
+        if start_line:
+            params["start_line"] = str(start_line)
+        if end_line:
+            params["end_line"] = str(end_line)
+        if detect_moves:
+            params["detect_moves"] = "true"
+
+        url = (
+            f"{self.api_base_url}/api/v{self.api_version}/repos/blame"
+            f"?{urlencode(params)}"
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            lines: List[BlameLine] = [
+                {
+                    "line_number": entry["line_number"],
+                    "commit_sha": entry["commit_sha"],
+                    "original_line_number": entry["original_line_number"],
+                    "original_path": entry["original_path"],
+                    "text": entry["text"],
+                }
+                for entry in data.get("lines", [])
+            ]
+
+            commits: Dict[str, BlameCommit] = {}
+            for sha, raw in (data.get("commits") or {}).items():
+                author_time_raw = raw["author_time"]
+                committer_time_raw = raw["committer_time"]
+                commits[sha] = {
+                    "previous_commit_sha": raw.get("previous_commit_sha"),
+                    "author_name": raw["author_name"],
+                    "author_email": raw["author_email"],
+                    "author_time": datetime.fromisoformat(
+                        author_time_raw.replace("Z", "+00:00")
+                    ),
+                    "raw_author_time": author_time_raw,
+                    "committer_name": raw["committer_name"],
+                    "committer_email": raw["committer_email"],
+                    "committer_time": datetime.fromisoformat(
+                        committer_time_raw.replace("Z", "+00:00")
+                    ),
+                    "raw_committer_time": committer_time_raw,
+                    "summary": raw["summary"],
+                }
+
+            return {
+                "ref": data["ref"],
+                "path": data["path"],
+                "commit": data["commit"],
+                "lines": lines,
+                "commits": commits,
+            }
 
     async def get_note(
         self,

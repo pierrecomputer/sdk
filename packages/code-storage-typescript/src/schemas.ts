@@ -57,6 +57,33 @@ export const getCommitResponseSchema = z.object({
   commit: commitInfoRawSchema,
 });
 
+export const blameLineRawSchema = z.object({
+  line_number: z.number(),
+  commit_sha: z.string(),
+  original_line_number: z.number(),
+  original_path: z.string(),
+  text: z.string(),
+});
+
+export const blameCommitRawSchema = z.object({
+  previous_commit_sha: z.string().optional(),
+  author_name: z.string(),
+  author_email: z.string(),
+  author_time: z.string(),
+  committer_name: z.string(),
+  committer_email: z.string(),
+  committer_time: z.string(),
+  summary: z.string(),
+});
+
+export const blameResponseSchema = z.object({
+  ref: z.string(),
+  path: z.string(),
+  commit: z.string(),
+  lines: z.array(blameLineRawSchema),
+  commits: z.record(blameCommitRawSchema),
+});
+
 export const repoBaseInfoSchema = z.object({
   provider: z.string(),
   owner: z.string(),
@@ -288,6 +315,9 @@ export type ListBranchesResponseRaw = z.infer<
 export type RawCommitInfo = z.infer<typeof commitInfoRawSchema>;
 export type ListCommitsResponseRaw = z.infer<typeof listCommitsResponseSchema>;
 export type GetCommitResponseRaw = z.infer<typeof getCommitResponseSchema>;
+export type BlameLineRaw = z.infer<typeof blameLineRawSchema>;
+export type BlameCommitRaw = z.infer<typeof blameCommitRawSchema>;
+export type BlameResponseRaw = z.infer<typeof blameResponseSchema>;
 export type RawRepoBaseInfo = z.infer<typeof repoBaseInfoSchema>;
 export type RawRepoInfo = z.infer<typeof repoInfoSchema>;
 export type ListReposResponseRaw = z.infer<typeof listReposResponseSchema>;

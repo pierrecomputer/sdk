@@ -318,6 +318,150 @@ describe('GitStorage', () => {
     );
   });
 
+  it('blames a file with full options', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-blame' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/blame')).toBe(true);
+      expect(requestUrl.searchParams.get('path')).toBe('src/x.go');
+      expect(requestUrl.searchParams.get('ref')).toBe('main');
+      expect(requestUrl.searchParams.get('start_line')).toBe('10');
+      expect(requestUrl.searchParams.get('end_line')).toBe('20');
+      expect(requestUrl.searchParams.get('detect_moves')).toBe('true');
+
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+      expect(payload.scopes).toEqual(['git:read']);
+      expect(payload.repo).toBe('repo-blame');
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          ref: 'main',
+          path: 'src/x.go',
+          commit: 'aaa111',
+          lines: [
+            {
+              line_number: 10,
+              commit_sha: 'bbb222',
+              original_line_number: 5,
+              original_path: 'src/x.go',
+              text: 'package main',
+            },
+            {
+              line_number: 11,
+              commit_sha: 'ccc333',
+              original_line_number: 11,
+              original_path: 'src/old.go',
+              text: 'import "fmt"',
+            },
+          ],
+          commits: {
+            bbb222: {
+              previous_commit_sha: 'zzz000',
+              author_name: 'Alice',
+              author_email: 'alice@example.com',
+              author_time: '2024-01-15T14:32:18Z',
+              committer_name: 'Alice',
+              committer_email: 'alice@example.com',
+              committer_time: '2024-01-15T14:32:18Z',
+              summary: 'init',
+            },
+            ccc333: {
+              author_name: 'Bob',
+              author_email: 'bob@example.com',
+              author_time: '2024-02-20T09:00:00Z',
+              committer_name: 'Bob',
+              committer_email: 'bob@example.com',
+              committer_time: '2024-02-20T09:00:00Z',
+              summary: 'fix',
+            },
+          },
+        }),
+      } as any);
+    });
+
+    const result = await repo.getBlame({
+      path: 'src/x.go',
+      ref: 'main',
+      startLine: 10,
+      endLine: 20,
+      detectMoves: true,
+    });
+
+    expect(result.ref).toBe('main');
+    expect(result.path).toBe('src/x.go');
+    expect(result.commit).toBe('aaa111');
+    expect(result.lines).toHaveLength(2);
+    expect(result.lines[0].commitSha).toBe('bbb222');
+    expect(result.lines[1].originalPath).toBe('src/old.go');
+
+    const commit = result.commits.bbb222;
+    expect(commit.authorName).toBe('Alice');
+    expect(commit.previousCommitSha).toBe('zzz000');
+    expect(commit.rawAuthorTime).toBe('2024-01-15T14:32:18Z');
+    expect(commit.authorTime).toBeInstanceOf(Date);
+    expect(commit.authorTime.toISOString()).toBe('2024-01-15T14:32:18.000Z');
+  });
+
+  it('omits optional blame params when not provided', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-blame-defaults' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.searchParams.get('path')).toBe('src/x.go');
+      for (const key of [
+        'ref',
+        'ephemeral',
+        'start_line',
+        'end_line',
+        'detect_moves',
+      ]) {
+        expect(requestUrl.searchParams.has(key)).toBe(false);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          ref: 'main',
+          path: 'src/x.go',
+          commit: 'sha',
+          lines: [],
+          commits: {},
+        }),
+      } as any);
+    });
+
+    const result = await repo.getBlame({ path: 'src/x.go' });
+    expect(result.lines).toEqual([]);
+    expect(result.commits).toEqual({});
+  });
+
+  it('rejects blame when path is missing or blank', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-blame-validation' });
+
+    await expect(
+      // @ts-expect-error - exercising runtime validation when path is omitted
+      repo.getBlame({})
+    ).rejects.toThrow('getBlame path is required');
+
+    await expect(repo.getBlame({ path: '' })).rejects.toThrow(
+      'getBlame path is required'
+    );
+
+    await expect(repo.getBlame({ path: '   ' })).rejects.toThrow(
+      'getBlame path is required'
+    );
+  });
+
   it('sends note payloads with createNote, appendNote, and deleteNote', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-notes-write' });

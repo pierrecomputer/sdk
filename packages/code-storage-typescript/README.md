@@ -244,6 +244,21 @@ console.log(commits.commits);
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
 console.log(commit.message, commit.authorName);
 
+// Blame a file (per-line authorship). The top-level `commit` is the SHA the
+// `ref` resolved to; `commits` is a deduped map of authoring commits referenced
+// by `lines[].commitSha`.
+const blame = await repo.getBlame({
+  path: 'src/main.go',
+  ref: 'main',
+  startLine: 10,
+  endLine: 30,
+  detectMoves: true,
+});
+for (const line of blame.lines) {
+  const author = blame.commits[line.commitSha];
+  console.log(`${line.lineNumber}: ${author.authorName}\t${line.text}`);
+}
+
 // Read a git note for a commit
 const note = await repo.getNote({ sha: 'abc123...' });
 console.log(note.note);
@@ -515,6 +530,7 @@ interface Repo {
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
   getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
+  getBlame(options: BlameOptions): Promise<BlameResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
@@ -698,6 +714,45 @@ interface GetCommitOptions {
 
 interface GetCommitResult {
   commit: CommitInfo;
+}
+
+interface BlameOptions {
+  path: string;
+  ref?: string;
+  ephemeral?: boolean;
+  startLine?: number;
+  endLine?: number;
+  detectMoves?: boolean;
+  ttl?: number;
+}
+
+interface BlameLine {
+  lineNumber: number;
+  commitSha: string;
+  originalLineNumber: number;
+  originalPath: string;
+  text: string;
+}
+
+interface BlameCommit {
+  previousCommitSha?: string;
+  authorName: string;
+  authorEmail: string;
+  authorTime: Date;
+  rawAuthorTime: string;
+  committerName: string;
+  committerEmail: string;
+  committerTime: Date;
+  rawCommitterTime: string;
+  summary: string;
+}
+
+interface BlameResult {
+  ref: string;       // The ref passed in (or default branch resolved)
+  path: string;
+  commit: string;    // SHA the input ref resolved to at request time
+  lines: BlameLine[];
+  commits: Record<string, BlameCommit>; // Per-authoring-commit metadata
 }
 
 interface GetBranchDiffOptions {

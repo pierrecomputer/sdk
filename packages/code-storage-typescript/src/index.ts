@@ -23,6 +23,7 @@ import {
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
   errorEnvelopeSchema,
+  blameResponseSchema,
   getCommitResponseSchema,
   grepResponseSchema,
   listBranchesResponseSchema,
@@ -78,6 +79,9 @@ import type {
   GetCommitDiffOptions,
   GetCommitDiffResponse,
   GetCommitDiffResult,
+  BlameOptions,
+  BlameResponse,
+  BlameResult,
   GetCommitOptions,
   GetCommitResponse,
   GetCommitResult,
@@ -354,6 +358,38 @@ function transformListCommitsResult(
 function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
   return {
     commit: transformCommitInfo(raw.commit),
+  };
+}
+
+function transformBlameResult(raw: BlameResponse): BlameResult {
+  const commits: BlameResult['commits'] = {};
+  for (const [sha, c] of Object.entries(raw.commits)) {
+    commits[sha] = {
+      previousCommitSha: c.previous_commit_sha,
+      authorName: c.author_name,
+      authorEmail: c.author_email,
+      authorTime: new Date(c.author_time),
+      rawAuthorTime: c.author_time,
+      committerName: c.committer_name,
+      committerEmail: c.committer_email,
+      committerTime: new Date(c.committer_time),
+      rawCommitterTime: c.committer_time,
+      summary: c.summary,
+    };
+  }
+
+  return {
+    ref: raw.ref,
+    path: raw.path,
+    commit: raw.commit,
+    lines: raw.lines.map((line) => ({
+      lineNumber: line.line_number,
+      commitSha: line.commit_sha,
+      originalLineNumber: line.original_line_number,
+      originalPath: line.original_path,
+      text: line.text,
+    })),
+    commits,
   };
 }
 
@@ -972,6 +1008,45 @@ class RepoImpl implements Repo {
 
     const raw = getCommitResponseSchema.parse(await response.json());
     return transformGetCommitResult(raw);
+  }
+
+  async getBlame(options: BlameOptions): Promise<BlameResult> {
+    const path = options?.path?.trim();
+    if (!path) {
+      throw new Error('getBlame path is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const params: Record<string, string> = { path };
+    const ref = options.ref?.trim();
+    if (ref) {
+      params.ref = ref;
+    }
+    if (options.ephemeral) {
+      params.ephemeral = 'true';
+    }
+    if (options.startLine) {
+      params.start_line = String(options.startLine);
+    }
+    if (options.endLine) {
+      params.end_line = String(options.endLine);
+    }
+    if (options.detectMoves) {
+      params.detect_moves = 'true';
+    }
+
+    const response = await this.api.get(
+      { path: 'repos/blame', params },
+      jwt
+    );
+
+    const raw = blameResponseSchema.parse(await response.json());
+    return transformBlameResult(raw);
   }
 
   async getNote(options: GetNoteOptions): Promise<GetNoteResult> {

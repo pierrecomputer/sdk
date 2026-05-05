@@ -47,6 +47,33 @@ type getCommitResponse struct {
 	Commit commitInfoRaw `json:"commit"`
 }
 
+type blameResponse struct {
+	Ref     string                  `json:"ref"`
+	Path    string                  `json:"path"`
+	Commit  string                  `json:"commit"`
+	Lines   []blameLineRaw          `json:"lines"`
+	Commits map[string]blameCommitRaw `json:"commits"`
+}
+
+type blameLineRaw struct {
+	LineNumber         int32  `json:"line_number"`
+	CommitSHA          string `json:"commit_sha"`
+	OriginalLineNumber int32  `json:"original_line_number"`
+	OriginalPath       string `json:"original_path"`
+	Text               string `json:"text"`
+}
+
+type blameCommitRaw struct {
+	PreviousCommitSHA string `json:"previous_commit_sha,omitempty"`
+	AuthorName        string `json:"author_name"`
+	AuthorEmail       string `json:"author_email"`
+	AuthorTime        string `json:"author_time"`
+	CommitterName     string `json:"committer_name"`
+	CommitterEmail    string `json:"committer_email"`
+	CommitterTime     string `json:"committer_time"`
+	Summary           string `json:"summary"`
+}
+
 type commitInfoRaw struct {
 	SHA            string `json:"sha"`
 	Message        string `json:"message"`
