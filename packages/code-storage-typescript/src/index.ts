@@ -362,34 +362,26 @@ function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
 }
 
 function transformBlameResult(raw: BlameResponse): BlameResult {
-  const commits: BlameResult['commits'] = {};
-  for (const [sha, c] of Object.entries(raw.commits)) {
-    commits[sha] = {
-      previousCommitSha: c.previous_commit_sha,
-      authorName: c.author_name,
-      authorEmail: c.author_email,
-      authorTime: new Date(c.author_time),
-      rawAuthorTime: c.author_time,
-      committerName: c.committer_name,
-      committerEmail: c.committer_email,
-      committerTime: new Date(c.committer_time),
-      rawCommitterTime: c.committer_time,
-      summary: c.summary,
-    };
-  }
-
   return {
     ref: raw.ref,
     path: raw.path,
-    commit: raw.commit,
+    commitSha: raw.commit_sha,
     lines: raw.lines.map((line) => ({
       lineNumber: line.line_number,
       commitSha: line.commit_sha,
       originalLineNumber: line.original_line_number,
       originalPath: line.original_path,
-      text: line.text,
+      previousCommitSha: line.previous_commit_sha,
+      authorName: line.author_name,
+      authorEmail: line.author_email,
+      authorTime: new Date(line.author_time),
+      rawAuthorTime: line.author_time,
+      committerName: line.committer_name,
+      committerEmail: line.committer_email,
+      committerTime: new Date(line.committer_time),
+      rawCommitterTime: line.committer_time,
+      summary: line.summary,
     })),
-    commits,
   };
 }
 

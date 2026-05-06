@@ -6,8 +6,6 @@ import type {
   CreateTagResponseRaw,
   DeleteBranchResponseRaw,
   DeleteTagResponseRaw,
-  BlameCommitRaw as SchemaBlameCommitRaw,
-  BlameLineRaw as SchemaBlameLineRaw,
   BlameResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
@@ -461,10 +459,6 @@ export interface BlameLine {
   commitSha: string;
   originalLineNumber: number;
   originalPath: string;
-  text: string;
-}
-
-export interface BlameCommit {
   previousCommitSha?: string;
   authorName: string;
   authorEmail: string;
@@ -480,9 +474,8 @@ export interface BlameCommit {
 export interface BlameResult {
   ref: string;
   path: string;
-  commit: string;
+  commitSha: string;
   lines: BlameLine[];
-  commits: Record<string, BlameCommit>;
 }
 
 // Git notes API types

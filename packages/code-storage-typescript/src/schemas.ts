@@ -62,10 +62,6 @@ export const blameLineRawSchema = z.object({
   commit_sha: z.string(),
   original_line_number: z.number(),
   original_path: z.string(),
-  text: z.string(),
-});
-
-export const blameCommitRawSchema = z.object({
   previous_commit_sha: z.string().optional(),
   author_name: z.string(),
   author_email: z.string(),
@@ -79,9 +75,8 @@ export const blameCommitRawSchema = z.object({
 export const blameResponseSchema = z.object({
   ref: z.string(),
   path: z.string(),
-  commit: z.string(),
+  commit_sha: z.string(),
   lines: z.array(blameLineRawSchema),
-  commits: z.record(blameCommitRawSchema),
 });
 
 export const repoBaseInfoSchema = z.object({
@@ -316,7 +311,6 @@ export type RawCommitInfo = z.infer<typeof commitInfoRawSchema>;
 export type ListCommitsResponseRaw = z.infer<typeof listCommitsResponseSchema>;
 export type GetCommitResponseRaw = z.infer<typeof getCommitResponseSchema>;
 export type BlameLineRaw = z.infer<typeof blameLineRawSchema>;
-export type BlameCommitRaw = z.infer<typeof blameCommitRawSchema>;
 export type BlameResponseRaw = z.infer<typeof blameResponseSchema>;
 export type RawRepoBaseInfo = z.infer<typeof repoBaseInfoSchema>;
 export type RawRepoInfo = z.infer<typeof repoInfoSchema>;

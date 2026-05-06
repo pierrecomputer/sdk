@@ -16,7 +16,6 @@ from pierre_storage.commit import (
 )
 from pierre_storage.errors import ApiError, RefUpdateError, infer_ref_update_reason
 from pierre_storage.types import (
-    BlameCommit,
     BlameLine,
     BlameResult,
     BranchInfo,
@@ -1181,44 +1180,39 @@ class RepoImpl:
             response.raise_for_status()
             data = response.json()
 
-            lines: List[BlameLine] = [
-                {
+            lines: List[BlameLine] = []
+            for entry in data.get("lines", []):
+                author_time_raw = entry["author_time"]
+                committer_time_raw = entry["committer_time"]
+                line: BlameLine = {
                     "line_number": entry["line_number"],
                     "commit_sha": entry["commit_sha"],
                     "original_line_number": entry["original_line_number"],
                     "original_path": entry["original_path"],
-                    "text": entry["text"],
-                }
-                for entry in data.get("lines", [])
-            ]
-
-            commits: Dict[str, BlameCommit] = {}
-            for sha, raw in (data.get("commits") or {}).items():
-                author_time_raw = raw["author_time"]
-                committer_time_raw = raw["committer_time"]
-                commits[sha] = {
-                    "previous_commit_sha": raw.get("previous_commit_sha"),
-                    "author_name": raw["author_name"],
-                    "author_email": raw["author_email"],
+                    "author_name": entry["author_name"],
+                    "author_email": entry["author_email"],
                     "author_time": datetime.fromisoformat(
                         author_time_raw.replace("Z", "+00:00")
                     ),
                     "raw_author_time": author_time_raw,
-                    "committer_name": raw["committer_name"],
-                    "committer_email": raw["committer_email"],
+                    "committer_name": entry["committer_name"],
+                    "committer_email": entry["committer_email"],
                     "committer_time": datetime.fromisoformat(
                         committer_time_raw.replace("Z", "+00:00")
                     ),
                     "raw_committer_time": committer_time_raw,
-                    "summary": raw["summary"],
+                    "summary": entry["summary"],
                 }
+                previous = entry.get("previous_commit_sha")
+                if previous:
+                    line["previous_commit_sha"] = previous
+                lines.append(line)
 
             return {
                 "ref": data["ref"],
                 "path": data["path"],
-                "commit": data["commit"],
+                "commit_sha": data["commit_sha"],
                 "lines": lines,
-                "commits": commits,
             }
 
     async def get_note(

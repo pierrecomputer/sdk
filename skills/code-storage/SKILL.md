@@ -453,27 +453,23 @@ Response:
 {
   "ref": "main",
   "path": "src/main.go",
-  "commit": "<resolved sha>",
+  "commit_sha": "<resolved sha>",
   "lines": [{
     "line_number": 1,
     "commit_sha": "...",
     "original_line_number": 1,
     "original_path": "src/main.go",
-    "text": "..."
-  }],
-  "commits": {
-    "<sha>": {
-      "previous_commit_sha": "...",
-      "author_name": "...", "author_email": "...", "author_time": "...",
-      "committer_name": "...", "committer_email": "...", "committer_time": "...",
-      "summary": "..."
-    }
-  }
+    "previous_commit_sha": "...",
+    "author_name": "...", "author_email": "...", "author_time": "...",
+    "committer_name": "...", "committer_email": "...", "committer_time": "...",
+    "summary": "..."
+  }]
 }
 ```
-The top-level `commit` is the SHA the input ref resolved to. The `commits` map
-holds per-commit metadata for every authoring commit referenced by `lines[]`,
-deduped by SHA. Errors: `400` missing/invalid params, `404` ref/path not found.
+The top-level `commit_sha` is the SHA the input ref resolved to. Each entry in
+`lines[]` carries its authoring commit's metadata inline; `previous_commit_sha`
+is omitted when the line has no prior version (e.g. introduced in the initial
+commit). Errors: `400` missing/invalid params, `404` ref/path not found.
 
 ## POST /repos/grep — Search Content (Beta)
 

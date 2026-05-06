@@ -1352,25 +1352,13 @@ class TestRepoCommitOperations:
         blame_response.json.return_value = {
             "ref": "main",
             "path": "src/x.go",
-            "commit": "aaa111",
+            "commit_sha": "aaa111",
             "lines": [
                 {
                     "line_number": 10,
                     "commit_sha": "bbb222",
                     "original_line_number": 5,
                     "original_path": "src/x.go",
-                    "text": "package main",
-                },
-                {
-                    "line_number": 11,
-                    "commit_sha": "ccc333",
-                    "original_line_number": 11,
-                    "original_path": "src/old.go",
-                    "text": "import \"fmt\"",
-                },
-            ],
-            "commits": {
-                "bbb222": {
                     "previous_commit_sha": "zzz000",
                     "author_name": "Alice",
                     "author_email": "alice@example.com",
@@ -1380,7 +1368,11 @@ class TestRepoCommitOperations:
                     "committer_time": "2024-01-15T14:32:18Z",
                     "summary": "init",
                 },
-                "ccc333": {
+                {
+                    "line_number": 11,
+                    "commit_sha": "ccc333",
+                    "original_line_number": 11,
+                    "original_path": "src/old.go",
                     "author_name": "Bob",
                     "author_email": "bob@example.com",
                     "author_time": "2024-02-20T09:00:00Z",
@@ -1389,7 +1381,7 @@ class TestRepoCommitOperations:
                     "committer_time": "2024-02-20T09:00:00Z",
                     "summary": "fix",
                 },
-            },
+            ],
         }
 
         with patch("httpx.AsyncClient") as mock_client:
@@ -1408,19 +1400,23 @@ class TestRepoCommitOperations:
 
             assert result["ref"] == "main"
             assert result["path"] == "src/x.go"
-            assert result["commit"] == "aaa111"
+            assert result["commit_sha"] == "aaa111"
             assert len(result["lines"]) == 2
-            assert result["lines"][0]["commit_sha"] == "bbb222"
-            assert result["lines"][1]["original_path"] == "src/old.go"
 
-            commit = result["commits"]["bbb222"]
-            assert commit["author_name"] == "Alice"
-            assert commit["previous_commit_sha"] == "zzz000"
-            assert commit["raw_author_time"] == "2024-01-15T14:32:18Z"
-            assert isinstance(commit["author_time"], datetime)
-            assert commit["author_time"] == datetime(
+            first = result["lines"][0]
+            assert first["commit_sha"] == "bbb222"
+            assert first["author_name"] == "Alice"
+            assert first["previous_commit_sha"] == "zzz000"
+            assert first["raw_author_time"] == "2024-01-15T14:32:18Z"
+            assert isinstance(first["author_time"], datetime)
+            assert first["author_time"] == datetime(
                 2024, 1, 15, 14, 32, 18, tzinfo=timezone.utc
             )
+
+            second = result["lines"][1]
+            assert second["original_path"] == "src/old.go"
+            assert "previous_commit_sha" not in second
+            assert second["author_name"] == "Bob"
 
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
@@ -1457,9 +1453,8 @@ class TestRepoCommitOperations:
         blame_response.json.return_value = {
             "ref": "main",
             "path": "src/x.go",
-            "commit": "sha",
+            "commit_sha": "sha",
             "lines": [],
-            "commits": {},
         }
 
         with patch("httpx.AsyncClient") as mock_client:

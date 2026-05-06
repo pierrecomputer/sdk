@@ -275,19 +275,13 @@ class GetCommitResult(TypedDict):
 
 
 class BlameLine(TypedDict):
-    """A single line in blame results."""
+    """A single line in blame results with inline commit metadata."""
 
     line_number: int
     commit_sha: str
     original_line_number: int
     original_path: str
-    text: str
-
-
-class BlameCommit(TypedDict):
-    """Per-commit metadata referenced by blame lines."""
-
-    previous_commit_sha: Optional[str]
+    previous_commit_sha: NotRequired[str]
     author_name: str
     author_email: str
     author_time: datetime
@@ -304,9 +298,8 @@ class BlameResult(TypedDict):
 
     ref: str
     path: str
-    commit: str
+    commit_sha: str
     lines: List[BlameLine]
-    commits: Dict[str, BlameCommit]
 
 
 # Git notes types

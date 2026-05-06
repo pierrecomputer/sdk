@@ -1394,15 +1394,11 @@ func TestBlame(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"ref": "main",
 			"path": "src/x.go",
-			"commit": "aaa111",
+			"commit_sha": "aaa111",
 			"lines": [
-				{"line_number": 10, "commit_sha": "bbb222", "original_line_number": 5, "original_path": "src/x.go", "text": "package main"},
-				{"line_number": 11, "commit_sha": "ccc333", "original_line_number": 11, "original_path": "src/old.go", "text": "import \"fmt\""}
-			],
-			"commits": {
-				"bbb222": {"previous_commit_sha": "zzz000", "author_name": "Alice", "author_email": "alice@example.com", "author_time": "2024-01-15T14:32:18Z", "committer_name": "Alice", "committer_email": "alice@example.com", "committer_time": "2024-01-15T14:32:18Z", "summary": "init"},
-				"ccc333": {"author_name": "Bob", "author_email": "bob@example.com", "author_time": "2024-02-20T09:00:00Z", "committer_name": "Bob", "committer_email": "bob@example.com", "committer_time": "2024-02-20T09:00:00Z", "summary": "fix"}
-			}
+				{"line_number": 10, "commit_sha": "bbb222", "original_line_number": 5, "original_path": "src/x.go", "previous_commit_sha": "zzz000", "author_name": "Alice", "author_email": "alice@example.com", "author_time": "2024-01-15T14:32:18Z", "committer_name": "Alice", "committer_email": "alice@example.com", "committer_time": "2024-01-15T14:32:18Z", "summary": "init"},
+				{"line_number": 11, "commit_sha": "ccc333", "original_line_number": 11, "original_path": "src/old.go", "author_name": "Bob", "author_email": "bob@example.com", "author_time": "2024-02-20T09:00:00Z", "committer_name": "Bob", "committer_email": "bob@example.com", "committer_time": "2024-02-20T09:00:00Z", "summary": "fix"}
+			]
 		}`))
 	}))
 	defer server.Close()
@@ -1423,24 +1419,31 @@ func TestBlame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("blame error: %v", err)
 	}
-	if result.Ref != "main" || result.Path != "src/x.go" || result.Commit != "aaa111" {
+	if result.Ref != "main" || result.Path != "src/x.go" || result.CommitSHA != "aaa111" {
 		t.Fatalf("unexpected top-level fields: %+v", result)
 	}
 	if len(result.Lines) != 2 {
 		t.Fatalf("unexpected line count: %d", len(result.Lines))
 	}
-	if result.Lines[0].CommitSHA != "bbb222" || result.Lines[0].LineNumber != 10 {
-		t.Fatalf("unexpected first line: %+v", result.Lines[0])
+	first := result.Lines[0]
+	if first.CommitSHA != "bbb222" || first.LineNumber != 10 {
+		t.Fatalf("unexpected first line: %+v", first)
 	}
-	if result.Lines[1].OriginalPath != "src/old.go" {
-		t.Fatalf("unexpected original_path: %q", result.Lines[1].OriginalPath)
+	if first.AuthorName != "Alice" || first.PreviousCommitSHA != "zzz000" {
+		t.Fatalf("unexpected first-line author metadata: %+v", first)
 	}
-	commit := result.Commits["bbb222"]
-	if commit.AuthorName != "Alice" || commit.PreviousCommitSHA != "zzz000" {
-		t.Fatalf("unexpected commit metadata: %+v", commit)
+	if first.AuthorTime.IsZero() || first.RawAuthorTime != "2024-01-15T14:32:18Z" {
+		t.Fatalf("unexpected first-line author time: %+v", first)
 	}
-	if commit.AuthorTime.IsZero() || commit.RawAuthorTime != "2024-01-15T14:32:18Z" {
-		t.Fatalf("unexpected author time: %+v", commit)
+	second := result.Lines[1]
+	if second.OriginalPath != "src/old.go" {
+		t.Fatalf("unexpected original_path: %q", second.OriginalPath)
+	}
+	if second.PreviousCommitSHA != "" {
+		t.Fatalf("expected empty previous_commit_sha on second line, got %q", second.PreviousCommitSHA)
+	}
+	if second.AuthorName != "Bob" {
+		t.Fatalf("unexpected second-line author: %q", second.AuthorName)
 	}
 }
 
@@ -1456,7 +1459,7 @@ func TestBlameOmitsEmptyParams(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ref":"main","path":"src/x.go","commit":"sha","lines":[],"commits":{}}`))
+		_, _ = w.Write([]byte(`{"ref":"main","path":"src/x.go","commit_sha":"sha","lines":[]}`))
 	}))
 	defer server.Close()
 

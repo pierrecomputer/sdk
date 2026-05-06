@@ -489,30 +489,24 @@ type BlameLine struct {
 	CommitSHA          string
 	OriginalLineNumber int32
 	OriginalPath       string
-	Text               string
+	PreviousCommitSHA  string
+	AuthorName         string
+	AuthorEmail        string
+	AuthorTime         time.Time
+	RawAuthorTime      string
+	CommitterName      string
+	CommitterEmail     string
+	CommitterTime      time.Time
+	RawCommitterTime   string
+	Summary            string
 }
 
-// BlameCommit describes per-commit metadata referenced by BlameLine entries.
-type BlameCommit struct {
-	PreviousCommitSHA string
-	AuthorName        string
-	AuthorEmail       string
-	AuthorTime        time.Time
-	RawAuthorTime     string
-	CommitterName     string
-	CommitterEmail    string
-	CommitterTime     time.Time
-	RawCommitterTime  string
-	Summary           string
-}
-
-// BlameResult is the result returned by Repo.Blame.
+// BlameResult is the result returned by Repo.GetBlame.
 type BlameResult struct {
-	Ref     string
-	Path    string
-	Commit  string
-	Lines   []BlameLine
-	Commits map[string]BlameCommit
+	Ref       string
+	Path      string
+	CommitSHA string
+	Lines     []BlameLine
 }
 
 // NoteAuthor identifies note author.

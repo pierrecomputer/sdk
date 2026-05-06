@@ -344,25 +344,13 @@ describe('GitStorage', () => {
         json: async () => ({
           ref: 'main',
           path: 'src/x.go',
-          commit: 'aaa111',
+          commit_sha: 'aaa111',
           lines: [
             {
               line_number: 10,
               commit_sha: 'bbb222',
               original_line_number: 5,
               original_path: 'src/x.go',
-              text: 'package main',
-            },
-            {
-              line_number: 11,
-              commit_sha: 'ccc333',
-              original_line_number: 11,
-              original_path: 'src/old.go',
-              text: 'import "fmt"',
-            },
-          ],
-          commits: {
-            bbb222: {
               previous_commit_sha: 'zzz000',
               author_name: 'Alice',
               author_email: 'alice@example.com',
@@ -372,7 +360,11 @@ describe('GitStorage', () => {
               committer_time: '2024-01-15T14:32:18Z',
               summary: 'init',
             },
-            ccc333: {
+            {
+              line_number: 11,
+              commit_sha: 'ccc333',
+              original_line_number: 11,
+              original_path: 'src/old.go',
               author_name: 'Bob',
               author_email: 'bob@example.com',
               author_time: '2024-02-20T09:00:00Z',
@@ -381,7 +373,7 @@ describe('GitStorage', () => {
               committer_time: '2024-02-20T09:00:00Z',
               summary: 'fix',
             },
-          },
+          ],
         }),
       } as any);
     });
@@ -396,17 +388,17 @@ describe('GitStorage', () => {
 
     expect(result.ref).toBe('main');
     expect(result.path).toBe('src/x.go');
-    expect(result.commit).toBe('aaa111');
+    expect(result.commitSha).toBe('aaa111');
     expect(result.lines).toHaveLength(2);
     expect(result.lines[0].commitSha).toBe('bbb222');
+    expect(result.lines[0].authorName).toBe('Alice');
+    expect(result.lines[0].previousCommitSha).toBe('zzz000');
+    expect(result.lines[0].rawAuthorTime).toBe('2024-01-15T14:32:18Z');
+    expect(result.lines[0].authorTime).toBeInstanceOf(Date);
+    expect(result.lines[0].authorTime.toISOString()).toBe('2024-01-15T14:32:18.000Z');
     expect(result.lines[1].originalPath).toBe('src/old.go');
-
-    const commit = result.commits.bbb222;
-    expect(commit.authorName).toBe('Alice');
-    expect(commit.previousCommitSha).toBe('zzz000');
-    expect(commit.rawAuthorTime).toBe('2024-01-15T14:32:18Z');
-    expect(commit.authorTime).toBeInstanceOf(Date);
-    expect(commit.authorTime.toISOString()).toBe('2024-01-15T14:32:18.000Z');
+    expect(result.lines[1].previousCommitSha).toBeUndefined();
+    expect(result.lines[1].authorName).toBe('Bob');
   });
 
   it('omits optional blame params when not provided', async () => {
@@ -432,16 +424,15 @@ describe('GitStorage', () => {
         json: async () => ({
           ref: 'main',
           path: 'src/x.go',
-          commit: 'sha',
+          commit_sha: 'sha',
           lines: [],
-          commits: {},
         }),
       } as any);
     });
 
     const result = await repo.getBlame({ path: 'src/x.go' });
+    expect(result.commitSha).toBe('sha');
     expect(result.lines).toEqual([]);
-    expect(result.commits).toEqual({});
   });
 
   it('rejects blame when path is missing or blank', async () => {

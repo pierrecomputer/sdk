@@ -8,7 +8,6 @@ from pierre_storage.client import GitStorage, create_client
 from pierre_storage.errors import ApiError, RefUpdateError
 from pierre_storage.types import (
     BaseRepo,
-    BlameCommit,
     BlameLine,
     BlameResult,
     BranchInfo,
@@ -71,7 +70,6 @@ __all__ = [
     "RefUpdateError",
     # Types
     "BaseRepo",
-    "BlameCommit",
     "BlameLine",
     "BlameResult",
     "BranchInfo",

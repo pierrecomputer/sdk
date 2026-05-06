@@ -475,11 +475,10 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 	}
 
 	result := BlameResult{
-		Ref:     payload.Ref,
-		Path:    payload.Path,
-		Commit:  payload.Commit,
-		Lines:   make([]BlameLine, len(payload.Lines)),
-		Commits: make(map[string]BlameCommit, len(payload.Commits)),
+		Ref:       payload.Ref,
+		Path:      payload.Path,
+		CommitSHA: payload.CommitSHA,
+		Lines:     make([]BlameLine, len(payload.Lines)),
 	}
 	for i, line := range payload.Lines {
 		result.Lines[i] = BlameLine{
@@ -487,21 +486,16 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 			CommitSHA:          line.CommitSHA,
 			OriginalLineNumber: line.OriginalLineNumber,
 			OriginalPath:       line.OriginalPath,
-			Text:               line.Text,
-		}
-	}
-	for sha, c := range payload.Commits {
-		result.Commits[sha] = BlameCommit{
-			PreviousCommitSHA: c.PreviousCommitSHA,
-			AuthorName:        c.AuthorName,
-			AuthorEmail:       c.AuthorEmail,
-			AuthorTime:        parseTime(c.AuthorTime),
-			RawAuthorTime:     c.AuthorTime,
-			CommitterName:     c.CommitterName,
-			CommitterEmail:    c.CommitterEmail,
-			CommitterTime:     parseTime(c.CommitterTime),
-			RawCommitterTime:  c.CommitterTime,
-			Summary:           c.Summary,
+			PreviousCommitSHA:  line.PreviousCommitSHA,
+			AuthorName:         line.AuthorName,
+			AuthorEmail:        line.AuthorEmail,
+			AuthorTime:         parseTime(line.AuthorTime),
+			RawAuthorTime:      line.AuthorTime,
+			CommitterName:      line.CommitterName,
+			CommitterEmail:     line.CommitterEmail,
+			CommitterTime:      parseTime(line.CommitterTime),
+			RawCommitterTime:   line.CommitterTime,
+			Summary:            line.Summary,
 		}
 	}
 
