@@ -867,16 +867,24 @@ class RepoImpl implements Repo {
 
     const cursor = options?.cursor;
     const limit = options?.limit;
+    const ephemeral = options?.ephemeral;
 
     let params: Record<string, string> | undefined;
 
-    if (typeof cursor === 'string' || typeof limit === 'number') {
+    if (
+      typeof cursor === 'string' ||
+      typeof limit === 'number' ||
+      typeof ephemeral === 'boolean'
+    ) {
       params = {};
       if (typeof cursor === 'string') {
         params.cursor = cursor;
       }
       if (typeof limit === 'number') {
         params.limit = limit.toString();
+      }
+      if (typeof ephemeral === 'boolean') {
+        params.ephemeral = String(ephemeral);
       }
     }
 
@@ -931,7 +939,12 @@ class RepoImpl implements Repo {
 
     let params: Record<string, string> | undefined;
 
-    if (options?.branch || options?.cursor || options?.limit) {
+    if (
+      options?.branch ||
+      options?.cursor ||
+      options?.limit ||
+      typeof options?.ephemeral === 'boolean'
+    ) {
       params = {};
       if (options?.branch) {
         params.branch = options.branch;
@@ -941,6 +954,9 @@ class RepoImpl implements Repo {
       }
       if (typeof options?.limit == 'number') {
         params.limit = options.limit.toString();
+      }
+      if (typeof options?.ephemeral === 'boolean') {
+        params.ephemeral = String(options.ephemeral);
       }
     }
 

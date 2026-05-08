@@ -264,6 +264,9 @@ func (r *Repo) ListBranches(ctx context.Context, options ListBranchesOptions) (L
 	if options.Limit > 0 {
 		params.Set("limit", itoa(options.Limit))
 	}
+	if options.Ephemeral != nil {
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
+	}
 	if len(params) == 0 {
 		params = nil
 	}
@@ -355,6 +358,9 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	}
 	if options.Limit > 0 {
 		params.Set("limit", itoa(options.Limit))
+	}
+	if options.Ephemeral != nil {
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
 	if len(params) == 0 {
 		params = nil

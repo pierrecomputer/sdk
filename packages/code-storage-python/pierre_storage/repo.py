@@ -496,6 +496,7 @@ class RepoImpl:
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListBranchesResult:
         """List branches in repository.
@@ -503,6 +504,7 @@ class RepoImpl:
         Args:
             cursor: Pagination cursor
             limit: Maximum number of branches to return
+            ephemeral: When true, list branches under the ephemeral namespace
             ttl: Token TTL in seconds
 
         Returns:
@@ -516,6 +518,8 @@ class RepoImpl:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
         if params:
@@ -999,6 +1003,7 @@ class RepoImpl:
         branch: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in repository.
@@ -1007,6 +1012,7 @@ class RepoImpl:
             branch: Branch name to list commits from
             cursor: Pagination cursor
             limit: Maximum number of commits to return
+            ephemeral: When true, resolve `branch` under the ephemeral namespace
             ttl: Token TTL in seconds
 
         Returns:
@@ -1022,6 +1028,8 @@ class RepoImpl:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/commits"
         if params:

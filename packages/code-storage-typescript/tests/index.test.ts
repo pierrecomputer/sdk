@@ -190,6 +190,43 @@ describe('GitStorage', () => {
     );
   });
 
+  it('passes ephemeral query param on listBranches', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-list-branches-eph' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/branches')).toBe(true);
+      expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ branches: [], has_more: false }),
+      } as any);
+    });
+
+    await repo.listBranches({ ephemeral: true });
+  });
+
+  it('passes ephemeral query param on listCommits', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-list-commits-eph' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
+      expect(requestUrl.searchParams.get('branch')).toBe('feature-branch');
+      expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ commits: [], has_more: false }),
+      } as any);
+    });
+
+    await repo.listCommits({ branch: 'feature-branch', ephemeral: true });
+  });
+
   it('fetches git notes with getNote', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-notes-read' });

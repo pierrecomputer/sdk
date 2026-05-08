@@ -280,6 +280,8 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches?limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
+Optional `ephemeral=true` lists branches under the ephemeral namespace instead of regular branches (defaults to `false`).
+
 Response: `{ "branches": [{ "name", "head_sha", "created_at" }], "next_cursor", "has_more" }`
 
 ## GET /repos/branches/diff — Get Branch Diff
@@ -364,6 +366,8 @@ Diff must be compatible with `git apply --cached --binary`. Same response schema
 curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
+
+Optional `ephemeral=true` resolves `branch` from the ephemeral namespace (defaults to `false`).
 
 Response: `{ "commits": [{ "sha", "message", "author_name", "author_email", "date" }], "next_cursor", "has_more" }`
 

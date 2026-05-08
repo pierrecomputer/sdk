@@ -1289,6 +1289,61 @@ func TestListCommitsDateParsing(t *testing.T) {
 	}
 }
 
+func TestListBranchesEphemeralQueryParam(t *testing.T) {
+	var rawQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/branches" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"branches":[],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.ListBranches(nil, ListBranchesOptions{Ephemeral: boolPtr(true)}); err != nil {
+		t.Fatalf("list branches error: %v", err)
+	}
+	if !strings.Contains(rawQuery, "ephemeral=true") {
+		t.Fatalf("expected ephemeral=true in query, got %q", rawQuery)
+	}
+}
+
+func TestListCommitsEphemeralQueryParam(t *testing.T) {
+	var rawQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/commits" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commits":[],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.ListCommits(nil, ListCommitsOptions{Branch: "feature", Ephemeral: boolPtr(true)}); err != nil {
+		t.Fatalf("list commits error: %v", err)
+	}
+	if !strings.Contains(rawQuery, "ephemeral=true") {
+		t.Fatalf("expected ephemeral=true in query, got %q", rawQuery)
+	}
+	if !strings.Contains(rawQuery, "branch=feature") {
+		t.Fatalf("expected branch=feature in query, got %q", rawQuery)
+	}
+}
+
 func TestListCommitsUserAgentHeader(t *testing.T) {
 	var headerAgent string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
