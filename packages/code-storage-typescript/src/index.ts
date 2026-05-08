@@ -1244,6 +1244,9 @@ class RepoImpl implements Repo {
     if (ref) {
       body.ref = ref;
     }
+    if (typeof options.ephemeral === 'boolean') {
+      body.ephemeral = options.ephemeral;
+    }
     if (Array.isArray(options.paths) && options.paths.length > 0) {
       body.paths = options.paths;
     }

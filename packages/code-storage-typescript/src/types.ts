@@ -532,6 +532,7 @@ export interface GrepOptions extends GitStorageInvocationOptions {
    * @deprecated Use ref instead.
    */
   rev?: string;
+  ephemeral?: boolean;
   paths?: string[];
   query: {
     pattern: string;

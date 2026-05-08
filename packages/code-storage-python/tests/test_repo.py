@@ -526,6 +526,39 @@ class TestRepoFileOperations:
             assert kwargs["json"]["ref"] == "main"
             assert "rev" not in kwargs["json"]
 
+    @pytest.mark.asyncio
+    async def test_grep_ephemeral_in_body(self, git_storage_options: dict) -> None:
+        """grep ephemeral=True must surface as body['ephemeral']=True."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        grep_response = MagicMock()
+        grep_response.status_code = 200
+        grep_response.is_success = True
+        grep_response.raise_for_status = MagicMock()
+        grep_response.json.return_value = {
+            "query": {"pattern": "SEARCHME", "case_sensitive": True},
+            "repo": {"ref": "feature", "commit": "deadbeef"},
+            "matches": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_response, grep_response])
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.grep(pattern="SEARCHME", ref="feature", ephemeral=True)
+
+            _, kwargs = client_instance.post.call_args
+            assert kwargs["json"]["ephemeral"] is True
+            assert kwargs["json"]["ref"] == "feature"
+
 
 class TestRepoBranchOperations:
     """Tests for branch operations."""

@@ -456,6 +456,8 @@ curl "$CODE_STORAGE_BASE_URL/repos/grep" -X POST \
   }'
 ```
 
+Optional `"ephemeral": true` in the body resolves `ref` from the ephemeral namespace (defaults to `false`).
+
 Response: `{ "matches": [{ "path", "lines": [{ "line_number", "text", "type" }] }], "next_cursor", "has_more" }`
 
 ## POST /repos/archive — Download Archive

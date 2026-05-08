@@ -719,6 +719,42 @@ describe('GitStorage', () => {
     expect(result.repo.ref).toBe('main');
   });
 
+  it('passes ephemeral flag in grep request body', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-grep-eph' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('POST');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/grep')).toBe(true);
+
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      expect(body.ref).toBe('feature');
+      expect(body.ephemeral).toBe(true);
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({
+          query: { pattern: 'SEARCHME', case_sensitive: true },
+          repo: { ref: 'feature', commit: 'deadbeef' },
+          matches: [],
+          next_cursor: null,
+          has_more: false,
+        }),
+        text: async () => '',
+      } as any);
+    });
+
+    await repo.grep({
+      ref: 'feature',
+      ephemeral: true,
+      query: { pattern: 'SEARCHME' },
+    });
+  });
+
   describe('createRepo', () => {
     it('should return a repo with id and getRemoteURL function', async () => {
       const store = new GitStorage({ name: 'v0', key });

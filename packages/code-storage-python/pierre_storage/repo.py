@@ -1413,6 +1413,7 @@ class RepoImpl:
         pattern: str,
         ref: Optional[str] = None,
         rev: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         case_sensitive: Optional[bool] = None,
         file_filters: Optional[Dict[str, Any]] = None,
@@ -1427,6 +1428,7 @@ class RepoImpl:
             pattern: Regex pattern to search for
             ref: Git ref to search (defaults to server-side default branch)
             rev: Deprecated alias for ref
+            ephemeral: When true, resolve `ref` under the ephemeral namespace
             paths: Git pathspecs to restrict search
             case_sensitive: Whether search is case-sensitive (default: server default)
             file_filters: Optional filters with include_globs/exclude_globs/extension_filters
@@ -1463,6 +1465,8 @@ class RepoImpl:
             body["ref"] = ref
         elif rev:
             body["ref"] = rev
+        if ephemeral is not None:
+            body["ephemeral"] = bool(ephemeral)
         if paths:
             body["paths"] = paths
         if file_filters:

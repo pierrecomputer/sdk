@@ -621,6 +621,7 @@ type GrepOptions struct {
 	Ref string
 	// Deprecated: use Ref instead.
 	Rev         string
+	Ephemeral   *bool
 	Query       GrepQuery
 	Paths       []string
 	FileFilters *GrepFileFilters

@@ -692,6 +692,9 @@ func (r *Repo) Grep(ctx context.Context, options GrepOptions) (GrepResult, error
 	if ref != "" {
 		body.Ref = ref
 	}
+	if options.Ephemeral != nil {
+		body.Ephemeral = options.Ephemeral
+	}
 	if len(options.Paths) > 0 {
 		body.Paths = options.Paths
 	}

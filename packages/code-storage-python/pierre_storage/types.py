@@ -835,6 +835,7 @@ class Repo(Protocol):
         pattern: str,
         ref: Optional[str] = None,
         rev: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         case_sensitive: Optional[bool] = None,
         file_filters: Optional[Dict[str, Any]] = None,
