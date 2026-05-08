@@ -446,8 +446,10 @@ curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&start_line=10
 
 Params: `path` (required — repository-relative file path), `ref` (branch, tag, or
 SHA; defaults to the repository default branch), `ephemeral` (resolve `ref` from
-the ephemeral namespace), `start_line`/`end_line` (1-based inclusive; both zero
-blames the whole file), `detect_moves` (follow renames and copies).
+the ephemeral namespace), `start_line`/`end_line` (1-based inclusive; either may
+be omitted — only `start_line` blames to EOF, only `end_line` blames from line
+1, both omitted blames the whole file; when both are set, `end_line` must be
+≥ `start_line`), `detect_moves` (follow renames and copies).
 Response:
 ```json
 {

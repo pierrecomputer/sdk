@@ -1135,9 +1135,13 @@ class RepoImpl:
             ref: Branch, tag, or commit SHA to blame at. Defaults to the
                 repository default branch.
             ephemeral: Resolve ``ref`` from the ephemeral namespace.
-            start_line: 1-based inclusive start line. Both ``start_line`` and
-                ``end_line`` zero blames the whole file.
-            end_line: 1-based inclusive end line.
+            start_line: 1-based inclusive start line. May be omitted on its
+                own — passing only ``end_line`` blames from line 1 through
+                that line. Omitting both blames the whole file.
+            end_line: 1-based inclusive end line. May be omitted on its
+                own — passing only ``start_line`` blames from that line
+                through EOF. When both are set, ``end_line`` must be
+                ≥ ``start_line``.
             detect_moves: Follow the file across renames and copies.
             ttl: Token TTL in seconds.
 
