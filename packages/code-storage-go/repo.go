@@ -434,8 +434,7 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 
 // GetBlame returns per-line authorship for a file at a ref.
 func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult, error) {
-	path := strings.TrimSpace(options.Path)
-	if path == "" {
+	if strings.TrimSpace(options.Path) == "" {
 		return BlameResult{}, errors.New("getBlame path is required")
 	}
 
@@ -446,7 +445,7 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 	}
 
 	params := url.Values{}
-	params.Set("path", path)
+	params.Set("path", options.Path)
 	if ref := strings.TrimSpace(options.Ref); ref != "" {
 		params.Set("ref", ref)
 	}

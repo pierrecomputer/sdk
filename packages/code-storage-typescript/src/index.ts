@@ -1003,8 +1003,7 @@ class RepoImpl implements Repo {
   }
 
   async getBlame(options: BlameOptions): Promise<BlameResult> {
-    const path = options?.path?.trim();
-    if (!path) {
+    if (!options?.path?.trim()) {
       throw new Error('getBlame path is required');
     }
 
@@ -1014,7 +1013,7 @@ class RepoImpl implements Repo {
       ttl,
     });
 
-    const params: Record<string, string> = { path };
+    const params: Record<string, string> = { path: options.path };
     const ref = options.ref?.trim();
     if (ref) {
       params.ref = ref;

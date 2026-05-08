@@ -1144,14 +1144,13 @@ class RepoImpl:
         Returns:
             Per-line attribution plus a deduped commits map.
         """
-        path_clean = path.strip()
-        if not path_clean:
+        if not path.strip():
             raise ValueError("get_blame path is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params: Dict[str, str] = {"path": path_clean}
+        params: Dict[str, str] = {"path": path}
         if ref is not None and ref.strip():
             params["ref"] = ref.strip()
         if ephemeral:
