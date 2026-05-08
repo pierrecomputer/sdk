@@ -691,6 +691,7 @@ class Repo:
         *,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListBranchesResult: ...
 
@@ -742,6 +743,7 @@ class Repo:
         branch: Optional[str] = None,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult: ...
 
