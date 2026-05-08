@@ -254,9 +254,9 @@ print(commits["commits"])
 result = await repo.get_commit(sha="abc123...")
 print(result["commit"]["message"], result["commit"]["author_name"])
 
-# Blame a file (per-line authorship). The top-level "commit" is the SHA the
-# `ref` resolved to; "commits" is a deduped map of authoring commits referenced
-# by lines[].commit_sha.
+# Blame a file (per-line authorship). The top-level "commit_sha" is the SHA the
+# `ref` resolved to; each entry in "lines" carries its own author/committer
+# metadata inline.
 blame = await repo.get_blame(
     path="src/main.go",
     ref="main",
@@ -265,8 +265,7 @@ blame = await repo.get_blame(
     detect_moves=True,
 )
 for line in blame["lines"]:
-    author = blame["commits"][line["commit_sha"]]
-    print(f"{line['line_number']}: {author['author_name']}\t{line['text']}")
+    print(f"{line['line_number']} ({line['commit_sha'][:7]}): {line['author_name']} — {line['summary']}")
 
 # Read a git note for a commit
 note = await repo.get_note(sha="abc123...")

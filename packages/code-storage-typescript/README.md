@@ -244,9 +244,9 @@ console.log(commits.commits);
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
 console.log(commit.message, commit.authorName);
 
-// Blame a file (per-line authorship). The top-level `commit` is the SHA the
-// `ref` resolved to; `commits` is a deduped map of authoring commits referenced
-// by `lines[].commitSha`.
+// Blame a file (per-line authorship). The top-level `commitSha` is the SHA the
+// `ref` resolved to; each entry in `lines` carries its own author/committer
+// metadata inline.
 const blame = await repo.getBlame({
   path: 'src/main.go',
   ref: 'main',
@@ -255,8 +255,7 @@ const blame = await repo.getBlame({
   detectMoves: true,
 });
 for (const line of blame.lines) {
-  const author = blame.commits[line.commitSha];
-  console.log(`${line.lineNumber}: ${author.authorName}\t${line.text}`);
+  console.log(`${line.lineNumber} (${line.commitSha.slice(0, 7)}): ${line.authorName} — ${line.summary}`);
 }
 
 // Read a git note for a commit
@@ -731,10 +730,6 @@ interface BlameLine {
   commitSha: string;
   originalLineNumber: number;
   originalPath: string;
-  text: string;
-}
-
-interface BlameCommit {
   previousCommitSha?: string;
   authorName: string;
   authorEmail: string;
@@ -750,9 +745,8 @@ interface BlameCommit {
 interface BlameResult {
   ref: string;       // The ref passed in (or default branch resolved)
   path: string;
-  commit: string;    // SHA the input ref resolved to at request time
+  commitSha: string; // SHA the input ref resolved to at request time
   lines: BlameLine[];
-  commits: Record<string, BlameCommit>; // Per-authoring-commit metadata
 }
 
 interface GetBranchDiffOptions {
