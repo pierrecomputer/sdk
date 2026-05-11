@@ -447,8 +447,7 @@ export interface BlameOptions extends GitStorageInvocationOptions {
   path: string;
   ref?: string;
   ephemeral?: boolean;
-  startLine?: number;
-  endLine?: number;
+  ranges?: string[];
   detectMoves?: boolean;
 }
 

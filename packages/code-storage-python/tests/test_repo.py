@@ -1393,8 +1393,7 @@ class TestRepoCommitOperations:
             result = await repo.get_blame(
                 path="src/x.go",
                 ref="main",
-                start_line=10,
-                end_line=20,
+                ranges=["10,20", "/getUser/,+30"],
                 detect_moves=True,
             )
 
@@ -1424,8 +1423,7 @@ class TestRepoCommitOperations:
             assert parse_qs(parsed.query) == {
                 "path": ["src/x.go"],
                 "ref": ["main"],
-                "start_line": ["10"],
-                "end_line": ["20"],
+                "range": ["10,20", "/getUser/,+30"],
                 "detect_moves": ["true"],
             }
 

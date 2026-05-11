@@ -452,11 +452,8 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 	if options.Ephemeral {
 		params.Set("ephemeral", "true")
 	}
-	if options.StartLine != 0 {
-		params.Set("start_line", strconv.FormatInt(int64(options.StartLine), 10))
-	}
-	if options.EndLine != 0 {
-		params.Set("end_line", strconv.FormatInt(int64(options.EndLine), 10))
+	for _, spec := range options.Ranges {
+		params.Add("range", spec)
 	}
 	if options.DetectMoves {
 		params.Set("detect_moves", "true")

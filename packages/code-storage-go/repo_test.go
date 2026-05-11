@@ -1381,11 +1381,8 @@ func TestBlame(t *testing.T) {
 		if got := q.Get("ref"); got != "main" {
 			t.Fatalf("unexpected ref query: %q", got)
 		}
-		if got := q.Get("start_line"); got != "10" {
-			t.Fatalf("unexpected start_line query: %q", got)
-		}
-		if got := q.Get("end_line"); got != "20" {
-			t.Fatalf("unexpected end_line query: %q", got)
+		if got := q["range"]; len(got) != 2 || got[0] != "10,20" || got[1] != "/getUser/,+30" {
+			t.Fatalf("unexpected range query: %v", got)
 		}
 		if got := q.Get("detect_moves"); got != "true" {
 			t.Fatalf("unexpected detect_moves query: %q", got)
@@ -1412,8 +1409,7 @@ func TestBlame(t *testing.T) {
 	result, err := repo.GetBlame(nil, BlameOptions{
 		Path:        "src/x.go",
 		Ref:         "main",
-		StartLine:   10,
-		EndLine:     20,
+		Ranges:      []string{"10,20", "/getUser/,+30"},
 		DetectMoves: true,
 	})
 	if err != nil {
@@ -1453,7 +1449,7 @@ func TestBlameOmitsEmptyParams(t *testing.T) {
 		if q.Get("path") != "src/x.go" {
 			t.Fatalf("expected path query")
 		}
-		for _, key := range []string{"ref", "ephemeral", "start_line", "end_line", "detect_moves"} {
+		for _, key := range []string{"ref", "ephemeral", "range", "detect_moves"} {
 			if _, ok := q[key]; ok {
 				t.Fatalf("unexpected %q in query: %v", key, q.Get(key))
 			}

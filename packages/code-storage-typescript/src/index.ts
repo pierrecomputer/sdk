@@ -1013,7 +1013,7 @@ class RepoImpl implements Repo {
       ttl,
     });
 
-    const params: Record<string, string> = { path: options.path };
+    const params: Record<string, string | string[]> = { path: options.path };
     const ref = options.ref?.trim();
     if (ref) {
       params.ref = ref;
@@ -1021,11 +1021,8 @@ class RepoImpl implements Repo {
     if (options.ephemeral) {
       params.ephemeral = 'true';
     }
-    if (options.startLine) {
-      params.start_line = String(options.startLine);
-    }
-    if (options.endLine) {
-      params.end_line = String(options.endLine);
+    if (options.ranges && options.ranges.length > 0) {
+      params.range = options.ranges;
     }
     if (options.detectMoves) {
       params.detect_moves = 'true';

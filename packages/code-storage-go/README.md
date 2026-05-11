@@ -79,6 +79,30 @@ fmt.Println(result.Files[0].LastCommitSHA)
 fmt.Println(result.Commits[result.Files[0].LastCommitSHA].Author)
 ```
 
+### Blame a file
+
+```go
+blame, err := repo.GetBlame(context.Background(), storage.BlameOptions{
+	Path:        "src/main.go",
+	Ref:         "main",
+	Ranges:      []string{"10,30"},
+	DetectMoves: true,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, line := range blame.Lines {
+	fmt.Printf("%d (%s): %s — %s\n", line.LineNumber, line.CommitSHA[:7], line.AuthorName, line.Summary)
+}
+```
+
+`Ranges` accepts repeated `git blame -L` specs (`"10,30"`, `"/getUser/,/^}/"`,
+`"10,+5"`, `"10,"`, `",30"`, `"10"`, `":funcname"`). Up to 16 per request; omit
+to blame the whole file. The top-level `CommitSHA` is the SHA `Ref` resolved
+to; each `BlameLine` carries its authoring commit's metadata inline, with
+`PreviousCommitSHA` empty when the line has no prior version.
+
 ### Manage tags
 
 ```go

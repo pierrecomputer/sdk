@@ -328,8 +328,7 @@ describe('GitStorage', () => {
       expect(requestUrl.pathname.endsWith('/repos/blame')).toBe(true);
       expect(requestUrl.searchParams.get('path')).toBe('src/x.go');
       expect(requestUrl.searchParams.get('ref')).toBe('main');
-      expect(requestUrl.searchParams.get('start_line')).toBe('10');
-      expect(requestUrl.searchParams.get('end_line')).toBe('20');
+      expect(requestUrl.searchParams.getAll('range')).toEqual(['10,20', '/getUser/,+30']);
       expect(requestUrl.searchParams.get('detect_moves')).toBe('true');
 
       const headers = (init?.headers ?? {}) as Record<string, string>;
@@ -381,8 +380,7 @@ describe('GitStorage', () => {
     const result = await repo.getBlame({
       path: 'src/x.go',
       ref: 'main',
-      startLine: 10,
-      endLine: 20,
+      ranges: ['10,20', '/getUser/,+30'],
       detectMoves: true,
     });
 
@@ -411,8 +409,7 @@ describe('GitStorage', () => {
       for (const key of [
         'ref',
         'ephemeral',
-        'start_line',
-        'end_line',
+        'range',
         'detect_moves',
       ]) {
         expect(requestUrl.searchParams.has(key)).toBe(false);

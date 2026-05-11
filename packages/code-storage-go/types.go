@@ -478,8 +478,7 @@ type BlameOptions struct {
 	Path        string
 	Ref         string
 	Ephemeral   bool
-	StartLine   int32
-	EndLine     int32
+	Ranges      []string
 	DetectMoves bool
 }
 

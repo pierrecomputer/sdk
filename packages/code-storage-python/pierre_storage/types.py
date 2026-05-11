@@ -793,8 +793,7 @@ class Repo(Protocol):
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
-        start_line: Optional[int] = None,
-        end_line: Optional[int] = None,
+        ranges: Optional[List[str]] = None,
         detect_moves: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> BlameResult:

@@ -1123,8 +1123,7 @@ class RepoImpl:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
-        start_line: Optional[int] = None,
-        end_line: Optional[int] = None,
+        ranges: Optional[List[str]] = None,
         detect_moves: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> BlameResult:
@@ -1135,13 +1134,8 @@ class RepoImpl:
             ref: Branch, tag, or commit SHA to blame at. Defaults to the
                 repository default branch.
             ephemeral: Resolve ``ref`` from the ephemeral namespace.
-            start_line: 1-based inclusive start line. May be omitted on its
-                own — passing only ``end_line`` blames from line 1 through
-                that line. Omitting both blames the whole file.
-            end_line: 1-based inclusive end line. May be omitted on its
-                own — passing only ``start_line`` blames from that line
-                through EOF. When both are set, ``end_line`` must be
-                ≥ ``start_line``.
+            ranges: ``git blame -L``-style range specs. When omitted, the
+                whole file is blamed.
             detect_moves: Follow the file across renames and copies.
             ttl: Token TTL in seconds.
 
@@ -1154,17 +1148,16 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params: Dict[str, str] = {"path": path}
+        params: List[tuple[str, str]] = [("path", path)]
         if ref is not None and ref.strip():
-            params["ref"] = ref.strip()
+            params.append(("ref", ref.strip()))
         if ephemeral:
-            params["ephemeral"] = "true"
-        if start_line:
-            params["start_line"] = str(start_line)
-        if end_line:
-            params["end_line"] = str(end_line)
+            params.append(("ephemeral", "true"))
+        if ranges:
+            for spec in ranges:
+                params.append(("range", spec))
         if detect_moves:
-            params["detect_moves"] = "true"
+            params.append(("detect_moves", "true"))
 
         url = (
             f"{self.api_base_url}/api/v{self.api_version}/repos/blame"

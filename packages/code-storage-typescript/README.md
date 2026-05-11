@@ -250,8 +250,7 @@ console.log(commit.message, commit.authorName);
 const blame = await repo.getBlame({
   path: 'src/main.go',
   ref: 'main',
-  startLine: 10,
-  endLine: 30,
+  ranges: ['10,30'],
   detectMoves: true,
 });
 for (const line of blame.lines) {
@@ -719,8 +718,7 @@ interface BlameOptions {
   path: string;
   ref?: string;
   ephemeral?: boolean;
-  startLine?: number;
-  endLine?: number;
+  ranges?: string[];
   detectMoves?: boolean;
   ttl?: number;
 }

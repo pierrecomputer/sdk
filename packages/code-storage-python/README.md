@@ -260,8 +260,7 @@ print(result["commit"]["message"], result["commit"]["author_name"])
 blame = await repo.get_blame(
     path="src/main.go",
     ref="main",
-    start_line=10,
-    end_line=30,
+    ranges=["10,30"],
     detect_moves=True,
 )
 for line in blame["lines"]:
@@ -771,8 +770,7 @@ class Repo:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
-        start_line: Optional[int] = None,
-        end_line: Optional[int] = None,
+        ranges: Optional[list[str]] = None,
         detect_moves: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> BlameResult: ...

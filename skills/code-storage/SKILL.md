@@ -440,16 +440,17 @@ Response: raw file bytes (streaming), `Content-Type` set appropriately.
 ## GET /repos/blame — Blame File
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&start_line=10&end_line=30&detect_moves=true" \
+curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&range=10,30&range=/getUser/,+30&detect_moves=true" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
 Params: `path` (required — repository-relative file path), `ref` (branch, tag, or
 SHA; defaults to the repository default branch), `ephemeral` (resolve `ref` from
-the ephemeral namespace), `start_line`/`end_line` (1-based inclusive; either may
-be omitted — only `start_line` blames to EOF, only `end_line` blames from line
-1, both omitted blames the whole file; when both are set, `end_line` must be
-≥ `start_line`), `detect_moves` (follow renames and copies).
+the ephemeral namespace), `range` (repeatable `git blame -L`-style spec, up to
+16 per request — each value is one `-L` argument: e.g. `10,20`, `10,+5`,
+`/getUser/,/^}/`, `/getUser/,+30`, `10,`, `,20`, `10`, `:^func .*Foo`,
+`:funcname`; when omitted, the whole file is blamed), `detect_moves` (follow
+renames and copies).
 Response:
 ```json
 {
