@@ -190,6 +190,43 @@ describe('GitStorage', () => {
     );
   });
 
+  it('passes ephemeral query param on listBranches', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-list-branches-eph' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/branches')).toBe(true);
+      expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ branches: [], has_more: false }),
+      } as any);
+    });
+
+    await repo.listBranches({ ephemeral: true });
+  });
+
+  it('passes ephemeral query param on listCommits', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-list-commits-eph' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
+      expect(requestUrl.searchParams.get('branch')).toBe('feature-branch');
+      expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ commits: [], has_more: false }),
+      } as any);
+    });
+
+    await repo.listCommits({ branch: 'feature-branch', ephemeral: true });
+  });
+
   it('fetches git notes with getNote', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-notes-read' });
@@ -812,6 +849,42 @@ describe('GitStorage', () => {
 
     expect(result.query.pattern).toBe('SEARCHME');
     expect(result.repo.ref).toBe('main');
+  });
+
+  it('passes ephemeral flag in grep request body', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-grep-eph' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('POST');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/grep')).toBe(true);
+
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      expect(body.ref).toBe('feature');
+      expect(body.ephemeral).toBe(true);
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({
+          query: { pattern: 'SEARCHME', case_sensitive: true },
+          repo: { ref: 'feature', commit: 'deadbeef' },
+          matches: [],
+          next_cursor: null,
+          has_more: false,
+        }),
+        text: async () => '',
+      } as any);
+    });
+
+    await repo.grep({
+      ref: 'feature',
+      ephemeral: true,
+      query: { pattern: 'SEARCHME' },
+    });
   });
 
   describe('createRepo', () => {

@@ -498,6 +498,7 @@ class RepoImpl:
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListBranchesResult:
         """List branches in repository.
@@ -505,6 +506,7 @@ class RepoImpl:
         Args:
             cursor: Pagination cursor
             limit: Maximum number of branches to return
+            ephemeral: When true, list branches under the ephemeral namespace
             ttl: Token TTL in seconds
 
         Returns:
@@ -518,6 +520,8 @@ class RepoImpl:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
         if params:
@@ -1001,6 +1005,7 @@ class RepoImpl:
         branch: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in repository.
@@ -1009,6 +1014,7 @@ class RepoImpl:
             branch: Branch name to list commits from
             cursor: Pagination cursor
             limit: Maximum number of commits to return
+            ephemeral: When true, resolve `branch` under the ephemeral namespace
             ttl: Token TTL in seconds
 
         Returns:
@@ -1024,6 +1030,8 @@ class RepoImpl:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/commits"
         if params:
@@ -1501,6 +1509,7 @@ class RepoImpl:
         pattern: str,
         ref: Optional[str] = None,
         rev: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         case_sensitive: Optional[bool] = None,
         file_filters: Optional[Dict[str, Any]] = None,
@@ -1515,6 +1524,7 @@ class RepoImpl:
             pattern: Regex pattern to search for
             ref: Git ref to search (defaults to server-side default branch)
             rev: Deprecated alias for ref
+            ephemeral: When true, resolve `ref` under the ephemeral namespace
             paths: Git pathspecs to restrict search
             case_sensitive: Whether search is case-sensitive (default: server default)
             file_filters: Optional filters with include_globs/exclude_globs/extension_filters
@@ -1551,6 +1561,8 @@ class RepoImpl:
             body["ref"] = ref
         elif rev:
             body["ref"] = rev
+        if ephemeral is not None:
+            body["ephemeral"] = bool(ephemeral)
         if paths:
             body["paths"] = paths
         if file_filters:

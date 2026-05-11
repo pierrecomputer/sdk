@@ -210,6 +210,39 @@ func TestGrepRequestBody(t *testing.T) {
 	}
 }
 
+func TestGrepEphemeralRequestBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/grep" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["ephemeral"] != true {
+			t.Fatalf("expected ephemeral=true, got %v", body["ephemeral"])
+		}
+		if body["ref"] != "feature" {
+			t.Fatalf("expected ref=feature, got %v", body["ref"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"query":{"pattern":"SEARCH","case_sensitive":false},"repo":{"ref":"feature","commit":"deadbeef"},"matches":[],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.Grep(nil, GrepOptions{
+		Ref:       "feature",
+		Ephemeral: boolPtr(true),
+		Query:     GrepQuery{Pattern: "SEARCH"},
+	}); err != nil {
+		t.Fatalf("grep error: %v", err)
+	}
+}
+
 func TestGrepRequestLegacyRev(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/grep" {
@@ -1286,6 +1319,61 @@ func TestListCommitsDateParsing(t *testing.T) {
 	}
 	if commit.Date.IsZero() {
 		t.Fatalf("expected parsed date")
+	}
+}
+
+func TestListBranchesEphemeralQueryParam(t *testing.T) {
+	var rawQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/branches" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"branches":[],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.ListBranches(nil, ListBranchesOptions{Ephemeral: boolPtr(true)}); err != nil {
+		t.Fatalf("list branches error: %v", err)
+	}
+	if !strings.Contains(rawQuery, "ephemeral=true") {
+		t.Fatalf("expected ephemeral=true in query, got %q", rawQuery)
+	}
+}
+
+func TestListCommitsEphemeralQueryParam(t *testing.T) {
+	var rawQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/commits" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commits":[],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.ListCommits(nil, ListCommitsOptions{Branch: "feature", Ephemeral: boolPtr(true)}); err != nil {
+		t.Fatalf("list commits error: %v", err)
+	}
+	if !strings.Contains(rawQuery, "ephemeral=true") {
+		t.Fatalf("expected ephemeral=true in query, got %q", rawQuery)
+	}
+	if !strings.Contains(rawQuery, "branch=feature") {
+		t.Fatalf("expected branch=feature in query, got %q", rawQuery)
 	}
 }
 
