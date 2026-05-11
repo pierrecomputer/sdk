@@ -307,6 +307,7 @@ export interface ListFilesWithMetadataResult {
 export interface ListBranchesOptions extends GitStorageInvocationOptions {
   cursor?: string;
   limit?: number;
+  ephemeral?: boolean;
 }
 
 export type RawBranchInfo = SchemaRawBranchInfo;
@@ -406,6 +407,7 @@ export interface ListCommitsOptions extends GitStorageInvocationOptions {
   branch?: string;
   cursor?: string;
   limit?: number;
+  ephemeral?: boolean;
 }
 
 export type RawCommitInfo = SchemaRawCommitInfo;
@@ -530,6 +532,7 @@ export interface GrepOptions extends GitStorageInvocationOptions {
    * @deprecated Use ref instead.
    */
   rev?: string;
+  ephemeral?: boolean;
   paths?: string[];
   query: {
     pattern: string;

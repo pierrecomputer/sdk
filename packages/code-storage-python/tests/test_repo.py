@@ -526,6 +526,39 @@ class TestRepoFileOperations:
             assert kwargs["json"]["ref"] == "main"
             assert "rev" not in kwargs["json"]
 
+    @pytest.mark.asyncio
+    async def test_grep_ephemeral_in_body(self, git_storage_options: dict) -> None:
+        """grep ephemeral=True must surface as body['ephemeral']=True."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        grep_response = MagicMock()
+        grep_response.status_code = 200
+        grep_response.is_success = True
+        grep_response.raise_for_status = MagicMock()
+        grep_response.json.return_value = {
+            "query": {"pattern": "SEARCHME", "case_sensitive": True},
+            "repo": {"ref": "feature", "commit": "deadbeef"},
+            "matches": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_response, grep_response])
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.grep(pattern="SEARCHME", ref="feature", ephemeral=True)
+
+            _, kwargs = client_instance.post.call_args
+            assert kwargs["json"]["ephemeral"] is True
+            assert kwargs["json"]["ref"] == "feature"
+
 
 class TestRepoBranchOperations:
     """Tests for branch operations."""
@@ -618,6 +651,40 @@ class TestRepoBranchOperations:
             assert result is not None
             assert result["next_cursor"] == "next-page-token"
             assert result["has_more"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_branches_ephemeral_query_param(
+        self, git_storage_options: dict
+    ) -> None:
+        """ephemeral=True must surface as ephemeral=true in the query string."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        branches_response = MagicMock()
+        branches_response.status_code = 200
+        branches_response.is_success = True
+        branches_response.json.return_value = {
+            "branches": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            mock_get = AsyncMock(return_value=branches_response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.list_branches(ephemeral=True)
+
+            called_url = mock_get.await_args.args[0]
+            assert "ephemeral=true" in called_url
 
     @pytest.mark.asyncio
     async def test_create_branch_prefers_base_ref(self, git_storage_options: dict) -> None:
@@ -1209,6 +1276,41 @@ class TestRepoCommitOperations:
             assert len(result["commits"]) == 2
             assert result["commits"][0]["sha"] == "abc123"
             assert result["commits"][0]["message"] == "Initial commit"
+
+    @pytest.mark.asyncio
+    async def test_list_commits_ephemeral_query_param(
+        self, git_storage_options: dict
+    ) -> None:
+        """ephemeral=True must surface as ephemeral=true in the query string."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commits_response = MagicMock()
+        commits_response.status_code = 200
+        commits_response.is_success = True
+        commits_response.json.return_value = {
+            "commits": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            mock_get = AsyncMock(return_value=commits_response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.list_commits(branch="feature", ephemeral=True)
+
+            called_url = mock_get.await_args.args[0]
+            assert "ephemeral=true" in called_url
+            assert "branch=feature" in called_url
 
     @pytest.mark.asyncio
     async def test_get_commit(self, git_storage_options: dict) -> None:

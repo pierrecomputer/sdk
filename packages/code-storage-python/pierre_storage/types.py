@@ -652,6 +652,7 @@ class Repo(Protocol):
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListBranchesResult:
         """List branches in the repository."""
@@ -745,6 +746,7 @@ class Repo(Protocol):
         branch: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in the repository."""
@@ -833,6 +835,7 @@ class Repo(Protocol):
         pattern: str,
         ref: Optional[str] = None,
         rev: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         case_sensitive: Optional[bool] = None,
         file_filters: Optional[Dict[str, Any]] = None,

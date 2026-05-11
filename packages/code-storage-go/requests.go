@@ -41,6 +41,7 @@ type authorInfo struct {
 type grepRequest struct {
 	Query       grepQueryPayload       `json:"query"`
 	Ref         string                 `json:"ref,omitempty"`
+	Ephemeral   *bool                  `json:"ephemeral,omitempty"`
 	Paths       []string               `json:"paths,omitempty"`
 	FileFilters *grepFileFilterPayload `json:"file_filters,omitempty"`
 	Context     *grepContextPayload    `json:"context,omitempty"`

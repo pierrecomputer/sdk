@@ -277,8 +277,9 @@ type ListFilesWithMetadataResult struct {
 // ListBranchesOptions configures list branches.
 type ListBranchesOptions struct {
 	InvocationOptions
-	Cursor string
-	Limit  int
+	Cursor    string
+	Limit     int
+	Ephemeral *bool
 }
 
 // BranchInfo describes a branch.
@@ -437,9 +438,10 @@ type DeleteTagResult struct {
 // ListCommitsOptions configures list commits.
 type ListCommitsOptions struct {
 	InvocationOptions
-	Branch string
-	Cursor string
-	Limit  int
+	Branch    string
+	Cursor    string
+	Limit     int
+	Ephemeral *bool
 }
 
 // CommitInfo describes a commit entry.
@@ -619,6 +621,7 @@ type GrepOptions struct {
 	Ref string
 	// Deprecated: use Ref instead.
 	Rev         string
+	Ephemeral   *bool
 	Query       GrepQuery
 	Paths       []string
 	FileFilters *GrepFileFilters

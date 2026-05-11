@@ -639,6 +639,7 @@ interface NoteWriteResult {
 interface ListBranchesOptions {
   cursor?: string;
   limit?: number;
+  ephemeral?: boolean;
   ttl?: number;
 }
 
@@ -665,6 +666,7 @@ interface ListCommitsOptions {
   branch?: string;
   cursor?: string;
   limit?: number;
+  ephemeral?: boolean;
   ttl?: number;
 }
 
