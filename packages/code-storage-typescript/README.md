@@ -244,6 +244,19 @@ console.log(commits.commits);
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
 console.log(commit.message, commit.authorName);
 
+// Blame a file (per-line authorship). The top-level `commitSha` is the SHA the
+// `ref` resolved to; each entry in `lines` carries its own author/committer
+// metadata inline.
+const blame = await repo.getBlame({
+  path: 'src/main.go',
+  ref: 'main',
+  ranges: ['10,30'],
+  detectMoves: true,
+});
+for (const line of blame.lines) {
+  console.log(`${line.lineNumber} (${line.commitSha.slice(0, 7)}): ${line.authorName} — ${line.summary}`);
+}
+
 // Read a git note for a commit
 const note = await repo.getNote({ sha: 'abc123...' });
 console.log(note.note);
@@ -515,6 +528,7 @@ interface Repo {
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
   getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
+  getBlame(options: BlameOptions): Promise<BlameResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
@@ -700,6 +714,39 @@ interface GetCommitOptions {
 
 interface GetCommitResult {
   commit: CommitInfo;
+}
+
+interface BlameOptions {
+  path: string;
+  ref?: string;
+  ephemeral?: boolean;
+  ranges?: string[];
+  detectMoves?: boolean;
+  ttl?: number;
+}
+
+interface BlameLine {
+  lineNumber: number;
+  commitSha: string;
+  originalLineNumber: number;
+  originalPath: string;
+  previousCommitSha?: string;
+  authorName: string;
+  authorEmail: string;
+  authorTime: Date;
+  rawAuthorTime: string;
+  committerName: string;
+  committerEmail: string;
+  committerTime: Date;
+  rawCommitterTime: string;
+  summary: string;
+}
+
+interface BlameResult {
+  ref: string;       // The ref passed in (or default branch resolved)
+  path: string;
+  commitSha: string; // SHA the input ref resolved to at request time
+  lines: BlameLine[];
 }
 
 interface GetBranchDiffOptions {

@@ -254,6 +254,18 @@ print(commits["commits"])
 result = await repo.get_commit(sha="abc123...")
 print(result["commit"]["message"], result["commit"]["author_name"])
 
+# Blame a file (per-line authorship). The top-level "commit_sha" is the SHA the
+# `ref` resolved to; each entry in "lines" carries its own author/committer
+# metadata inline.
+blame = await repo.get_blame(
+    path="src/main.go",
+    ref="main",
+    ranges=["10,30"],
+    detect_moves=True,
+)
+for line in blame["lines"]:
+    print(f"{line['line_number']} ({line['commit_sha'][:7]}): {line['author_name']} — {line['summary']}")
+
 # Read a git note for a commit
 note = await repo.get_note(sha="abc123...")
 print(note["note"])
@@ -753,6 +765,17 @@ class Repo:
         sha: str,
         ttl: Optional[int] = None,
     ) -> GetCommitResult: ...
+
+    async def get_blame(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        ranges: Optional[list[str]] = None,
+        detect_moves: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> BlameResult: ...
 
     async def get_branch_diff(
         self,

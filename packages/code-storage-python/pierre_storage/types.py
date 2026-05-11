@@ -274,6 +274,34 @@ class GetCommitResult(TypedDict):
     commit: CommitInfo
 
 
+class BlameLine(TypedDict):
+    """A single line in blame results with inline commit metadata."""
+
+    line_number: int
+    commit_sha: str
+    original_line_number: int
+    original_path: str
+    previous_commit_sha: NotRequired[str]
+    author_name: str
+    author_email: str
+    author_time: datetime
+    raw_author_time: str
+    committer_name: str
+    committer_email: str
+    committer_time: datetime
+    raw_committer_time: str
+    summary: str
+
+
+class BlameResult(TypedDict):
+    """Result from running blame on a file."""
+
+    ref: str
+    path: str
+    commit_sha: str
+    lines: List[BlameLine]
+
+
 # Git notes types
 class NoteReadResult(TypedDict):
     """Result from reading a git note."""
@@ -759,6 +787,19 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> GetCommitResult:
         """Fetch metadata for a single commit (no diff)."""
+        ...
+
+    async def get_blame(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        ranges: Optional[List[str]] = None,
+        detect_moves: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> BlameResult:
+        """Return per-line authorship for a file at a ref."""
         ...
 
     async def get_note(

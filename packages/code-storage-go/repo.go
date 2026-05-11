@@ -438,6 +438,72 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 	}, nil
 }
 
+// GetBlame returns per-line authorship for a file at a ref.
+func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult, error) {
+	if strings.TrimSpace(options.Path) == "" {
+		return BlameResult{}, errors.New("getBlame path is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return BlameResult{}, err
+	}
+
+	params := url.Values{}
+	params.Set("path", options.Path)
+	if ref := strings.TrimSpace(options.Ref); ref != "" {
+		params.Set("ref", ref)
+	}
+	if options.Ephemeral {
+		params.Set("ephemeral", "true")
+	}
+	for _, spec := range options.Ranges {
+		params.Add("range", spec)
+	}
+	if options.DetectMoves {
+		params.Set("detect_moves", "true")
+	}
+
+	resp, err := r.client.api.get(ctx, "repos/blame", params, jwtToken, nil)
+	if err != nil {
+		return BlameResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload blameResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return BlameResult{}, err
+	}
+
+	result := BlameResult{
+		Ref:       payload.Ref,
+		Path:      payload.Path,
+		CommitSHA: payload.CommitSHA,
+		Lines:     make([]BlameLine, len(payload.Lines)),
+	}
+	for i, line := range payload.Lines {
+		result.Lines[i] = BlameLine{
+			LineNumber:         line.LineNumber,
+			CommitSHA:          line.CommitSHA,
+			OriginalLineNumber: line.OriginalLineNumber,
+			OriginalPath:       line.OriginalPath,
+			PreviousCommitSHA:  line.PreviousCommitSHA,
+			AuthorName:         line.AuthorName,
+			AuthorEmail:        line.AuthorEmail,
+			AuthorTime:         parseTime(line.AuthorTime),
+			RawAuthorTime:      line.AuthorTime,
+			CommitterName:      line.CommitterName,
+			CommitterEmail:     line.CommitterEmail,
+			CommitterTime:      parseTime(line.CommitterTime),
+			RawCommitterTime:   line.CommitterTime,
+			Summary:            line.Summary,
+		}
+	}
+
+	return result, nil
+}
+
 // GetNote reads a git note.
 func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResult, error) {
 	sha := strings.TrimSpace(options.SHA)

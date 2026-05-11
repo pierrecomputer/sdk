@@ -474,6 +474,42 @@ type GetCommitResult struct {
 	Commit CommitInfo
 }
 
+// BlameOptions configures a per-line blame lookup.
+type BlameOptions struct {
+	InvocationOptions
+	Path        string
+	Ref         string
+	Ephemeral   bool
+	Ranges      []string
+	DetectMoves bool
+}
+
+// BlameLine describes blame attribution for a single line in a file.
+type BlameLine struct {
+	LineNumber         int32
+	CommitSHA          string
+	OriginalLineNumber int32
+	OriginalPath       string
+	PreviousCommitSHA  string
+	AuthorName         string
+	AuthorEmail        string
+	AuthorTime         time.Time
+	RawAuthorTime      string
+	CommitterName      string
+	CommitterEmail     string
+	CommitterTime      time.Time
+	RawCommitterTime   string
+	Summary            string
+}
+
+// BlameResult is the result returned by Repo.GetBlame.
+type BlameResult struct {
+	Ref       string
+	Path      string
+	CommitSHA string
+	Lines     []BlameLine
+}
+
 // NoteAuthor identifies note author.
 type NoteAuthor struct {
 	Name  string

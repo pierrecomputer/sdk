@@ -6,6 +6,7 @@ import type {
   CreateTagResponseRaw,
   DeleteBranchResponseRaw,
   DeleteTagResponseRaw,
+  BlameResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
   GetCommitResponseRaw,
@@ -76,6 +77,7 @@ export interface Repo {
   listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
   getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
+  getBlame(options: BlameOptions): Promise<BlameResult>;
   createTag(options: CreateTagOptions): Promise<CreateTagResult>;
   deleteTag(options: DeleteTagOptions): Promise<DeleteTagResult>;
   getNote(options: GetNoteOptions): Promise<GetNoteResult>;
@@ -440,6 +442,41 @@ export type GetCommitResponse = GetCommitResponseRaw;
 
 export interface GetCommitResult {
   commit: CommitInfo;
+}
+
+// Blame API types
+export interface BlameOptions extends GitStorageInvocationOptions {
+  path: string;
+  ref?: string;
+  ephemeral?: boolean;
+  ranges?: string[];
+  detectMoves?: boolean;
+}
+
+export type BlameResponse = BlameResponseRaw;
+
+export interface BlameLine {
+  lineNumber: number;
+  commitSha: string;
+  originalLineNumber: number;
+  originalPath: string;
+  previousCommitSha?: string;
+  authorName: string;
+  authorEmail: string;
+  authorTime: Date;
+  rawAuthorTime: string;
+  committerName: string;
+  committerEmail: string;
+  committerTime: Date;
+  rawCommitterTime: string;
+  summary: string;
+}
+
+export interface BlameResult {
+  ref: string;
+  path: string;
+  commitSha: string;
+  lines: BlameLine[];
 }
 
 // Git notes API types

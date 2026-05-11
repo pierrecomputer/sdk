@@ -107,6 +107,7 @@ Username is always `t`. Password is the JWT.
 | List files at ref             | GET      | `/repos/files`                    | `git:read`      |
 | List files with metadata      | GET      | `/repos/files/metadata`           | `git:read`      |
 | Get file content (stream)     | GET      | `/repos/file`                     | `git:read`      |
+| Blame file at ref             | GET      | `/repos/blame`                    | `git:read`      |
 | Search content (grep)         | POST     | `/repos/grep`                     | `git:read`      |
 | Download archive (tar.gz)     | POST     | `/repos/archive`                  | `git:read`      |
 | **TAGS**                      |          |                                   |                 |
@@ -439,6 +440,43 @@ curl "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
 ```
 
 Response: raw file bytes (streaming), `Content-Type` set appropriately.
+
+## GET /repos/blame — Blame File
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&range=10,30&range=/getUser/,+30&detect_moves=true" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Params: `path` (required — repository-relative file path), `ref` (branch, tag, or
+SHA; defaults to the repository default branch), `ephemeral` (resolve `ref` from
+the ephemeral namespace), `range` (repeatable `git blame -L`-style spec, up to
+16 per request — each value is one `-L` argument: e.g. `10,20`, `10,+5`,
+`/getUser/,/^}/`, `/getUser/,+30`, `10,`, `,20`, `10`, `:^func .*Foo`,
+`:funcname`; when omitted, the whole file is blamed), `detect_moves` (follow
+renames and copies).
+Response:
+```json
+{
+  "ref": "main",
+  "path": "src/main.go",
+  "commit_sha": "<resolved sha>",
+  "lines": [{
+    "line_number": 1,
+    "commit_sha": "...",
+    "original_line_number": 1,
+    "original_path": "src/main.go",
+    "previous_commit_sha": "...",
+    "author_name": "...", "author_email": "...", "author_time": "...",
+    "committer_name": "...", "committer_email": "...", "committer_time": "...",
+    "summary": "..."
+  }]
+}
+```
+The top-level `commit_sha` is the SHA the input ref resolved to. Each entry in
+`lines[]` carries its authoring commit's metadata inline; `previous_commit_sha`
+is omitted when the line has no prior version (e.g. introduced in the initial
+commit). Errors: `400` missing/invalid params, `404` ref/path not found.
 
 ## POST /repos/grep — Search Content (Beta)
 

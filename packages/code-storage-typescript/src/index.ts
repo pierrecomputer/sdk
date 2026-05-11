@@ -23,6 +23,7 @@ import {
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
   errorEnvelopeSchema,
+  blameResponseSchema,
   getCommitResponseSchema,
   grepResponseSchema,
   listBranchesResponseSchema,
@@ -78,6 +79,9 @@ import type {
   GetCommitDiffOptions,
   GetCommitDiffResponse,
   GetCommitDiffResult,
+  BlameOptions,
+  BlameResponse,
+  BlameResult,
   GetCommitOptions,
   GetCommitResponse,
   GetCommitResult,
@@ -354,6 +358,30 @@ function transformListCommitsResult(
 function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
   return {
     commit: transformCommitInfo(raw.commit),
+  };
+}
+
+function transformBlameResult(raw: BlameResponse): BlameResult {
+  return {
+    ref: raw.ref,
+    path: raw.path,
+    commitSha: raw.commit_sha,
+    lines: raw.lines.map((line) => ({
+      lineNumber: line.line_number,
+      commitSha: line.commit_sha,
+      originalLineNumber: line.original_line_number,
+      originalPath: line.original_path,
+      previousCommitSha: line.previous_commit_sha,
+      authorName: line.author_name,
+      authorEmail: line.author_email,
+      authorTime: new Date(line.author_time),
+      rawAuthorTime: line.author_time,
+      committerName: line.committer_name,
+      committerEmail: line.committer_email,
+      committerTime: new Date(line.committer_time),
+      rawCommitterTime: line.committer_time,
+      summary: line.summary,
+    })),
   };
 }
 
@@ -988,6 +1016,41 @@ class RepoImpl implements Repo {
 
     const raw = getCommitResponseSchema.parse(await response.json());
     return transformGetCommitResult(raw);
+  }
+
+  async getBlame(options: BlameOptions): Promise<BlameResult> {
+    if (!options?.path?.trim()) {
+      throw new Error('getBlame path is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const params: Record<string, string | string[]> = { path: options.path };
+    const ref = options.ref?.trim();
+    if (ref) {
+      params.ref = ref;
+    }
+    if (options.ephemeral) {
+      params.ephemeral = 'true';
+    }
+    if (options.ranges && options.ranges.length > 0) {
+      params.range = options.ranges;
+    }
+    if (options.detectMoves) {
+      params.detect_moves = 'true';
+    }
+
+    const response = await this.api.get(
+      { path: 'repos/blame', params },
+      jwt
+    );
+
+    const raw = blameResponseSchema.parse(await response.json());
+    return transformBlameResult(raw);
   }
 
   async getNote(options: GetNoteOptions): Promise<GetNoteResult> {
