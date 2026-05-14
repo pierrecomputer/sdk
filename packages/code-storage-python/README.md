@@ -210,6 +210,13 @@ print(branch_result["target_branch"], branch_result.get("commit_sha"))
 delete_branch_result = await repo.delete_branch(name="feature/old-onboarding")
 print(delete_branch_result["message"])
 
+# Pass ephemeral=True to delete a branch from the ephemeral namespace
+ephemeral_delete = await repo.delete_branch(
+    name="merge/123e4567-e89b-12d3-a456-426614174000",
+    ephemeral=True,
+)
+print(ephemeral_delete["ephemeral"])  # True
+
 # Merge one branch into another
 merge_result = await repo.merge(
     source_branch="feature/preview",
@@ -722,6 +729,7 @@ class Repo:
         self,
         *,
         name: str,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> DeleteBranchResult: ...
 

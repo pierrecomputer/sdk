@@ -242,6 +242,7 @@ class DeleteBranchResult(TypedDict):
 
     name: str
     message: str
+    ephemeral: bool
 
 
 # Removed: ListCommitsOptions - now uses **kwargs
@@ -706,6 +707,7 @@ class Repo(Protocol):
         self,
         *,
         name: str,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> DeleteBranchResult:
         """Delete a branch."""

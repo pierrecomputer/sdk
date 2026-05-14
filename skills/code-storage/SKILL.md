@@ -332,7 +332,11 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches" -X DELETE \
 
 The default branch cannot be deleted. If the repository is connected to GitHub sync, branch deletion
 triggers a sync automatically.
-Response: `{ "name": "feature/old-onboarding", "message": "branch deleted" }`
+Response: `{ "name": "feature/old-onboarding", "message": "branch deleted", "ephemeral": false }`
+
+Pass `"ephemeral": true` in the body to delete a branch under the ephemeral namespace. When `ephemeral` is true the default-branch protection is skipped
+(the default branch is always non-ephemeral) and GitHub mirroring is not triggered. The response
+echoes which namespace the deletion targeted via the `ephemeral` field.
 
 ## POST /repos/commit-pack — Create Commit
 

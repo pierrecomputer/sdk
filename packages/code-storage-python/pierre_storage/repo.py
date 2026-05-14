@@ -650,9 +650,14 @@ class RepoImpl:
         self,
         *,
         name: str,
+        ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> DeleteBranchResult:
-        """Delete a branch."""
+        """Delete a branch.
+
+        When ``ephemeral`` is true, the branch is resolved and removed under the
+        repository's ephemeral namespace rather than the persistent one.
+        """
         name_clean = name.strip()
         if not name_clean:
             raise ValueError("delete_branch name is required")
@@ -667,6 +672,10 @@ class RepoImpl:
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
 
+        body: dict[str, object] = {"name": name_clean}
+        if ephemeral is not None:
+            body["ephemeral"] = bool(ephemeral)
+
         async with httpx.AsyncClient() as client:
             response = await client.request(
                 "DELETE",
@@ -676,7 +685,7 @@ class RepoImpl:
                     "Content-Type": "application/json",
                     "Code-Storage-Agent": get_user_agent(),
                 },
-                json={"name": name_clean},
+                json=body,
                 timeout=30.0,
             )
 
@@ -698,6 +707,7 @@ class RepoImpl:
             return {
                 "name": data["name"],
                 "message": data["message"],
+                "ephemeral": bool(data.get("ephemeral", False)),
             }
 
     async def merge(

@@ -319,13 +319,15 @@ type CreateBranchResult struct {
 // DeleteBranchOptions configures branch deletion.
 type DeleteBranchOptions struct {
 	InvocationOptions
-	Name string
+	Name      string
+	Ephemeral *bool
 }
 
 // DeleteBranchResult describes branch deletion result.
 type DeleteBranchResult struct {
-	Name    string
-	Message string
+	Name      string
+	Message   string
+	Ephemeral bool
 }
 
 // MergeStrategy selects how Repo.Merge reconciles source into target.

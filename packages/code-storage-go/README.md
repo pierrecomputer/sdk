@@ -136,6 +136,17 @@ if err != nil {
 	log.Fatal(err)
 }
 fmt.Println(deletedBranch.Message)
+
+// Set Ephemeral to delete a branch from the ephemeral namespace
+ephemeral := true
+deletedEphemeral, err := repo.DeleteBranch(context.Background(), storage.DeleteBranchOptions{
+	Name:      "merge/123e4567-e89b-12d3-a456-426614174000",
+	Ephemeral: &ephemeral,
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(deletedEphemeral.Ephemeral)
 ```
 
 ### Merge branches

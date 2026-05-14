@@ -126,7 +126,8 @@ type deleteTagRequest struct {
 }
 
 type deleteBranchRequest struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Ephemeral *bool  `json:"ephemeral,omitempty"`
 }
 
 // commitMetadataPayload is the JSON body for commit metadata.
