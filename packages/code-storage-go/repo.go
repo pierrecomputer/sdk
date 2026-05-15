@@ -949,7 +949,7 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 		return DeleteBranchResult{}, err
 	}
 
-	body := &deleteBranchRequest{Name: name}
+	body := &deleteBranchRequest{Name: name, Ephemeral: options.Ephemeral}
 	resp, err := r.client.api.delete(ctx, "repos/branches", nil, body, jwtToken, nil)
 	if err != nil {
 		return DeleteBranchResult{}, err
@@ -962,8 +962,9 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 	}
 
 	return DeleteBranchResult{
-		Name:    payload.Name,
-		Message: payload.Message,
+		Name:      payload.Name,
+		Message:   payload.Message,
+		Ephemeral: payload.Ephemeral,
 	}, nil
 }
 

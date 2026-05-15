@@ -350,6 +350,7 @@ export interface CreateBranchResult {
 
 export interface DeleteBranchOptions extends GitStorageInvocationOptions {
   name: string;
+  ephemeral?: boolean;
 }
 
 export type DeleteBranchResponse = DeleteBranchResponseRaw;
@@ -357,6 +358,7 @@ export type DeleteBranchResponse = DeleteBranchResponseRaw;
 export interface DeleteBranchResult {
   name: string;
   message: string;
+  ephemeral: boolean;
 }
 
 export interface ListTagsOptions extends GitStorageInvocationOptions {

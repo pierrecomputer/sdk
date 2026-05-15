@@ -562,6 +562,7 @@ function transformDeleteBranchResult(
   return {
     name: raw.name,
     message: raw.message,
+    ephemeral: raw.ephemeral ?? false,
   };
 }
 
@@ -1463,8 +1464,13 @@ class RepoImpl implements Repo {
       ttl,
     });
 
+    const body: Record<string, unknown> = { name };
+    if (typeof options.ephemeral === 'boolean') {
+      body.ephemeral = options.ephemeral;
+    }
+
     const response = await this.api.delete(
-      { path: 'repos/branches', body: { name } },
+      { path: 'repos/branches', body },
       jwt
     );
     const raw = deleteBranchResponseSchema.parse(await response.json());

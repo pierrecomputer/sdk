@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -956,6 +957,9 @@ func TestDeleteBranch(t *testing.T) {
 		if body.Name != "feature/old-onboarding" {
 			t.Fatalf("unexpected delete branch payload: %+v", body)
 		}
+		if body.Ephemeral != nil {
+			t.Fatalf("expected omitted ephemeral, got %#v", body.Ephemeral)
+		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		claims := parseJWTFromToken(t, token)
 		scopes, ok := claims["scopes"].([]interface{})
@@ -963,7 +967,7 @@ func TestDeleteBranch(t *testing.T) {
 			t.Fatalf("unexpected scopes: %#v", claims["scopes"])
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"feature/old-onboarding","message":"branch deleted"}`))
+		_, _ = w.Write([]byte(`{"name":"feature/old-onboarding","message":"branch deleted","ephemeral":false}`))
 	}))
 	defer server.Close()
 
@@ -973,11 +977,53 @@ func TestDeleteBranch(t *testing.T) {
 	}
 	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
 
-	result, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "feature/old-onboarding"})
+	result, err := repo.DeleteBranch(context.Background(), DeleteBranchOptions{Name: "feature/old-onboarding"})
 	if err != nil {
 		t.Fatalf("delete branch error: %v", err)
 	}
-	if result.Name != "feature/old-onboarding" || result.Message != "branch deleted" {
+	if result.Name != "feature/old-onboarding" || result.Message != "branch deleted" || result.Ephemeral {
+		t.Fatalf("unexpected delete branch result: %+v", result)
+	}
+}
+
+func TestDeleteBranchEphemeral(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/branches" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		var body deleteBranchRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Name != "merge/123e4567-e89b-12d3-a456-426614174000" {
+			t.Fatalf("unexpected delete branch name: %s", body.Name)
+		}
+		if body.Ephemeral == nil || !*body.Ephemeral {
+			t.Fatalf("expected ephemeral=true, got %#v", body.Ephemeral)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"merge/123e4567-e89b-12d3-a456-426614174000","message":"branch deleted","ephemeral":true}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	ephemeral := true
+	result, err := repo.DeleteBranch(context.Background(), DeleteBranchOptions{
+		Name:      "merge/123e4567-e89b-12d3-a456-426614174000",
+		Ephemeral: &ephemeral,
+	})
+	if err != nil {
+		t.Fatalf("delete branch error: %v", err)
+	}
+	if result.Name != "merge/123e4567-e89b-12d3-a456-426614174000" || result.Message != "branch deleted" || !result.Ephemeral {
 		t.Fatalf("unexpected delete branch result: %+v", result)
 	}
 }

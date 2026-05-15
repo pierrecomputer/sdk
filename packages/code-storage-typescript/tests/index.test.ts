@@ -1967,6 +1967,7 @@ describe('GitStorage', () => {
           json: async () => ({
             name: 'feature/old-onboarding',
             message: 'branch deleted',
+            ephemeral: false,
           }),
         } as any);
       });
@@ -1977,6 +1978,44 @@ describe('GitStorage', () => {
       expect(result).toEqual({
         name: 'feature/old-onboarding',
         message: 'branch deleted',
+        ephemeral: false,
+      });
+    });
+
+    it('forwards ephemeral flag in the request body and surfaces it on the result', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-delete-branch-ephemeral' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('DELETE');
+
+        const body = JSON.parse(requestInit.body as string);
+        expect(body).toEqual({
+          name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+          ephemeral: true,
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+            message: 'branch deleted',
+            ephemeral: true,
+          }),
+        } as any);
+      });
+
+      const result = await repo.deleteBranch({
+        name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+        ephemeral: true,
+      });
+      expect(result).toEqual({
+        name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+        message: 'branch deleted',
+        ephemeral: true,
       });
     });
 

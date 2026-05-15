@@ -216,6 +216,7 @@ export const deleteTagResponseSchema = z.object({
 export const deleteBranchResponseSchema = z.object({
   name: z.string(),
   message: z.string(),
+  ephemeral: z.boolean().optional(),
 });
 
 export const refUpdateResultSchema = z.object({

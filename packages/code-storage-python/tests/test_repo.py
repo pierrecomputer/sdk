@@ -1869,6 +1869,7 @@ class TestRepoTagOperations:
         delete_branch_response.json.return_value = {
             "name": "feature/old-onboarding",
             "message": "branch deleted",
+            "ephemeral": False,
         }
 
         with patch("httpx.AsyncClient") as mock_client:
@@ -1882,12 +1883,55 @@ class TestRepoTagOperations:
             assert result == {
                 "name": "feature/old-onboarding",
                 "message": "branch deleted",
+                "ephemeral": False,
             }
 
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.args[0] == "DELETE"
             assert delete_call.args[1].endswith("/repos/branches")
             assert delete_call.kwargs["json"] == {"name": "feature/old-onboarding"}
+
+    @pytest.mark.asyncio
+    async def test_delete_branch_ephemeral(self, git_storage_options: dict) -> None:
+        """Test that delete_branch forwards the ephemeral flag and surfaces it."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        delete_branch_response = MagicMock()
+        delete_branch_response.status_code = 200
+        delete_branch_response.is_success = True
+        delete_branch_response.json.return_value = {
+            "name": "merge/123e4567-e89b-12d3-a456-426614174000",
+            "message": "branch deleted",
+            "ephemeral": True,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.request = AsyncMock(return_value=delete_branch_response)
+
+            repo = await storage.create_repo(id="test-repo")
+
+            result = await repo.delete_branch(
+                name="merge/123e4567-e89b-12d3-a456-426614174000",
+                ephemeral=True,
+            )
+            assert result == {
+                "name": "merge/123e4567-e89b-12d3-a456-426614174000",
+                "message": "branch deleted",
+                "ephemeral": True,
+            }
+
+            delete_call = client_instance.request.call_args_list[0]
+            assert delete_call.kwargs["json"] == {
+                "name": "merge/123e4567-e89b-12d3-a456-426614174000",
+                "ephemeral": True,
+            }
 
     @pytest.mark.asyncio
     async def test_delete_branch_validates_name(self, git_storage_options: dict) -> None:

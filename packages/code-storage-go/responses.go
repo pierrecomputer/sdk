@@ -214,8 +214,9 @@ type deleteTagResponse struct {
 }
 
 type deleteBranchResponse struct {
-	Name    string `json:"name"`
-	Message string `json:"message"`
+	Name      string `json:"name"`
+	Message   string `json:"message"`
+	Ephemeral bool   `json:"ephemeral"`
 }
 
 type grepResponse struct {

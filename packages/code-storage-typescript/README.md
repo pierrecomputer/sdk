@@ -306,6 +306,13 @@ console.log(branch.targetBranch, branch.commitSha);
 const deletedBranch = await repo.deleteBranch({ name: 'feature/demo' });
 console.log(deletedBranch.message);
 
+// Pass `ephemeral: true` to delete a branch from the ephemeral namespace
+const ephemeralDelete = await repo.deleteBranch({
+  name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+  ephemeral: true,
+});
+console.log(ephemeralDelete.ephemeral); // true
+
 // `baseBranch` is still accepted for backwards compatibility, but deprecated.
 // Prefer `baseRef` for new code.
 
