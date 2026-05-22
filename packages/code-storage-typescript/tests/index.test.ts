@@ -1775,6 +1775,62 @@ describe('GitStorage', () => {
       });
     });
 
+    it('normalizes squash merge results to merge_commit for 1.x compatibility', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge-squash' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        expect(body).toEqual({
+          source_branch: 'feature',
+          target_branch: 'main',
+          strategy: 'merge',
+          squash: true,
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            result: 'squash',
+            commit_sha: 'squash-sha',
+            tree_sha: 'tree-sha',
+            source: { branch: 'feature', ephemeral: false, sha: 'source-sha' },
+            target: {
+              branch: 'main',
+              ephemeral: false,
+              old_sha: 'old-sha',
+              new_sha: 'squash-sha',
+            },
+            promoted_commits: 3,
+          }),
+        } as any);
+      });
+
+      const result = await repo.merge({
+        sourceBranch: 'feature',
+        targetBranch: 'main',
+        strategy: 'merge',
+        squash: true,
+      });
+
+      expect(result).toEqual({
+        result: 'merge_commit',
+        commitSha: 'squash-sha',
+        treeSha: 'tree-sha',
+        source: { branch: 'feature', ephemeral: false, sha: 'source-sha' },
+        target: {
+          branch: 'main',
+          ephemeral: false,
+          oldSha: 'old-sha',
+          newSha: 'squash-sha',
+        },
+        mergeBaseSha: undefined,
+        promotedCommits: 3,
+      });
+    });
+
     it('validates merge inputs locally', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge-validation' });

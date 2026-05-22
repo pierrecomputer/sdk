@@ -453,7 +453,7 @@ class CreateCommitOptions(TypedDict, total=False):
 
 
 MergeStrategy = Literal["merge", "ff_only", "ff_prefer"]
-MergeResultLabel = Literal["merge_commit", "fast_forward", "no_op", "unknown"]
+MergeResultLabel = Literal["merge_commit", "fast_forward", "no_op", "squash", "unknown"]
 
 
 class MergeBranchesOptions(TypedDict, total=False):
@@ -469,6 +469,7 @@ class MergeBranchesOptions(TypedDict, total=False):
     committer: CommitSignature
     strategy: MergeStrategy  # required
     allow_unrelated_histories: bool
+    squash: bool
 
 
 class MergeSourceResult(TypedDict):
@@ -726,6 +727,7 @@ class Repo(Protocol):
         author: Optional[CommitSignature] = None,
         committer: Optional[CommitSignature] = None,
         allow_unrelated_histories: Optional[bool] = None,
+        squash: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""

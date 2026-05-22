@@ -14,7 +14,7 @@ import {
 import { FetchDiffCommitTransport, sendCommitFromDiff } from './diff-commit';
 import { RefUpdateError } from './errors';
 import { ApiError, ApiFetcher } from './fetch';
-import type { RestoreCommitAckRaw } from './schemas';
+import type { MergeResponseRaw, RestoreCommitAckRaw } from './schemas';
 import {
   branchDiffResponseSchema,
   commitDiffResponseSchema,
@@ -111,7 +111,7 @@ import type {
   ListReposResponse,
   ListReposResult,
   MergeOptions,
-  MergeResponse,
+  MergeResultLabel,
   MergeResult,
   ListTagsOptions,
   ListTagsResponse,
@@ -504,9 +504,19 @@ function transformCreateBranchResult(
   };
 }
 
-function transformMergeResult(raw: MergeResponse): MergeResult {
+function normalizeMergeResultLabel(
+  result: MergeResponseRaw['result']
+): MergeResultLabel {
+  if (result === 'squash') {
+    return 'merge_commit';
+  }
+
+  return result;
+}
+
+function transformMergeResult(raw: MergeResponseRaw): MergeResult {
   return {
-    result: raw.result,
+    result: normalizeMergeResultLabel(raw.result),
     commitSha: raw.commit_sha,
     treeSha: raw.tree_sha,
     source: {
@@ -1495,6 +1505,9 @@ class RepoImpl implements Repo {
     if (strategy !== 'merge' && strategy !== 'ff_only' && strategy !== 'ff_prefer') {
       throw new Error('merge strategy must be merge, ff_only, or ff_prefer');
     }
+    if (options.squash === true && strategy === 'ff_only') {
+      throw new Error('merge squash is incompatible with the ff_only strategy');
+    }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
     const jwt = await this.generateJWT(this.id, {
@@ -1547,6 +1560,10 @@ class RepoImpl implements Repo {
 
     if (typeof options.allowUnrelatedHistories === 'boolean') {
       body.allow_unrelated_histories = options.allowUnrelatedHistories;
+    }
+
+    if (typeof options.squash === 'boolean') {
+      body.squash = options.squash;
     }
 
     const response = await this.api.post({ path: 'repos/merge', body }, jwt);
@@ -1894,14 +1911,18 @@ export class GitStorage {
       ttl,
     });
 
+    const trimmedQ = options?.q?.trim();
     let params: Record<string, string> | undefined;
-    if (options?.cursor || typeof options?.limit === 'number') {
+    if (options?.cursor || typeof options?.limit === 'number' || trimmedQ) {
       params = {};
-      if (options.cursor) {
+      if (options?.cursor) {
         params.cursor = options.cursor;
       }
-      if (typeof options.limit === 'number') {
+      if (typeof options?.limit === 'number') {
         params.limit = options.limit.toString();
+      }
+      if (trimmedQ) {
+        params.q = trimmedQ;
       }
     }
 

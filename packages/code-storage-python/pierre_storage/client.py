@@ -217,9 +217,14 @@ class GitStorage:
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> ListReposResult:
-        """List repositories for the organization."""
+        """List repositories for the organization.
+
+        Pass ``q`` to filter by a case-insensitive substring match against the
+        repository ``url``. Empty/whitespace ``q`` is treated as omitted.
+        """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
             "org",
@@ -231,6 +236,10 @@ class GitStorage:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+        if q is not None:
+            q_clean = q.strip()
+            if q_clean:
+                params["q"] = q_clean
 
         url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
         if params:

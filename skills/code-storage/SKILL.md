@@ -231,11 +231,13 @@ GitHub App sync does not use this endpoint.
 ## GET /repos — List Repositories
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos?limit=20&cursor=CURSOR" \
+curl "$CODE_STORAGE_BASE_URL/repos?limit=20&cursor=CURSOR&q=sdk" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `cursor` (pagination), `limit` (default 20, max 100)
+Params: `cursor` (pagination), `limit` (default 20, max 100), `q` (optional
+case-insensitive substring matched against the repository `url`; trimmed before
+matching; empty/whitespace is treated as omitted)
 Scope: `org:read`
 Response: `{ "repos": [...], "next_cursor": "...", "has_more": true }`
 
@@ -315,10 +317,15 @@ curl "$CODE_STORAGE_BASE_URL/repos/merge" -X POST \
 
 Required: `source_branch`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
 Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
-`commit_message`, `author`, `committer`, `allow_unrelated_histories`.
-Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"unknown",
+`commit_message`, `author`, `committer`, `allow_unrelated_histories`, `squash`.
+Set `squash: true` to collapse the source into a single new commit whose only
+parent is the current target tip; incompatible with `ff_only`.
+Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
+TypeScript SDK 1.x normalizes a raw `result: "squash"` payload to
+`result: "merge_commit"` in its exported merge result types for semver
+compatibility; Python and Go currently surface the raw label.
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
 ## DELETE /repos/branches — Delete Branch
@@ -891,4 +898,4 @@ git push origin feature-branch
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops (`ops`)    | JWT-level guards. `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. |
-| Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`. 409 on conflict.       |
+| Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`; optional `squash` (not with `ff_only`). 409 on conflict. |
