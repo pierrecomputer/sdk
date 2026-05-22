@@ -45,9 +45,20 @@ class GitStorageOptions(TypedDict, total=False):
 Op = str
 
 OP_NO_FORCE_PUSH: Op = "no-force-push"
+OP_NO_PUSH: Op = "no-push"
 
 # Ops is a list of policy operations.
 Ops = List[Op]
+
+
+class RefPolicy(TypedDict, total=False):
+    """A single ordered ref-matching policy rule (first match wins)."""
+
+    pattern: str  # required
+    ops: List[Op]
+
+
+Refs = List[RefPolicy]
 
 
 class PublicGitHubBaseRepoAuth(TypedDict):
@@ -609,6 +620,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        refs: Optional[Refs] = None,
     ) -> str:
         """Get the remote URL for the repository."""
         ...
@@ -619,6 +631,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        refs: Optional[Refs] = None,
     ) -> str:
         """Get the import remote URL for the repository."""
         ...
@@ -629,6 +642,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        refs: Optional[Refs] = None,
     ) -> str:
         """Get the ephemeral remote URL for the repository."""
         ...

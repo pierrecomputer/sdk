@@ -44,7 +44,11 @@ Every request requires a JWT signed with your private key. Tokens are per-reposi
   "sub": "@pierre/storage",   // Subject (the SDKs set this to the package name)
   "repo": "team/project",     // Repository the token grants access to
   "scopes": ["git:read", "git:write"],
-  "ops": ["no-force-push"],   // Optional policy operations (see below)
+  "ops": ["no-force-push"],   // Optional repo-wide policy ops (legacy; see below)
+  "refs": [                    // Optional per-ref policy rules (first match wins)
+    ["refs/heads/main", ["no-push"]],
+    ["refs/heads/feature/*", ["no-force-push"]]
+  ],
   "iat": 1723453189,
   "exp": 1723456789
 }
@@ -52,18 +56,55 @@ Every request requires a JWT signed with your private key. Tokens are per-reposi
 
 JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
 
-### Policy Operations (`ops`)
+### Policy Operations
 
-The optional `ops` claim narrows what a token may do at the protocol layer. The
-SDKs expose the canonical constant for force-push prevention:
+| Op string        | SDK constant                                                                 | Effect                                                |
+|------------------|------------------------------------------------------------------------------|-------------------------------------------------------|
+| `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush`   | Rejects force pushes / non-fast-forward ref updates. |
+| `no-push`        | TS `OP_NO_PUSH` / Py `OP_NO_PUSH` / Go `storage.OpNoPush`                    | Rejects any push to matching refs.                   |
 
-| Op string        | SDK constant                                                              | Effect                                                |
-|------------------|---------------------------------------------------------------------------|-------------------------------------------------------|
-| `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush` | Rejects force pushes / non-fast-forward ref updates. |
+#### Repo-wide `ops` (legacy)
 
-Pass via the SDK `getRemoteURL` / `getEphemeralRemoteURL` / `getImportRemoteURL`
-helpers (`{ ops: [OP_NO_FORCE_PUSH] }`) or include the `ops` array directly when
-minting a JWT manually.
+The optional top-level `ops` claim applies to every ref. On verify it is folded
+into a trailing `*` rule when no explicit catch-all exists.
+
+Pass via `getRemoteURL` / `getEphemeralRemoteURL` / `getImportRemoteURL`
+(`{ ops: [OP_NO_FORCE_PUSH] }`) or include `ops` directly when minting manually.
+
+#### Per-ref `refs` (preferred)
+
+The optional `refs` claim is an **ordered** array of `[pattern, [ops...]]` tuples.
+Rules are evaluated in declaration order; the first pattern that matches the ref
+wins. Patterns may be fully-qualified refs (`refs/heads/main`), prefix globs
+(`refs/heads/feature/*`, `refs/tags/*`), or `*` for every ref. Short branch names
+like `main` are normalized to `refs/heads/main` on verify.
+
+```typescript
+await repo.getRemoteURL({
+  refs: [
+    { pattern: 'refs/heads/main', ops: [OP_NO_PUSH] },
+    { pattern: '*', ops: [OP_NO_FORCE_PUSH] },
+  ],
+});
+```
+
+```python
+await repo.get_remote_url(
+    refs=[
+        {"pattern": "refs/heads/main", "ops": [OP_NO_PUSH]},
+        {"pattern": "*", "ops": [OP_NO_FORCE_PUSH]},
+    ],
+)
+```
+
+```go
+repo.RemoteURL(ctx, storage.RemoteURLOptions{
+    Refs: storage.RefPolicies{
+        {Pattern: "refs/heads/main", Ops: storage.Ops{storage.OpNoPush}},
+        {Pattern: "*", Ops: storage.Ops{storage.OpNoForcePush}},
+    },
+})
+```
 
 ### Permission Scopes
 
@@ -799,8 +840,9 @@ safe_remote = await repo.get_remote_url(
 ```
 
 The same `ops` array also works on `getEphemeralRemoteURL` and
-`getImportRemoteURL`. When minting JWTs by hand, add `"ops": ["no-force-push"]`
-to the payload before signing.
+`getImportRemoteURL`. For per-ref rules, pass `refs` instead (see Policy
+Operations above). When minting JWTs by hand, add `"ops"` or `"refs"` to the
+payload before signing.
 
 ## PROCEDURE 8: Rollback a Branch
 
@@ -897,5 +939,5 @@ git push origin feature-branch
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
-| Policy ops (`ops`)    | JWT-level guards. `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. |
+| Policy ops            | JWT-level guards via `ops` (repo-wide) or `refs` (per-ref, first match wins). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates; `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. |
 | Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`; optional `squash` (not with `ff_only`). 409 on conflict. |

@@ -104,6 +104,56 @@ func TestRemoteURLOps(t *testing.T) {
 	})
 }
 
+func TestRemoteURLRefs(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, StorageBaseURL: "acme.code.storage"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo-1", DefaultBranch: "main", client: client}
+
+	t.Run("includes refs in JWT when provided", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{
+			Refs: RefPolicies{
+				{Pattern: "refs/heads/main", Ops: Ops{OpNoPush}},
+				{Pattern: "*", Ops: Ops{OpNoForcePush}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		refs, ok := claims["refs"].([]interface{})
+		if !ok {
+			t.Fatalf("expected refs claim to be a list, got %T", claims["refs"])
+		}
+		if len(refs) != 2 {
+			t.Fatalf("expected 2 ref rules, got %d", len(refs))
+		}
+		mainRule, ok := refs[0].([]interface{})
+		if !ok || len(mainRule) != 2 {
+			t.Fatalf("unexpected main rule shape: %v", refs[0])
+		}
+		if mainRule[0] != "refs/heads/main" {
+			t.Fatalf("unexpected pattern: %v", mainRule[0])
+		}
+		mainOps, ok := mainRule[1].([]interface{})
+		if !ok || len(mainOps) != 1 || mainOps[0] != "no-push" {
+			t.Fatalf("unexpected main ops: %v", mainRule[1])
+		}
+	})
+
+	t.Run("omits refs from JWT when not provided", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		if _, ok := claims["refs"]; ok {
+			t.Fatalf("expected no refs claim")
+		}
+	})
+}
+
 func TestListFilesEphemeral(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/files" {

@@ -50,13 +50,31 @@ export type Op = string;
 
 export const OP_NO_FORCE_PUSH: Op = 'no-force-push';
 
+export const OP_NO_PUSH: Op = 'no-push';
+
 /** A list of policy operations. */
 export type Ops = Op[];
 
-export interface GetRemoteURLOptions {
+/** A single ordered ref-matching policy rule (first match wins). */
+export interface RefPolicy {
+  pattern: string;
+  ops?: Ops;
+}
+
+/** Ordered per-ref policy rules for the JWT `refs` claim. */
+export type RefPolicies = RefPolicy[];
+
+/** Optional ref policies that can be attached to a minted JWT for any ref-mutating call. */
+export interface PolicyOptions {
+  /** Repo-wide policy ops (legacy; folded into a catch-all `*` rule on verify). */
+  ops?: Ops;
+  /** Per-ref policy rules evaluated in declaration order (first match wins). */
+  refs?: RefPolicies;
+}
+
+export interface GetRemoteURLOptions extends PolicyOptions {
   permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
   ttl?: number;
-  ops?: Ops;
 }
 
 export interface Repo {
@@ -262,7 +280,7 @@ export interface ArchiveOptions extends GitStorageInvocationOptions {
   archivePrefix?: string;
 }
 
-export interface PullUpstreamOptions extends GitStorageInvocationOptions {
+export interface PullUpstreamOptions extends GitStorageInvocationOptions, PolicyOptions {
   ref?: string;
 }
 
@@ -335,7 +353,7 @@ export interface ListBranchesResult {
 }
 
 // Create Branch API types
-export interface CreateBranchOptions extends GitStorageInvocationOptions {
+export interface CreateBranchOptions extends GitStorageInvocationOptions, PolicyOptions {
   baseRef?: string;
   /** @deprecated Use baseRef instead. */
   baseBranch?: string;
@@ -353,7 +371,7 @@ export interface CreateBranchResult {
   commitSha?: string;
 }
 
-export interface DeleteBranchOptions extends GitStorageInvocationOptions {
+export interface DeleteBranchOptions extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
   ephemeral?: boolean;
 }
@@ -387,7 +405,7 @@ export interface ListTagsResult {
   hasMore: boolean;
 }
 
-export interface CreateTagOptions extends GitStorageInvocationOptions {
+export interface CreateTagOptions extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
   target: string;
 }
@@ -400,7 +418,7 @@ export interface CreateTagResult {
   message: string;
 }
 
-export interface DeleteTagOptions extends GitStorageInvocationOptions {
+export interface DeleteTagOptions extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
 }
 
@@ -499,7 +517,7 @@ export interface GetNoteResult {
   refSha: string;
 }
 
-interface NoteWriteBaseOptions extends GitStorageInvocationOptions {
+interface NoteWriteBaseOptions extends GitStorageInvocationOptions, PolicyOptions {
   sha: string;
   note: string;
   expectedRefSha?: string;
@@ -510,7 +528,7 @@ export type CreateNoteOptions = NoteWriteBaseOptions;
 
 export type AppendNoteOptions = NoteWriteBaseOptions;
 
-export interface DeleteNoteOptions extends GitStorageInvocationOptions {
+export interface DeleteNoteOptions extends GitStorageInvocationOptions, PolicyOptions {
   sha: string;
   expectedRefSha?: string;
   author?: CommitSignature;
@@ -669,7 +687,7 @@ export interface FileDiff extends DiffFileBase {
 
 export interface FilteredFile extends DiffFileBase {}
 
-interface CreateCommitBaseOptions extends GitStorageInvocationOptions {
+interface CreateCommitBaseOptions extends GitStorageInvocationOptions, PolicyOptions {
   commitMessage: string;
   expectedHeadSha?: string;
   baseBranch?: string;
@@ -772,7 +790,7 @@ export interface CommitBuilder {
 export type DiffSource = CommitFileSource;
 
 export interface CreateCommitFromDiffOptions
-  extends GitStorageInvocationOptions {
+  extends GitStorageInvocationOptions, PolicyOptions {
   targetBranch: string;
   commitMessage: string;
   diff: DiffSource;
@@ -821,7 +839,7 @@ export type MergeResultLabel =
   | 'no_op'
   | 'unknown';
 
-export interface MergeOptions extends GitStorageInvocationOptions {
+export interface MergeOptions extends GitStorageInvocationOptions, PolicyOptions {
   sourceBranch: string;
   sourceIsEphemeral?: boolean;
   targetBranch: string;
@@ -863,7 +881,7 @@ export interface MergeResult {
   promotedCommits: number;
 }
 
-export interface RestoreCommitOptions extends GitStorageInvocationOptions {
+export interface RestoreCommitOptions extends GitStorageInvocationOptions, PolicyOptions {
   targetBranch: string;
   targetCommitSha: string;
   commitMessage?: string;

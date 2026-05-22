@@ -35,16 +35,29 @@ type Op = string
 
 const (
 	OpNoForcePush Op = "no-force-push"
+	OpNoPush      Op = "no-push"
 )
 
 // Ops is a list of policy operations.
 type Ops []Op
 
+// RefPolicy is a single ordered ref-matching policy rule (first match wins).
+type RefPolicy struct {
+	Pattern string
+	Ops     Ops
+}
+
+// RefPolicies is an ordered list of per-ref policy rules for the JWT `refs` claim.
+type RefPolicies []RefPolicy
+
 // RemoteURLOptions configure token generation for remote URLs.
 type RemoteURLOptions struct {
 	Permissions []Permission
 	TTL         time.Duration
-	Ops         Ops
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // InvocationOptions holds common request options.
@@ -232,6 +245,10 @@ type ArchiveOptions struct {
 type PullUpstreamOptions struct {
 	InvocationOptions
 	Ref string
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // ListFilesOptions configures list files.
@@ -309,6 +326,10 @@ type CreateBranchOptions struct {
 	TargetBranch      string
 	BaseIsEphemeral   bool
 	TargetIsEphemeral bool
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // CreateBranchResult describes branch creation result.
@@ -324,6 +345,10 @@ type DeleteBranchOptions struct {
 	InvocationOptions
 	Name      string
 	Ephemeral *bool
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // DeleteBranchResult describes branch deletion result.
@@ -357,6 +382,10 @@ type MergeOptions struct {
 	AllowUnrelatedHistories bool
 	// Squash is incompatible with MergeStrategyFFOnly.
 	Squash bool
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // MergeResultStatus describes a merge operation outcome.
@@ -422,6 +451,10 @@ type CreateTagOptions struct {
 	InvocationOptions
 	Name   string
 	Target string
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // CreateTagResult describes tag creation result.
@@ -435,6 +468,10 @@ type CreateTagResult struct {
 type DeleteTagOptions struct {
 	InvocationOptions
 	Name string
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // DeleteTagResult describes tag deletion result.
@@ -544,6 +581,10 @@ type CreateNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // AppendNoteOptions configures note append.
@@ -553,6 +594,10 @@ type AppendNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // DeleteNoteOptions configures note delete.
@@ -561,6 +606,10 @@ type DeleteNoteOptions struct {
 	SHA            string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // NoteWriteResult describes note write response.
@@ -799,6 +848,10 @@ type CommitOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // CommitFromDiffOptions configures diff commit.
@@ -813,6 +866,10 @@ type CommitFromDiffOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // RestoreCommitOptions configures restore commit.
@@ -824,6 +881,10 @@ type RestoreCommitOptions struct {
 	ExpectedHeadSHA string
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
+	Ops Ops
+	// Refs is evaluated in declaration order; the first matching rule wins.
+	Refs RefPolicies
 }
 
 // RestoreCommitResult describes restore commit.

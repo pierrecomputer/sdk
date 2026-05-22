@@ -3,7 +3,7 @@
 A Python SDK for interacting with Pierre's git storage system.
 """
 
-from pierre_storage.auth import generate_jwt
+from pierre_storage.auth import encode_refs_claim, generate_jwt
 from pierre_storage.client import GitStorage, create_client
 from pierre_storage.errors import ApiError, RefUpdateError
 from pierre_storage.types import (
@@ -31,7 +31,10 @@ from pierre_storage.types import (
     GitStorageOptions,
     Op,
     OP_NO_FORCE_PUSH,
+    OP_NO_PUSH,
     Ops,
+    RefPolicy,
+    Refs,
     GrepFileMatch,
     GrepLine,
     GrepResult,
@@ -64,6 +67,7 @@ __all__ = [
     "GitStorage",
     "create_client",
     # Auth
+    "encode_refs_claim",
     "generate_jwt",
     # Errors
     "ApiError",
@@ -96,7 +100,10 @@ __all__ = [
     "GitStorageOptions",
     "Op",
     "OP_NO_FORCE_PUSH",
+    "OP_NO_PUSH",
     "Ops",
+    "RefPolicy",
+    "Refs",
     "ListBranchesResult",
     "ListCommitsResult",
     "ListFilesResult",

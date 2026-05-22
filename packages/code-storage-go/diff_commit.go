@@ -67,7 +67,7 @@ func (d *diffCommitExecutor) send(ctx context.Context, repoID string) (CommitRes
 	}
 
 	ttl := resolveCommitTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := d.client.generateJWT(repoID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl})
+	jwtToken, err := d.client.generateJWT(repoID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
 	if err != nil {
 		return CommitResult{}, err
 	}
