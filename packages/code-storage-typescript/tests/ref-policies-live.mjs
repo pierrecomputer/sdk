@@ -12,7 +12,6 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { encodeRefsClaim } from '../src/jwt_claims.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +115,8 @@ function buildGitRemote(repoId, token) {
   return `${base}/${repoId}.git`.replace('://', `://t:${token}@`);
 }
 
+let encodeRefsClaim;
+
 async function loadGitStorage() {
   const candidates = [
     path.resolve(__dirname, '../dist/index.js'),
@@ -124,11 +125,13 @@ async function loadGitStorage() {
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       const mod = await import(pathToFileURL(candidate).href);
+      encodeRefsClaim = mod.encodeRefsClaim;
       return mod.GitStorage ?? mod.default;
     }
   }
-  const mod = await import('../src/index.ts');
-  return mod.GitStorage;
+  throw new Error(
+    'GitStorage dist build not found. Run "pnpm --filter @pierre/storage build" first.'
+  );
 }
 
 async function main() {
