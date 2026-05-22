@@ -1101,7 +1101,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1148,7 +1147,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1190,7 +1188,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1400,7 +1397,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1441,7 +1437,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1484,7 +1479,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1527,7 +1521,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1605,7 +1598,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1630,7 +1622,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:read', 'git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1671,7 +1662,6 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
-      ops: options.ops,
       refs: options.refs,
     });
 
@@ -1750,8 +1740,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
-        ops: options.ops,
-        refs: options.refs,
+          refs: options.refs,
       });
 
     return createCommitBuilder({
@@ -1778,8 +1767,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
-        ops: options.ops,
-        refs: options.refs,
+          refs: options.refs,
       });
 
     return sendCommitFromDiff({

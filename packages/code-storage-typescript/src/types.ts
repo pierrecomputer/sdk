@@ -64,10 +64,8 @@ export interface RefPolicy {
 /** Ordered per-ref policy rules for the JWT `refs` claim. */
 export type RefPolicies = RefPolicy[];
 
-/** Optional ref policies that can be attached to a minted JWT for any ref-mutating call. */
+/** Optional per-ref policies that can be attached to a minted JWT for any ref-mutating call. */
 export interface PolicyOptions {
-  /** Repo-wide policy ops (legacy; folded into a catch-all `*` rule on verify). */
-  ops?: Ops;
   /** Per-ref policy rules evaluated in declaration order (first match wins). */
   refs?: RefPolicies;
 }
@@ -75,6 +73,8 @@ export interface PolicyOptions {
 export interface GetRemoteURLOptions extends PolicyOptions {
   permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
   ttl?: number;
+  /** Repo-wide policy ops (legacy; folded into a catch-all `*` rule on verify). */
+  ops?: Ops;
 }
 
 export interface Repo {

@@ -54,8 +54,7 @@ type RefPolicies []RefPolicy
 type RemoteURLOptions struct {
 	Permissions []Permission
 	TTL         time.Duration
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
+	Ops         Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -245,8 +244,6 @@ type ArchiveOptions struct {
 type PullUpstreamOptions struct {
 	InvocationOptions
 	Ref string
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -326,8 +323,6 @@ type CreateBranchOptions struct {
 	TargetBranch      string
 	BaseIsEphemeral   bool
 	TargetIsEphemeral bool
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -345,8 +340,6 @@ type DeleteBranchOptions struct {
 	InvocationOptions
 	Name      string
 	Ephemeral *bool
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -382,8 +375,6 @@ type MergeOptions struct {
 	AllowUnrelatedHistories bool
 	// Squash is incompatible with MergeStrategyFFOnly.
 	Squash bool
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -451,8 +442,6 @@ type CreateTagOptions struct {
 	InvocationOptions
 	Name   string
 	Target string
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -468,8 +457,6 @@ type CreateTagResult struct {
 type DeleteTagOptions struct {
 	InvocationOptions
 	Name string
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -581,8 +568,6 @@ type CreateNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -594,8 +579,6 @@ type AppendNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -606,8 +589,6 @@ type DeleteNoteOptions struct {
 	SHA            string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -848,8 +829,6 @@ type CommitOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -866,8 +845,6 @@ type CommitFromDiffOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }
@@ -881,8 +858,6 @@ type RestoreCommitOptions struct {
 	ExpectedHeadSHA string
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Ops applies repo-wide (legacy; folded into a catch-all "*" rule on verify).
-	Ops Ops
 	// Refs is evaluated in declaration order; the first matching rule wins.
 	Refs RefPolicies
 }

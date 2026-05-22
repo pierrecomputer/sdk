@@ -183,7 +183,7 @@ func (b *CommitBuilder) Send(ctx context.Context) (CommitResult, error) {
 	}
 
 	ttl := resolveCommitTTL(b.options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := b.client.generateJWT(b.repoID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: b.options.Ops, Refs: b.options.Refs})
+	jwtToken, err := b.client.generateJWT(b.repoID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: b.options.Refs})
 	if err != nil {
 		return CommitResult{}, err
 	}

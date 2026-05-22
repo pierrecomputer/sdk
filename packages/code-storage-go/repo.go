@@ -536,12 +536,12 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 
 // CreateNote adds a git note.
 func (r *Repo) CreateNote(ctx context.Context, options CreateNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "add", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.Ops, options.Refs)
+	return r.writeNote(ctx, options.InvocationOptions, "add", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.Refs)
 }
 
 // AppendNote appends to a git note.
 func (r *Repo) AppendNote(ctx context.Context, options AppendNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "append", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.Ops, options.Refs)
+	return r.writeNote(ctx, options.InvocationOptions, "append", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.Refs)
 }
 
 // DeleteNote deletes a git note.
@@ -552,7 +552,7 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return NoteWriteResult{}, err
 	}
@@ -592,7 +592,7 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 	return result, nil
 }
 
-func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, sha string, note string, expectedRefSHA string, author *NoteAuthor, ops Ops, refs RefPolicies) (NoteWriteResult, error) {
+func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, sha string, note string, expectedRefSHA string, author *NoteAuthor, refs RefPolicies) (NoteWriteResult, error) {
 	sha = strings.TrimSpace(sha)
 	if sha == "" {
 		return NoteWriteResult{}, errors.New("note sha is required")
@@ -604,7 +604,7 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 	}
 
 	ttl := resolveInvocationTTL(invocation, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: ops, Refs: refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: refs})
 	if err != nil {
 		return NoteWriteResult{}, err
 	}
@@ -862,7 +862,7 @@ func (r *Repo) Grep(ctx context.Context, options GrepOptions) (GrepResult, error
 // PullUpstream triggers a pull-upstream operation.
 func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) error {
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return err
 	}
@@ -897,7 +897,7 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return CreateBranchResult{}, err
 	}
@@ -944,7 +944,7 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return DeleteBranchResult{}, err
 	}
@@ -1020,7 +1020,7 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return MergeResult{}, err
 	}
@@ -1081,7 +1081,7 @@ func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateT
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return CreateTagResult{}, err
 	}
@@ -1116,7 +1116,7 @@ func (r *Repo) DeleteTag(ctx context.Context, options DeleteTagOptions) (DeleteT
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead, PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead, PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return DeleteTagResult{}, err
 	}
@@ -1159,7 +1159,7 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 	}
 
 	ttl := resolveCommitTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Ops: options.Ops, Refs: options.Refs})
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitWrite}, TTL: ttl, Refs: options.Refs})
 	if err != nil {
 		return RestoreCommitResult{}, err
 	}

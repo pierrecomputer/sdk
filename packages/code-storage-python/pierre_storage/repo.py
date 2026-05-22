@@ -63,13 +63,10 @@ ZERO_DATETIME_UTC = datetime.min.replace(tzinfo=timezone.utc)
 def _build_jwt_options(
     permissions: List[str],
     ttl: int,
-    ops: Optional[List[str]] = None,
     refs: Optional[Refs] = None,
 ) -> Dict[str, Any]:
     """Assemble the JWT options dict, attaching ref policies when supplied."""
     options: Dict[str, Any] = {"permissions": permissions, "ttl": ttl}
-    if ops:
-        options["ops"] = ops
     if refs:
         options["refs"] = refs
     return options
@@ -592,7 +589,6 @@ class RepoImpl:
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> CreateBranchResult:
         """Create or promote a branch.
@@ -625,7 +621,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            _build_jwt_options(["git:write"], ttl_value, ops, refs),
+            _build_jwt_options(["git:write"], ttl_value, refs),
         )
 
         payload: Dict[str, Any] = {
@@ -684,7 +680,6 @@ class RepoImpl:
         name: str,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> DeleteBranchResult:
         """Delete a branch.
@@ -701,7 +696,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            _build_jwt_options(["git:write"], ttl_value, ops, refs),
+            _build_jwt_options(["git:write"], ttl_value, refs),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
@@ -759,7 +754,6 @@ class RepoImpl:
         allow_unrelated_histories: Optional[bool] = None,
         squash: Optional[bool] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""
@@ -813,7 +807,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            _build_jwt_options(["git:write"], ttl_value, ops, refs),
+            _build_jwt_options(["git:write"], ttl_value, refs),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge"
@@ -921,7 +915,6 @@ class RepoImpl:
         name: str,
         target: str,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> CreateTagResult:
         """Create a tag."""
@@ -938,7 +931,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            _build_jwt_options(["git:write"], ttl_value, ops, refs),
+            _build_jwt_options(["git:write"], ttl_value, refs),
         )
 
         payload = {"name": name_clean, "target": target_clean}
@@ -982,7 +975,6 @@ class RepoImpl:
         *,
         name: str,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> DeleteTagResult:
         """Delete a tag."""
@@ -995,7 +987,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            _build_jwt_options(["git:read", "git:write"], ttl_value, ops, refs),
+            _build_jwt_options(["git:read", "git:write"], ttl_value, refs),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
@@ -1316,7 +1308,6 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Create a git note."""
@@ -1328,7 +1319,6 @@ class RepoImpl:
             expected_ref_sha=expected_ref_sha,
             author=author,
             ttl=ttl,
-            ops=ops,
             refs=refs,
         )
 
@@ -1340,7 +1330,6 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Append to a git note."""
@@ -1352,7 +1341,6 @@ class RepoImpl:
             expected_ref_sha=expected_ref_sha,
             author=author,
             ttl=ttl,
-            ops=ops,
             refs=refs,
         )
 
@@ -1363,7 +1351,6 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Delete a git note."""
@@ -1372,7 +1359,7 @@ class RepoImpl:
             raise ValueError("delete_note sha is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ops, refs))
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, refs))
 
         payload: Dict[str, Any] = {"sha": sha_clean}
         if expected_ref_sha and expected_ref_sha.strip():
@@ -1683,7 +1670,6 @@ class RepoImpl:
         *,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository.
@@ -1698,7 +1684,7 @@ class RepoImpl:
             ApiError: If pull fails
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ops, refs))
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, refs))
 
         body = {}
         if ref:
@@ -1732,7 +1718,6 @@ class RepoImpl:
         expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> RestoreCommitResult:
         """Restore a previous commit.
@@ -1769,7 +1754,7 @@ class RepoImpl:
             raise ValueError("restoreCommit author name and email are required")
 
         ttl = ttl or resolve_commit_ttl_seconds(None)
-        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ops, refs))
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, refs))
 
         metadata: Dict[str, Any] = {
             "target_branch": target_branch,
@@ -1873,7 +1858,6 @@ class RepoImpl:
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> CommitBuilder:
         """Create a new commit builder.
@@ -1914,7 +1898,7 @@ class RepoImpl:
         def get_auth_token() -> str:
             return self.generate_jwt(
                 self._id,
-                _build_jwt_options(["git:write"], ttl, ops, refs),
+                _build_jwt_options(["git:write"], ttl, refs),
             )
 
         return CommitBuilderImpl(
@@ -1937,7 +1921,6 @@ class RepoImpl:
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> CommitResult:
         """Create a commit by applying a unified diff."""
@@ -1966,7 +1949,7 @@ class RepoImpl:
         def get_auth_token() -> str:
             return self.generate_jwt(
                 self._id,
-                _build_jwt_options(["git:write"], ttl_value, ops, refs),
+                _build_jwt_options(["git:write"], ttl_value, refs),
             )
 
         return await send_diff_commit_request(
@@ -1987,7 +1970,6 @@ class RepoImpl:
         expected_ref_sha: Optional[str],
         author: Optional[CommitSignature],
         ttl: Optional[int],
-        ops: Optional[List[str]] = None,
         refs: Optional[Refs] = None,
     ) -> NoteWriteResult:
         sha_clean = sha.strip()
@@ -1999,7 +1981,7 @@ class RepoImpl:
             raise ValueError(f"{action_label} note is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ops, refs))
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, refs))
 
         payload: Dict[str, Any] = {
             "sha": sha_clean,
