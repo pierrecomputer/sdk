@@ -985,6 +985,9 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 	if strategy != MergeStrategyMerge && strategy != MergeStrategyFFOnly && strategy != MergeStrategyFFPrefer {
 		return MergeResult{}, errors.New("merge strategy is invalid")
 	}
+	if options.Squash && strategy == MergeStrategyFFOnly {
+		return MergeResult{}, errors.New("merge squash is incompatible with the ff_only strategy")
+	}
 
 	body := &mergeRequest{
 		SourceBranch:            sourceBranch,
@@ -993,6 +996,7 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 		TargetIsEphemeral:       options.TargetIsEphemeral,
 		Strategy:                string(strategy),
 		AllowUnrelatedHistories: options.AllowUnrelatedHistories,
+		Squash:                  options.Squash,
 	}
 	if expectedTargetSHA := strings.TrimSpace(options.ExpectedTargetSHA); expectedTargetSHA != "" {
 		body.ExpectedTargetSHA = expectedTargetSHA

@@ -181,7 +181,7 @@ export const mergeTargetSchema = z.object({
 });
 
 export const mergeResponseSchema = z.object({
-  result: z.enum(['merge_commit', 'fast_forward', 'no_op', 'unknown']),
+  result: z.enum(['merge_commit', 'fast_forward', 'no_op', 'squash', 'unknown']),
   commit_sha: z.string(),
   tree_sha: z.string(),
   source: mergeRefSchema,

@@ -198,6 +198,11 @@ export interface GitCredential {
 export interface ListReposOptions extends GitStorageInvocationOptions {
   cursor?: string;
   limit?: number;
+  /**
+   * Case-insensitive substring matched against repository `url`. Trimmed before
+   * matching; empty after trim is treated as omitted.
+   */
+  q?: string;
 }
 
 export type RawRepoBaseInfo = SchemaRawRepoBaseInfo;
@@ -827,9 +832,13 @@ export interface MergeOptions extends GitStorageInvocationOptions {
   committer?: CommitSignature;
   strategy: MergeStrategy;
   allowUnrelatedHistories?: boolean;
+  /** Incompatible with the `ff_only` strategy. */
+  squash?: boolean;
 }
 
-export type MergeResponse = MergeResponseRaw;
+export type MergeResponse = Omit<MergeResponseRaw, 'result'> & {
+  result: MergeResultLabel;
+};
 
 export interface MergeSourceResult {
   branch: string;

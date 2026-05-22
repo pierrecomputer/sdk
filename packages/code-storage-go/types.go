@@ -149,6 +149,9 @@ type ListReposOptions struct {
 	InvocationOptions
 	Cursor string
 	Limit  int
+	// Q is a case-insensitive substring matched against the repository URL.
+	// Trimmed before matching; empty after trim is treated as omitted.
+	Q string
 }
 
 // ListReposResult returns paginated repos.
@@ -352,6 +355,8 @@ type MergeOptions struct {
 	Committer               *CommitSignature
 	Strategy                MergeStrategy
 	AllowUnrelatedHistories bool
+	// Squash is incompatible with MergeStrategyFFOnly.
+	Squash bool
 }
 
 // MergeResultStatus describes a merge operation outcome.
@@ -361,6 +366,7 @@ const (
 	MergeResultMergeCommit MergeResultStatus = "merge_commit"
 	MergeResultFastForward MergeResultStatus = "fast_forward"
 	MergeResultNoOp        MergeResultStatus = "no_op"
+	MergeResultSquash      MergeResultStatus = "squash"
 	MergeResultUnknown     MergeResultStatus = "unknown"
 )
 

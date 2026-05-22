@@ -202,6 +202,9 @@ func (c *Client) ListRepos(ctx context.Context, options ListReposOptions) (ListR
 	if options.Limit > 0 {
 		params.Set("limit", itoa(options.Limit))
 	}
+	if q := strings.TrimSpace(options.Q); q != "" {
+		params.Set("q", q)
+	}
 	if len(params) == 0 {
 		params = nil
 	}

@@ -114,6 +114,7 @@ type mergeRequest struct {
 	Committer               *authorInfo `json:"committer,omitempty"`
 	Strategy                string      `json:"strategy"`
 	AllowUnrelatedHistories bool        `json:"allow_unrelated_histories,omitempty"`
+	Squash                  bool        `json:"squash,omitempty"`
 }
 
 type createTagRequest struct {

@@ -723,6 +723,7 @@ class RepoImpl:
         author: Optional[CommitSignature] = None,
         committer: Optional[CommitSignature] = None,
         allow_unrelated_histories: Optional[bool] = None,
+        squash: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""
@@ -738,6 +739,8 @@ class RepoImpl:
             raise ValueError("merge strategy is required")
         if strategy_clean not in {"merge", "ff_only", "ff_prefer"}:
             raise ValueError("merge strategy must be one of merge, ff_only, ff_prefer")
+        if squash is True and strategy_clean == "ff_only":
+            raise ValueError("merge squash is incompatible with the ff_only strategy")
 
         payload: Dict[str, Any] = {
             "source_branch": source_branch_clean,
@@ -767,6 +770,9 @@ class RepoImpl:
 
         if allow_unrelated_histories is not None:
             payload["allow_unrelated_histories"] = bool(allow_unrelated_histories)
+
+        if squash is not None:
+            payload["squash"] = bool(squash)
 
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
