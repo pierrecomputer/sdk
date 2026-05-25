@@ -93,6 +93,7 @@ func (r *Repo) ImportRemoteURL(ctx context.Context, options RemoteURLOptions) (s
 }
 
 // FileStream returns the raw response for streaming file contents.
+// 206, 304 and 412 status codes pass through to the caller.
 func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Response, error) {
 	if strings.TrimSpace(options.Path) == "" {
 		return nil, errors.New("getFileStream path is required")
@@ -104,6 +105,42 @@ func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Re
 		return nil, fmt.Errorf("archive stream generate jwt: %w", err)
 	}
 
+	params := buildGetFileParams(options)
+	reqOpts := buildFileRequestOptions(options.Headers)
+
+	resp, err := r.client.api.get(ctx, "repos/file", params, jwtToken, reqOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// HeadFile issues HEAD /repos/file and returns parsed response metadata.
+func (r *Repo) HeadFile(ctx context.Context, options HeadFileOptions) (FileMetadata, error) {
+	if strings.TrimSpace(options.Path) == "" {
+		return FileMetadata{}, errors.New("headFile path is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return FileMetadata{}, fmt.Errorf("headFile generate jwt: %w", err)
+	}
+
+	params := buildGetFileParams(options)
+	reqOpts := buildFileRequestOptions(options.Headers)
+
+	resp, err := r.client.api.head(ctx, "repos/file", params, jwtToken, reqOpts)
+	if err != nil {
+		return FileMetadata{}, err
+	}
+	defer resp.Body.Close()
+
+	return parseFileMetadataHeaders(resp), nil
+}
+
+func buildGetFileParams(options GetFileOptions) url.Values {
 	params := url.Values{}
 	params.Set("path", options.Path)
 	if options.Ref != "" {
@@ -115,13 +152,58 @@ func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Re
 	if options.EphemeralBase != nil {
 		params.Set("ephemeral_base", strconv.FormatBool(*options.EphemeralBase))
 	}
+	return params
+}
 
-	resp, err := r.client.api.get(ctx, "repos/file", params, jwtToken, nil)
-	if err != nil {
-		return nil, err
+func buildFileRequestOptions(headers FileRequestHeaders) *requestOptions {
+	extra := map[string]string{}
+	if headers.Range != "" {
+		extra["Range"] = headers.Range
+	}
+	if headers.IfMatch != "" {
+		extra["If-Match"] = headers.IfMatch
+	}
+	if headers.IfNoneMatch != "" {
+		extra["If-None-Match"] = headers.IfNoneMatch
+	}
+	if headers.IfModifiedSince != "" {
+		extra["If-Modified-Since"] = headers.IfModifiedSince
+	}
+	if headers.IfUnmodifiedSince != "" {
+		extra["If-Unmodified-Since"] = headers.IfUnmodifiedSince
+	}
+	if headers.IfRange != "" {
+		extra["If-Range"] = headers.IfRange
 	}
 
-	return resp, nil
+	allowed := map[int]bool{304: true, 412: true}
+	opts := &requestOptions{allowedStatus: allowed}
+	if len(extra) > 0 {
+		opts.extraHeaders = extra
+	}
+	return opts
+}
+
+func parseFileMetadataHeaders(resp *http.Response) FileMetadata {
+	meta := FileMetadata{
+		BlobSHA:         resp.Header.Get("X-Blob-Sha"),
+		LastCommitSHA:   resp.Header.Get("X-Last-Commit-Sha"),
+		ETag:            resp.Header.Get("ETag"),
+		AcceptRanges:    resp.Header.Get("Accept-Ranges"),
+		ContentType:     resp.Header.Get("Content-Type"),
+		RawLastModified: resp.Header.Get("Last-Modified"),
+	}
+	if v := resp.Header.Get("Content-Length"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			meta.Size = n
+		}
+	}
+	if meta.RawLastModified != "" {
+		if t, err := http.ParseTime(meta.RawLastModified); err == nil {
+			meta.LastModified = t
+		}
+	}
+	return meta
 }
 
 // ArchiveStream returns the raw response for streaming repository archives.
@@ -177,6 +259,18 @@ func (r *Repo) ListFiles(ctx context.Context, options ListFilesOptions) (ListFil
 	if options.Ephemeral != nil {
 		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
+	if options.Path != "" {
+		params.Set("path", options.Path)
+	}
+	if options.Recursive != nil {
+		params.Set("recursive", strconv.FormatBool(*options.Recursive))
+	}
+	if options.Cursor != "" {
+		params.Set("cursor", options.Cursor)
+	}
+	if options.Limit > 0 {
+		params.Set("limit", itoa(options.Limit))
+	}
 	if len(params) == 0 {
 		params = nil
 	}
@@ -192,7 +286,23 @@ func (r *Repo) ListFiles(ctx context.Context, options ListFilesOptions) (ListFil
 		return ListFilesResult{}, err
 	}
 
-	return ListFilesResult{Paths: payload.Paths, Ref: payload.Ref}, nil
+	result := ListFilesResult{
+		Paths:      payload.Paths,
+		Ref:        payload.Ref,
+		NextCursor: payload.NextCursor,
+		HasMore:    payload.HasMore,
+	}
+	if len(payload.Entries) > 0 {
+		result.Entries = make([]TreeEntry, 0, len(payload.Entries))
+		for _, entry := range payload.Entries {
+			result.Entries = append(result.Entries, TreeEntry{
+				Path: entry.Path,
+				Type: TreeEntryType(entry.Type),
+				Mode: entry.Mode,
+			})
+		}
+	}
+	return result, nil
 }
 
 // ListFilesWithMetadata lists files with mode/size and last commit metadata.
@@ -210,6 +320,18 @@ func (r *Repo) ListFilesWithMetadata(ctx context.Context, options ListFilesWithM
 	if options.Ephemeral != nil {
 		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
 	}
+	if options.Path != "" {
+		params.Set("path", options.Path)
+	}
+	if options.Recursive != nil {
+		params.Set("recursive", strconv.FormatBool(*options.Recursive))
+	}
+	if options.Cursor != "" {
+		params.Set("cursor", options.Cursor)
+	}
+	if options.Limit > 0 {
+		params.Set("limit", itoa(options.Limit))
+	}
 	if len(params) == 0 {
 		params = nil
 	}
@@ -226,8 +348,10 @@ func (r *Repo) ListFilesWithMetadata(ctx context.Context, options ListFilesWithM
 	}
 
 	result := ListFilesWithMetadataResult{
-		Ref:     payload.Ref,
-		Commits: make(map[string]CommitMetadata, len(payload.Commits)),
+		Ref:        payload.Ref,
+		Commits:    make(map[string]CommitMetadata, len(payload.Commits)),
+		NextCursor: payload.NextCursor,
+		HasMore:    payload.HasMore,
 	}
 	for _, file := range payload.Files {
 		result.Files = append(result.Files, FileWithMetadata{
@@ -235,6 +359,7 @@ func (r *Repo) ListFilesWithMetadata(ctx context.Context, options ListFilesWithM
 			Mode:          file.Mode,
 			Size:          file.Size,
 			LastCommitSHA: file.LastCommitSHA,
+			Type:          TreeEntryType(file.Type),
 		})
 	}
 	for sha, commit := range payload.Commits {
@@ -361,6 +486,9 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	}
 	if options.Ephemeral != nil {
 		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
+	}
+	if options.Path != "" {
+		params.Set("path", options.Path)
 	}
 	if len(params) == 0 {
 		params = nil

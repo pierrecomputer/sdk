@@ -7,6 +7,7 @@ from pierre_storage.auth import generate_jwt
 from pierre_storage.client import GitStorage, create_client
 from pierre_storage.errors import ApiError, RefUpdateError
 from pierre_storage.types import (
+    OP_NO_FORCE_PUSH,
     BaseRepo,
     BlameLine,
     BlameResult,
@@ -18,8 +19,8 @@ from pierre_storage.types import (
     CreateBranchResult,
     CreateTagResult,
     DeleteBranchResult,
-    DeleteTagResult,
     DeleteRepoResult,
+    DeleteTagResult,
     DiffFileState,
     DiffStats,
     FileDiff,
@@ -29,9 +30,6 @@ from pierre_storage.types import (
     GetCommitDiffResult,
     GetCommitResult,
     GitStorageOptions,
-    Op,
-    OP_NO_FORCE_PUSH,
-    Ops,
     GrepFileMatch,
     GrepLine,
     GrepResult,
@@ -43,6 +41,8 @@ from pierre_storage.types import (
     ListTagsResult,
     NoteReadResult,
     NoteWriteResult,
+    Op,
+    Ops,
     RefUpdate,
     Repo,
     RepoInfo,

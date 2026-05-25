@@ -36,6 +36,8 @@ func (f *apiFetcher) buildURL(path string, params url.Values) string {
 
 type requestOptions struct {
 	allowedStatus map[int]bool
+	// extraHeaders merges request headers on top of SDK defaults; empty values are skipped.
+	extraHeaders map[string]string
 }
 
 func (f *apiFetcher) request(ctx context.Context, method string, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {
@@ -62,6 +64,13 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 	req.Header.Set("Code-Storage-Agent", userAgent())
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if opts != nil {
+		for k, v := range opts.extraHeaders {
+			if v != "" {
+				req.Header.Set(k, v)
+			}
+		}
 	}
 
 	resp, err := f.httpClient.Do(req)
@@ -114,6 +123,10 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 
 func (f *apiFetcher) get(ctx context.Context, path string, params url.Values, jwt string, opts *requestOptions) (*http.Response, error) {
 	return f.request(ctx, http.MethodGet, path, params, nil, jwt, opts)
+}
+
+func (f *apiFetcher) head(ctx context.Context, path string, params url.Values, jwt string, opts *requestOptions) (*http.Response, error) {
+	return f.request(ctx, http.MethodHead, path, params, nil, jwt, opts)
 }
 
 func (f *apiFetcher) post(ctx context.Context, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {

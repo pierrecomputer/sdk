@@ -1,14 +1,25 @@
 package storage
 
+type treeEntryRaw struct {
+	Path string `json:"path"`
+	Type string `json:"type"`
+	Mode string `json:"mode"`
+}
+
 type listFilesResponse struct {
-	Paths []string `json:"paths"`
-	Ref   string   `json:"ref"`
+	Paths      []string       `json:"paths"`
+	Ref        string         `json:"ref"`
+	Entries    []treeEntryRaw `json:"entries"`
+	NextCursor string         `json:"next_cursor"`
+	HasMore    bool           `json:"has_more"`
 }
 
 type listFilesWithMetadataResponse struct {
-	Files   []fileWithMetadataRaw        `json:"files"`
-	Commits map[string]commitMetadataRaw `json:"commits"`
-	Ref     string                       `json:"ref"`
+	Files      []fileWithMetadataRaw        `json:"files"`
+	Commits    map[string]commitMetadataRaw `json:"commits"`
+	Ref        string                       `json:"ref"`
+	NextCursor string                       `json:"next_cursor"`
+	HasMore    bool                         `json:"has_more"`
 }
 
 type fileWithMetadataRaw struct {
@@ -16,6 +27,7 @@ type fileWithMetadataRaw struct {
 	Mode          string `json:"mode"`
 	Size          int64  `json:"size"`
 	LastCommitSHA string `json:"last_commit_sha"`
+	Type          string `json:"type,omitempty"`
 }
 
 type commitMetadataRaw struct {

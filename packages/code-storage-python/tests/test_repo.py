@@ -286,6 +286,183 @@ class TestRepoFileOperations:
             assert params.get("ref") == ["feature/demo"]
 
     @pytest.mark.asyncio
+    async def test_list_files_subtree_and_pagination(self, git_storage_options: dict) -> None:
+        """path/recursive/cursor/limit reach the wire; entries+pagination parsed."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        list_response = MagicMock()
+        list_response.status_code = 200
+        list_response.is_success = True
+        list_response.json.return_value = {
+            "paths": ["docs/guide.md"],
+            "ref": "main",
+            "entries": [
+                {"path": "docs/sub", "type": "tree", "mode": "040000"},
+                {"path": "docs/guide.md", "type": "blob", "mode": "100644"},
+            ],
+            "next_cursor": "docs/zz",
+            "has_more": True,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=list_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.list_files(
+                ref="main",
+                path="docs",
+                recursive=False,
+                cursor="docs/a.md",
+                limit=50,
+            )
+
+            assert result["paths"] == ["docs/guide.md"]
+            assert result["entries"] == [
+                {"path": "docs/sub", "type": "tree", "mode": "040000"},
+                {"path": "docs/guide.md", "type": "blob", "mode": "100644"},
+            ]
+            assert result["next_cursor"] == "docs/zz"
+            assert result["has_more"] is True
+
+            called_url = client_instance.get.call_args.args[0]
+            params = parse_qs(urlparse(called_url).query)
+            assert params.get("path") == ["docs"]
+            assert params.get("recursive") == ["false"]
+            assert params.get("cursor") == ["docs/a.md"]
+            assert params.get("limit") == ["50"]
+
+    @pytest.mark.asyncio
+    async def test_list_files_legacy_response_defaults(
+        self, git_storage_options: dict
+    ) -> None:
+        """Servers without entries/has_more still produce a valid result."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        list_response = MagicMock()
+        list_response.status_code = 200
+        list_response.is_success = True
+        list_response.json.return_value = {"paths": ["README.md"], "ref": "main"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=list_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.list_files()
+            assert result["paths"] == ["README.md"]
+            assert result["entries"] == []
+            assert result["has_more"] is False
+            assert "next_cursor" not in result
+
+    @pytest.mark.asyncio
+    async def test_head_file_parses_response_headers(
+        self, git_storage_options: dict
+    ) -> None:
+        """head_file issues HEAD and returns parsed FileMetadata."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        head_response = MagicMock()
+        head_response.status_code = 200
+        head_response.is_success = True
+        head_response.headers = {
+            "x-blob-sha": "b10b5ha",
+            "x-last-commit-sha": "c0mm1tsha",
+            "content-length": "128",
+            "etag": '"b10b5ha"',
+            "last-modified": "Wed, 21 Oct 2026 07:28:00 GMT",
+            "accept-ranges": "bytes",
+            "content-type": "application/octet-stream",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.head = AsyncMock(return_value=head_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            meta = await repo.head_file(path="README.md")
+
+            assert meta["blob_sha"] == "b10b5ha"
+            assert meta["last_commit_sha"] == "c0mm1tsha"
+            assert meta["size"] == 128
+            assert meta["etag"] == '"b10b5ha"'
+            assert meta["accept_ranges"] == "bytes"
+            assert meta["content_type"] == "application/octet-stream"
+            assert meta["raw_last_modified"] == "Wed, 21 Oct 2026 07:28:00 GMT"
+            assert isinstance(meta["last_modified"], datetime)
+
+            called_url = client_instance.head.call_args.args[0]
+            assert urlparse(called_url).path.endswith("/repos/file")
+            assert parse_qs(urlparse(called_url).query).get("path") == ["README.md"]
+
+    @pytest.mark.asyncio
+    async def test_get_file_stream_forwards_conditional_headers(
+        self, git_storage_options: dict
+    ) -> None:
+        """get_file_stream passes Range/If-* headers through to the server."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        stream_response = MagicMock()
+        stream_response.status_code = 206
+        stream_response.is_success = True
+        stream_response.raise_for_status = MagicMock()
+
+        stream_cm = MagicMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=stream_response)
+        stream_cm.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value
+            # post() runs under `async with` context for create_repo
+            client_instance.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            # stream() is called on the long-lived client used by get_file_stream
+            client_instance.stream = MagicMock(return_value=stream_cm)
+            client_instance.aclose = AsyncMock()
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.get_file_stream(
+                path="README.md",
+                headers={
+                    "range": "bytes=0-15",
+                    "if_none_match": '"abc"',
+                    "if_modified_since": "Wed, 21 Oct 2026 07:28:00 GMT",
+                },
+            )
+            assert result.status_code == 206
+
+            stream_args = client_instance.stream.call_args
+            assert stream_args.args[0] == "GET"
+            sent_headers = stream_args.kwargs["headers"]
+            assert sent_headers["Range"] == "bytes=0-15"
+            assert sent_headers["If-None-Match"] == '"abc"'
+            assert sent_headers["If-Modified-Since"] == "Wed, 21 Oct 2026 07:28:00 GMT"
+
+    @pytest.mark.asyncio
     async def test_list_files_with_metadata_ephemeral_flag(self, git_storage_options: dict) -> None:
         """Ensure ephemeral flag propagates to list files with metadata."""
         storage = GitStorage(git_storage_options)
@@ -1311,6 +1488,42 @@ class TestRepoCommitOperations:
             called_url = mock_get.await_args.args[0]
             assert "ephemeral=true" in called_url
             assert "branch=feature" in called_url
+
+    @pytest.mark.asyncio
+    async def test_list_commits_path_query_param(
+        self, git_storage_options: dict
+    ) -> None:
+        """path kwarg appears as `path=` query parameter."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commits_response = MagicMock()
+        commits_response.status_code = 200
+        commits_response.is_success = True
+        commits_response.json.return_value = {
+            "commits": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            mock_get = AsyncMock(return_value=commits_response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.list_commits(branch="main", path="docs/guide.md")
+
+            called_url = mock_get.await_args.args[0]
+            params = parse_qs(urlparse(called_url).query)
+            assert params.get("branch") == ["main"]
+            assert params.get("path") == ["docs/guide.md"]
 
     @pytest.mark.asyncio
     async def test_get_commit(self, git_storage_options: dict) -> None:

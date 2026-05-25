@@ -77,7 +77,9 @@ class ForkBaseRepo(TypedDict, total=False):
 class GenericGitBaseRepo(TypedDict, total=False):
     """Base repository configuration for generic git providers (GitLab, Bitbucket, etc.)."""
 
-    provider: str  # required — one of: "gitlab", "bitbucket", "gitea", "forgejo", "codeberg", "sr.ht"
+    provider: (
+        str  # required — one of: "gitlab", "bitbucket", "gitea", "forgejo", "codeberg", "sr.ht"
+    )
     owner: str  # required
     name: str  # required
     default_branch: Optional[str]
@@ -144,20 +146,35 @@ class ListReposResult(TypedDict):
 # Removed: ListFilesOptions - now uses **kwargs
 
 
-class ListFilesResult(TypedDict):
+TreeEntryType = Literal["blob", "tree", "symlink", "submodule"]
+
+
+class TreeEntry(TypedDict):
+    """Tree entry returned by list_files."""
+
+    path: str
+    type: TreeEntryType
+    mode: str
+
+
+class ListFilesResult(TypedDict, total=False):
     """Result from listing files."""
 
     paths: List[str]
     ref: str
+    entries: List[TreeEntry]
+    next_cursor: Optional[str]
+    has_more: bool
 
 
-class FileWithMetadata(TypedDict):
+class FileWithMetadata(TypedDict, total=False):
     """Per-file metadata entry for list_files_with_metadata."""
 
     path: str
     mode: str
     size: int
     last_commit_sha: str
+    type: TreeEntryType
 
 
 class CommitMetadata(TypedDict):
@@ -169,12 +186,38 @@ class CommitMetadata(TypedDict):
     message: str
 
 
-class ListFilesWithMetadataResult(TypedDict):
+class ListFilesWithMetadataResult(TypedDict, total=False):
     """Result from listing files with metadata."""
 
     files: List[FileWithMetadata]
     commits: Dict[str, CommitMetadata]
     ref: str
+    next_cursor: Optional[str]
+    has_more: bool
+
+
+class FileRequestHeaders(TypedDict, total=False):
+    """Range / conditional headers forwarded to /repos/file."""
+
+    range: str
+    if_match: str
+    if_none_match: str
+    if_modified_since: str
+    if_unmodified_since: str
+    if_range: str
+
+
+class FileMetadata(TypedDict, total=False):
+    """Parsed response headers from HEAD /repos/file."""
+
+    blob_sha: str
+    last_commit_sha: str
+    size: int
+    etag: str
+    last_modified: datetime
+    raw_last_modified: str
+    accept_ranges: str
+    content_type: str
 
 
 # Removed: ListBranchesOptions - now uses **kwargs
@@ -639,9 +682,22 @@ class Repo(Protocol):
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> Any:  # httpx.Response
         """Get a file as a stream."""
+        ...
+
+    async def head_file(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
+        ttl: Optional[int] = None,
+    ) -> FileMetadata:
+        """Issue HEAD /repos/file and return parsed response metadata."""
         ...
 
     async def get_archive_stream(
@@ -662,6 +718,10 @@ class Repo(Protocol):
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesResult:
         """List files in the repository."""
@@ -672,6 +732,10 @@ class Repo(Protocol):
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesWithMetadataResult:
         """List files with metadata in the repository."""
@@ -779,6 +843,7 @@ class Repo(Protocol):
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in the repository."""

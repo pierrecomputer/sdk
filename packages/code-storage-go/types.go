@@ -209,6 +209,16 @@ type GitCredential struct {
 	CreatedAt string
 }
 
+// FileRequestHeaders carries Range / conditional headers forwarded to /repos/file.
+type FileRequestHeaders struct {
+	Range             string
+	IfMatch           string
+	IfNoneMatch       string
+	IfModifiedSince   string
+	IfUnmodifiedSince string
+	IfRange           string
+}
+
 // GetFileOptions configures file download.
 type GetFileOptions struct {
 	InvocationOptions
@@ -216,6 +226,22 @@ type GetFileOptions struct {
 	Ref           string
 	Ephemeral     *bool
 	EphemeralBase *bool
+	Headers       FileRequestHeaders
+}
+
+// HeadFileOptions configures a HEAD request against /repos/file.
+type HeadFileOptions = GetFileOptions
+
+// FileMetadata is the parsed result of a HEAD /repos/file request.
+type FileMetadata struct {
+	BlobSHA         string
+	LastCommitSHA   string
+	Size            int64
+	ETag            string
+	LastModified    time.Time
+	RawLastModified string
+	AcceptRanges    string
+	ContentType     string
 }
 
 // ArchiveOptions configures repository archive download.
@@ -234,17 +260,42 @@ type PullUpstreamOptions struct {
 	Ref string
 }
 
+// TreeEntryType identifies the kind of object at a tree entry.
+type TreeEntryType string
+
+const (
+	TreeEntryBlob      TreeEntryType = "blob"
+	TreeEntryTree      TreeEntryType = "tree"
+	TreeEntrySymlink   TreeEntryType = "symlink"
+	TreeEntrySubmodule TreeEntryType = "submodule"
+)
+
+// TreeEntry is a structured entry returned by ListFiles.
+type TreeEntry struct {
+	Path string
+	Type TreeEntryType
+	Mode string
+}
+
 // ListFilesOptions configures list files.
 type ListFilesOptions struct {
 	InvocationOptions
 	Ref       string
 	Ephemeral *bool
+	Path      string
+	// Recursive uses a pointer to distinguish unset from explicit false.
+	Recursive *bool
+	Cursor    string
+	Limit     int
 }
 
 // ListFilesResult describes file list.
 type ListFilesResult struct {
-	Paths []string
-	Ref   string
+	Paths      []string
+	Ref        string
+	Entries    []TreeEntry
+	NextCursor string
+	HasMore    bool
 }
 
 // ListFilesWithMetadataOptions configures list files with metadata.
@@ -252,6 +303,11 @@ type ListFilesWithMetadataOptions struct {
 	InvocationOptions
 	Ref       string
 	Ephemeral *bool
+	Path      string
+	// Recursive is accepted for symmetry with ListFiles; listings are always recursive.
+	Recursive *bool
+	Cursor    string
+	Limit     int
 }
 
 // FileWithMetadata describes a file metadata entry.
@@ -260,6 +316,7 @@ type FileWithMetadata struct {
 	Mode          string
 	Size          int64
 	LastCommitSHA string
+	Type          TreeEntryType
 }
 
 // CommitMetadata describes commit metadata for the files metadata response.
@@ -272,9 +329,11 @@ type CommitMetadata struct {
 
 // ListFilesWithMetadataResult describes files metadata response.
 type ListFilesWithMetadataResult struct {
-	Files   []FileWithMetadata
-	Commits map[string]CommitMetadata
-	Ref     string
+	Files      []FileWithMetadata
+	Commits    map[string]CommitMetadata
+	Ref        string
+	NextCursor string
+	HasMore    bool
 }
 
 // ListBranchesOptions configures list branches.
@@ -450,6 +509,7 @@ type ListCommitsOptions struct {
 	Cursor    string
 	Limit     int
 	Ephemeral *bool
+	Path      string
 }
 
 // CommitInfo describes a commit entry.

@@ -1,8 +1,24 @@
 import { z } from 'zod';
 
+export const treeEntryTypeSchema = z.enum([
+  'blob',
+  'tree',
+  'symlink',
+  'submodule',
+]);
+
+export const treeEntryRawSchema = z.object({
+  path: z.string(),
+  type: treeEntryTypeSchema,
+  mode: z.string(),
+});
+
 export const listFilesResponseSchema = z.object({
   paths: z.array(z.string()),
   ref: z.string(),
+  entries: z.array(treeEntryRawSchema).optional(),
+  next_cursor: z.string().nullable().optional(),
+  has_more: z.boolean().optional(),
 });
 
 export const fileWithMetadataRawSchema = z.object({
@@ -10,6 +26,7 @@ export const fileWithMetadataRawSchema = z.object({
   mode: z.string(),
   size: z.number(),
   last_commit_sha: z.string(),
+  type: treeEntryTypeSchema.optional(),
 });
 
 export const commitMetadataRawSchema = z.object({
@@ -22,6 +39,8 @@ export const listFilesWithMetadataResponseSchema = z.object({
   files: z.array(fileWithMetadataRawSchema),
   commits: z.record(commitMetadataRawSchema),
   ref: z.string(),
+  next_cursor: z.string().nullable().optional(),
+  has_more: z.boolean().optional(),
 });
 
 export const branchInfoSchema = z.object({
@@ -299,6 +318,8 @@ export const errorEnvelopeSchema = z.object({
 });
 
 export type ListFilesResponseRaw = z.infer<typeof listFilesResponseSchema>;
+export type RawTreeEntry = z.infer<typeof treeEntryRawSchema>;
+export type TreeEntryTypeRaw = z.infer<typeof treeEntryTypeSchema>;
 export type RawFileWithMetadata = z.infer<typeof fileWithMetadataRawSchema>;
 export type RawCommitMetadata = z.infer<typeof commitMetadataRawSchema>;
 export type ListFilesWithMetadataResponseRaw = z.infer<

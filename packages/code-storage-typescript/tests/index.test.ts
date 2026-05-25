@@ -742,6 +742,247 @@ describe('GitStorage', () => {
     );
   });
 
+  it('forwards path/recursive/cursor/limit and parses entries on listFiles', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-files-subtree' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/files')).toBe(true);
+      expect(requestUrl.searchParams.get('ref')).toBe('main');
+      expect(requestUrl.searchParams.get('path')).toBe('docs');
+      expect(requestUrl.searchParams.get('recursive')).toBe('false');
+      expect(requestUrl.searchParams.get('cursor')).toBe('docs/a.md');
+      expect(requestUrl.searchParams.get('limit')).toBe('50');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({
+          paths: ['docs/guide.md'],
+          ref: 'main',
+          entries: [
+            { path: 'docs/sub', type: 'tree', mode: '040000' },
+            { path: 'docs/guide.md', type: 'blob', mode: '100644' },
+          ],
+          next_cursor: 'docs/zz',
+          has_more: true,
+        }),
+        text: async () => '',
+      } as any);
+    });
+
+    const result = await repo.listFiles({
+      ref: 'main',
+      path: 'docs',
+      recursive: false,
+      cursor: 'docs/a.md',
+      limit: 50,
+    });
+    expect(result.paths).toEqual(['docs/guide.md']);
+    expect(result.entries).toEqual([
+      { path: 'docs/sub', type: 'tree', mode: '040000' },
+      { path: 'docs/guide.md', type: 'blob', mode: '100644' },
+    ]);
+    expect(result.nextCursor).toBe('docs/zz');
+    expect(result.hasMore).toBe(true);
+  });
+
+  it('falls back to empty entries when server omits the field', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-files-legacy' });
+
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({ paths: ['README.md'], ref: 'main' }),
+        text: async () => '',
+      } as any)
+    );
+
+    const result = await repo.listFiles();
+    expect(result.paths).toEqual(['README.md']);
+    expect(result.entries).toEqual([]);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeUndefined();
+  });
+
+  it('forwards type/pagination on listFilesWithMetadata', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-files-meta-page' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/files/metadata')).toBe(true);
+      expect(requestUrl.searchParams.get('path')).toBe('src');
+      expect(requestUrl.searchParams.get('cursor')).toBe('src/a.ts');
+      expect(requestUrl.searchParams.get('limit')).toBe('100');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({
+          files: [
+            {
+              path: 'src/main.ts',
+              mode: '100644',
+              size: 42,
+              last_commit_sha: 'deadbeef',
+              type: 'blob',
+            },
+          ],
+          commits: {
+            deadbeef: {
+              author: 'Test',
+              date: '2026-02-19T12:00:00Z',
+              message: 'init',
+            },
+          },
+          ref: 'main',
+          next_cursor: 'src/zz.ts',
+          has_more: true,
+        }),
+        text: async () => '',
+      } as any);
+    });
+
+    const result = await repo.listFilesWithMetadata({
+      path: 'src',
+      cursor: 'src/a.ts',
+      limit: 100,
+    });
+    expect(result.files[0].type).toBe('blob');
+    expect(result.nextCursor).toBe('src/zz.ts');
+    expect(result.hasMore).toBe(true);
+  });
+
+  it('forwards path query param on listCommits', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-commits-path' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
+      expect(requestUrl.searchParams.get('branch')).toBe('main');
+      expect(requestUrl.searchParams.get('path')).toBe('docs/guide.md');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({
+          commits: [],
+          next_cursor: null,
+          has_more: false,
+        }),
+        text: async () => '',
+      } as any);
+    });
+
+    await repo.listCommits({ branch: 'main', path: 'docs/guide.md' });
+  });
+
+  it('forwards Range and conditional headers on getFileStream', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-headers' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['Range']).toBe('bytes=0-15');
+      expect(headers['If-None-Match']).toBe('"abc"');
+      expect(headers['If-Modified-Since']).toBe('Wed, 21 Oct 2026 07:28:00 GMT');
+      return Promise.resolve({
+        ok: true,
+        status: 206,
+        statusText: 'Partial Content',
+        headers: { get: () => null } as any,
+        text: async () => '',
+      } as any);
+    });
+
+    const response = await repo.getFileStream({
+      path: 'README.md',
+      headers: {
+        range: 'bytes=0-15',
+        ifNoneMatch: '"abc"',
+        ifModifiedSince: 'Wed, 21 Oct 2026 07:28:00 GMT',
+      },
+    });
+    expect(response.status).toBe(206);
+  });
+
+  it('passes 304 through getFileStream without throwing', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-304' });
+
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        status: 304,
+        statusText: 'Not Modified',
+        headers: { get: () => null } as any,
+        text: async () => '',
+      } as any)
+    );
+
+    const response = await repo.getFileStream({
+      path: 'README.md',
+      headers: { ifNoneMatch: '"abc"' },
+    });
+    expect(response.status).toBe(304);
+  });
+
+  it('issues HEAD and parses file metadata headers', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-head' });
+
+    const headerMap: Record<string, string> = {
+      'x-blob-sha': 'b10b5ha',
+      'x-last-commit-sha': 'c0mm1tsha',
+      'content-length': '128',
+      etag: '"b10b5ha"',
+      'last-modified': 'Wed, 21 Oct 2026 07:28:00 GMT',
+      'accept-ranges': 'bytes',
+      'content-type': 'application/octet-stream',
+    };
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('HEAD');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.searchParams.get('path')).toBe('README.md');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          get: (key: string) => headerMap[key.toLowerCase()] ?? null,
+        } as any,
+        text: async () => '',
+      } as any);
+    });
+
+    const meta = await repo.headFile({ path: 'README.md' });
+    expect(meta.blobSha).toBe('b10b5ha');
+    expect(meta.lastCommitSha).toBe('c0mm1tsha');
+    expect(meta.size).toBe(128);
+    expect(meta.etag).toBe('"b10b5ha"');
+    expect(meta.acceptRanges).toBe('bytes');
+    expect(meta.contentType).toBe('application/octet-stream');
+    expect(meta.lastModified).toBeInstanceOf(Date);
+    expect(meta.rawLastModified).toBe('Wed, 21 Oct 2026 07:28:00 GMT');
+  });
+
   it('posts grep request body and parses response', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-grep' });
