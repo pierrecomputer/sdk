@@ -2545,6 +2545,58 @@ describe('GitStorage', () => {
       expect(payload).not.toHaveProperty('ops');
     });
 
+    it('should include refs in JWT when provided', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      const url = await repo.getRemoteURL({
+        refPolicies: [
+          { pattern: 'refs/heads/main', ops: ['no-push'] },
+          { pattern: '*', ops: ['no-force-push'] },
+        ],
+      });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload.refs).toEqual([
+        ['refs/heads/main', ['no-push']],
+        ['*', ['no-force-push']],
+      ]);
+      expect(payload).not.toHaveProperty('ops');
+    });
+
+    it('should encode allow-rules with empty ops array in refs claim', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      const url = await repo.getRemoteURL({
+        refPolicies: [
+          { pattern: 'refs/heads/release/*', ops: [] },
+          { pattern: '*', ops: ['no-push'] },
+        ],
+      });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload.refs).toEqual([
+        ['refs/heads/release/*', []],
+        ['*', ['no-push']],
+      ]);
+    });
+
+    it('should not include refs in JWT when not provided', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+      const url = await repo.getRemoteURL();
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload).not.toHaveProperty('refs');
+    });
+
     it('should include repo ID in URL path and JWT payload', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const customRepoId = 'my-custom-repo';
