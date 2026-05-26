@@ -74,8 +74,9 @@ every URL-minting method and every ref-mutating REST method.
 #### Repo-wide `ops` (legacy — do not use in new code)
 
 The optional top-level `ops` claim applies to every ref. On verify it is folded
-into a trailing `*` rule when no explicit catch-all exists. Only available on
-the URL-minting methods (`getRemoteURL` / `getEphemeralRemoteURL` /
+into the catch-all `*` rule — merged into an existing `*` entry in `refs` if
+one is present, or appended as a new trailing `*` rule otherwise. Only available
+on the URL-minting methods (`getRemoteURL` / `getEphemeralRemoteURL` /
 `getImportRemoteURL`). Use `refs: [{ pattern: '*', ops: [...] }]` instead.
 
 ```typescript
