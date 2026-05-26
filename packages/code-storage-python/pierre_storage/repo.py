@@ -49,8 +49,8 @@ from pierre_storage.types import (
     MergeStrategy,
     NoteReadResult,
     NoteWriteResult,
-    RefUpdate,
     Refs,
+    RefUpdate,
     RestoreCommitResult,
     TagInfo,
 )
