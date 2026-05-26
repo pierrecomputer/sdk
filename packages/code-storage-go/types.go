@@ -56,11 +56,7 @@ type RemoteURLOptions struct {
 	TTL         time.Duration
 	// Ops is a repo-wide policy ops list.
 	//
-	// Deprecated: Use RefPolicies instead. On verify the gateway folds Ops into
-	// the catch-all "*" rule. It is merged into an existing "*" entry in
-	// RefPolicies when one is present, or appended as a new trailing "*" rule
-	// otherwise. Prefer RefPolicies: RefPolicyList{{Pattern: "*", Ops: ...}}
-	// for new code.
+	// Deprecated: Use RefPolicies instead.
 	Ops Ops
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList

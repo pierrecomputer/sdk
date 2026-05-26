@@ -228,10 +228,7 @@ class RepoImpl:
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
-            ops: Deprecated. Repo-wide policy operations. On verify the gateway
-                folds ``ops`` into the catch-all ``*`` rule. It is merged into
-                an existing ``*`` entry in ``ref_policies`` when one is present,
-                or appended as a new trailing ``*`` rule otherwise. Use
+            ops: Deprecated. Repo-wide policy operations. Use
                 ``ref_policies=[{"pattern": "*", "ops": [...]}]`` instead.
             ref_policies: Ordered per-ref policy rules (first match wins)
 
