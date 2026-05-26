@@ -1740,7 +1740,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
-          refPolicies: options.refPolicies,
+        refPolicies: options.refPolicies,
       });
 
     return createCommitBuilder({
@@ -1767,7 +1767,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
-          refPolicies: options.refPolicies,
+        refPolicies: options.refPolicies,
       });
 
     return sendCommitFromDiff({
