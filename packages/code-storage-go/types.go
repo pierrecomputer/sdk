@@ -47,16 +47,23 @@ type RefPolicy struct {
 	Ops     Ops
 }
 
-// RefPolicies is an ordered list of per-ref policy rules for the JWT `refs` claim.
-type RefPolicies []RefPolicy
+// RefPolicyList is an ordered list of per-ref policy rules for the JWT `refs` claim.
+type RefPolicyList []RefPolicy
 
 // RemoteURLOptions configure token generation for remote URLs.
 type RemoteURLOptions struct {
 	Permissions []Permission
 	TTL         time.Duration
-	Ops         Ops
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// Ops is a repo-wide policy ops list.
+	//
+	// Deprecated: Use RefPolicies instead. On verify the gateway folds Ops into
+	// the catch-all "*" rule. It is merged into an existing "*" entry in
+	// RefPolicies when one is present, or appended as a new trailing "*" rule
+	// otherwise. Prefer RefPolicies: RefPolicyList{{Pattern: "*", Ops: ...}}
+	// for new code.
+	Ops Ops
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // InvocationOptions holds common request options.
@@ -244,8 +251,8 @@ type ArchiveOptions struct {
 type PullUpstreamOptions struct {
 	InvocationOptions
 	Ref string
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // ListFilesOptions configures list files.
@@ -323,8 +330,8 @@ type CreateBranchOptions struct {
 	TargetBranch      string
 	BaseIsEphemeral   bool
 	TargetIsEphemeral bool
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CreateBranchResult describes branch creation result.
@@ -340,8 +347,8 @@ type DeleteBranchOptions struct {
 	InvocationOptions
 	Name      string
 	Ephemeral *bool
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteBranchResult describes branch deletion result.
@@ -375,8 +382,8 @@ type MergeOptions struct {
 	AllowUnrelatedHistories bool
 	// Squash is incompatible with MergeStrategyFFOnly.
 	Squash bool
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // MergeResultStatus describes a merge operation outcome.
@@ -442,8 +449,8 @@ type CreateTagOptions struct {
 	InvocationOptions
 	Name   string
 	Target string
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CreateTagResult describes tag creation result.
@@ -457,8 +464,8 @@ type CreateTagResult struct {
 type DeleteTagOptions struct {
 	InvocationOptions
 	Name string
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteTagResult describes tag deletion result.
@@ -568,8 +575,8 @@ type CreateNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // AppendNoteOptions configures note append.
@@ -579,8 +586,8 @@ type AppendNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteNoteOptions configures note delete.
@@ -589,8 +596,8 @@ type DeleteNoteOptions struct {
 	SHA            string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // NoteWriteResult describes note write response.
@@ -829,8 +836,8 @@ type CommitOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CommitFromDiffOptions configures diff commit.
@@ -845,8 +852,8 @@ type CommitFromDiffOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // RestoreCommitOptions configures restore commit.
@@ -858,8 +865,8 @@ type RestoreCommitOptions struct {
 	ExpectedHeadSHA string
 	Author          CommitSignature
 	Committer       *CommitSignature
-	// Refs is evaluated in declaration order; the first matching rule wins.
-	Refs RefPolicies
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // RestoreCommitResult describes restore commit.

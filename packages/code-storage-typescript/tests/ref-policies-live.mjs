@@ -62,7 +62,7 @@ function patchGitStorage(GitStorage) {
       scopes: permissions,
       iat: now,
       exp: now + ttl,
-      ...(options?.refs?.length ? { refs: encodeRefsClaim(options.refs) } : {}),
+      ...(options?.refPolicies?.length ? { refs: encodeRefsClaim(options.refPolicies) } : {}),
       ...(options?.ops?.length ? { ops: options.ops } : {}),
     };
     const { key, alg } = await resolveSigningKey(this.options.key);
@@ -165,7 +165,7 @@ async function main() {
   const restrictedUrl = await repo.getRemoteURL({
     permissions: ['git:read', 'git:write'],
     ttl: 600,
-    refs: [{ pattern: 'refs/heads/main', ops: ['no-push'] }],
+    refPolicies: [{ pattern: 'refs/heads/main', ops: ['no-push'] }],
   });
 
   const openToken = tokenFromRemoteUrl(openUrl);

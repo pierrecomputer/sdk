@@ -113,7 +113,7 @@ func TestRemoteURLRefs(t *testing.T) {
 
 	t.Run("includes refs in JWT when provided", func(t *testing.T) {
 		remote, err := repo.RemoteURL(nil, RemoteURLOptions{
-			Refs: RefPolicies{
+			RefPolicies: RefPolicyList{
 				{Pattern: "refs/heads/main", Ops: Ops{OpNoPush}},
 				{Pattern: "*", Ops: Ops{OpNoForcePush}},
 			},

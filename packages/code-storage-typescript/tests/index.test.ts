@@ -2550,7 +2550,7 @@ describe('GitStorage', () => {
       const repo = await store.createRepo({});
 
       const url = await repo.getRemoteURL({
-        refs: [
+        refPolicies: [
           { pattern: 'refs/heads/main', ops: ['no-push'] },
           { pattern: '*', ops: ['no-force-push'] },
         ],
@@ -2571,7 +2571,7 @@ describe('GitStorage', () => {
       const repo = await store.createRepo({});
 
       const url = await repo.getRemoteURL({
-        refs: [
+        refPolicies: [
           { pattern: 'refs/heads/release/*', ops: [] },
           { pattern: '*', ops: ['no-push'] },
         ],

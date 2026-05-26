@@ -67,13 +67,21 @@ export type RefPolicies = RefPolicy[];
 /** Optional per-ref policies that can be attached to a minted JWT for any ref-mutating call. */
 export interface PolicyOptions {
   /** Per-ref policy rules evaluated in declaration order (first match wins). */
-  refs?: RefPolicies;
+  refPolicies?: RefPolicies;
 }
 
 export interface GetRemoteURLOptions extends PolicyOptions {
   permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
   ttl?: number;
-  /** Repo-wide policy ops (legacy; folded into a catch-all `*` rule on verify). */
+  /**
+   * Repo-wide policy ops.
+   *
+   * @deprecated Use `refPolicies` instead. On verify the gateway folds `ops`
+   *   into the catch-all `*` rule. It is merged into an existing `*` entry in
+   *   `refPolicies` when one is present, or appended as a new trailing `*`
+   *   rule otherwise. Prefer `refPolicies: [{ pattern: '*', ops: [...] }]`
+   *   for new code.
+   */
   ops?: Ops;
 }
 

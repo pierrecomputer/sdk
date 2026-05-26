@@ -3,7 +3,7 @@ package storage
 import "testing"
 
 func TestEncodeRefsClaim(t *testing.T) {
-	encoded := encodeRefsClaim(RefPolicies{
+	encoded := encodeRefsClaim(RefPolicyList{
 		{Pattern: "refs/heads/main", Ops: Ops{OpNoPush}},
 		{Pattern: "refs/heads/release/*", Ops: nil},
 		{Pattern: "*", Ops: Ops{OpNoForcePush}},

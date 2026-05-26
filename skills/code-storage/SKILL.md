@@ -62,26 +62,28 @@ JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
 | `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush`   | Rejects force pushes / non-fast-forward ref updates. |
 | `no-push`        | TS `OP_NO_PUSH` / Py `OP_NO_PUSH` / Go `storage.OpNoPush`                    | Rejects any push to matching refs.                   |
 
-#### Per-ref `refs` (preferred — use this for new code)
+#### Per-ref policies (preferred, use this for new code)
 
 The `refs` claim is an **ordered** array of `[pattern, [ops...]]` tuples.
-Rules are evaluated in declaration order; the first pattern that matches the ref
+Rules are evaluated in declaration order. The first pattern that matches the ref
 wins. Patterns may be fully-qualified refs (`refs/heads/main`), prefix globs
 (`refs/heads/feature/*`, `refs/tags/*`), or `*` for every ref. Short branch names
-like `main` are normalized to `refs/heads/main` on verify. `refs` is accepted by
-every URL-minting method and every ref-mutating REST method.
+like `main` are normalized to `refs/heads/main` on verify. The policies are
+accepted by every URL-minting method and every ref-mutating REST method via the
+SDK option `refPolicies` (TS), `ref_policies` (Py), `RefPolicies` (Go).
 
-#### Repo-wide `ops` (legacy — do not use in new code)
+#### Repo-wide `ops` (legacy, do not use in new code)
 
 The optional top-level `ops` claim applies to every ref. On verify it is folded
-into the catch-all `*` rule — merged into an existing `*` entry in `refs` if
-one is present, or appended as a new trailing `*` rule otherwise. Only available
-on the URL-minting methods (`getRemoteURL` / `getEphemeralRemoteURL` /
-`getImportRemoteURL`). Use `refs: [{ pattern: '*', ops: [...] }]` instead.
+into the catch-all `*` rule. It is merged into an existing `*` entry in the ref
+policies when one is present, or appended as a new trailing `*` rule otherwise.
+Only available on the URL-minting methods (`getRemoteURL` /
+`getEphemeralRemoteURL` / `getImportRemoteURL`). Use
+`refPolicies: [{ pattern: '*', ops: [...] }]` instead.
 
 ```typescript
 await repo.getRemoteURL({
-  refs: [
+  refPolicies: [
     { pattern: 'refs/heads/main', ops: [OP_NO_PUSH] },
     { pattern: '*', ops: [OP_NO_FORCE_PUSH] },
   ],
@@ -90,7 +92,7 @@ await repo.getRemoteURL({
 
 ```python
 await repo.get_remote_url(
-    refs=[
+    ref_policies=[
         {"pattern": "refs/heads/main", "ops": [OP_NO_PUSH]},
         {"pattern": "*", "ops": [OP_NO_FORCE_PUSH]},
     ],
@@ -99,7 +101,7 @@ await repo.get_remote_url(
 
 ```go
 repo.RemoteURL(ctx, storage.RemoteURLOptions{
-    Refs: storage.RefPolicies{
+    RefPolicies: storage.RefPolicyList{
         {Pattern: "refs/heads/main", Ops: storage.Ops{storage.OpNoPush}},
         {Pattern: "*", Ops: storage.Ops{storage.OpNoForcePush}},
     },
@@ -277,8 +279,8 @@ curl "$CODE_STORAGE_BASE_URL/repos?limit=20&cursor=CURSOR&q=sdk" \
 ```
 
 Params: `cursor` (pagination), `limit` (default 20, max 100), `q` (optional
-case-insensitive substring matched against the repository `url`; trimmed before
-matching; empty/whitespace is treated as omitted)
+case-insensitive substring matched against the repository `url`, trimmed before
+matching, empty/whitespace is treated as omitted)
 Scope: `org:read`
 Response: `{ "repos": [...], "next_cursor": "...", "has_more": true }`
 
@@ -312,7 +314,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches/create" -X POST \
   -d '{"base_ref":"refs/heads/main","target_branch":"feature/x","base_is_ephemeral":false,"target_is_ephemeral":false}'
 ```
 
-Required: `target_branch` plus one of `base_ref` (preferred — accepts `refs/heads/...`,
+Required: `target_branch` plus one of `base_ref` (preferred, accepts `refs/heads/...`,
 plain branch names, or commit SHAs) or `base_branch` (deprecated alias).
 Optional: `base_is_ephemeral`, `target_is_ephemeral`.
 Response: `{ "message", "target_branch", "target_is_ephemeral", "commit_sha" }`
@@ -360,13 +362,13 @@ Required: `source_branch`, `target_branch`, `strategy` (`merge` | `ff_only` | `f
 Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
 `commit_message`, `author`, `committer`, `allow_unrelated_histories`, `squash`.
 Set `squash: true` to collapse the source into a single new commit whose only
-parent is the current target tip; incompatible with `ff_only`.
+parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
 TypeScript SDK 1.x normalizes a raw `result: "squash"` payload to
 `result: "merge_commit"` in its exported merge result types for semver
-compatibility; Python and Go currently surface the raw label.
+compatibility. Python and Go currently surface the raw label.
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
 ## DELETE /repos/branches — Delete Branch
@@ -500,10 +502,10 @@ curl "$CODE_STORAGE_BASE_URL/repos/blame?path=src/main.go&ref=main&range=10,30&r
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `path` (required — repository-relative file path), `ref` (branch, tag, or
-SHA; defaults to the repository default branch), `ephemeral` (resolve `ref` from
+Params: `path` (required, repository-relative file path), `ref` (branch, tag, or
+SHA, defaults to the repository default branch), `ephemeral` (resolve `ref` from
 the ephemeral namespace), `range` (repeatable `git blame -L`-style spec, up to
-16 per request — each value is one `-L` argument: e.g. `10,20`, `10,+5`,
+16 per request, each value is one `-L` argument, e.g. `10,20`, `10,+5`,
 `/getUser/,/^}/`, `/getUser/,+30`, `10,`, `,20`, `10`, `:^func .*Foo`,
 `:funcname`; when omitted, the whole file is blamed), `detect_moves` (follow
 renames and copies).
@@ -526,7 +528,7 @@ Response:
 }
 ```
 The top-level `commit_sha` is the SHA the input ref resolved to. Each entry in
-`lines[]` carries its authoring commit's metadata inline; `previous_commit_sha`
+`lines[]` carries its authoring commit's metadata inline. `previous_commit_sha`
 is omitted when the line has no prior version (e.g. introduced in the initial
 commit). Errors: `400` missing/invalid params, `404` ref/path not found.
 
@@ -822,9 +824,9 @@ const repo = store.repo({ id: 'team/project' });
 const safeRemote = await repo.getRemoteURL({
   permissions: ['git:write'],
   ttl: 3600,
-  refs: [{ pattern: '*', ops: [OP_NO_FORCE_PUSH] }],
+  refPolicies: [{ pattern: '*', ops: [OP_NO_FORCE_PUSH] }],
 });
-// git push to safeRemote — non-fast-forward updates are rejected.
+// git push to safeRemote. Non-fast-forward updates are rejected.
 ```
 
 ```python
@@ -835,18 +837,19 @@ repo = store.repo(id="team/project")
 safe_remote = await repo.get_remote_url(
     permissions=["git:write"],
     ttl=3600,
-    refs=[{"pattern": "*", "ops": [OP_NO_FORCE_PUSH]}],
+    ref_policies=[{"pattern": "*", "ops": [OP_NO_FORCE_PUSH]}],
 )
 ```
 
-`refs` is also accepted by `getEphemeralRemoteURL`, `getImportRemoteURL`, and
-every ref-mutating REST method (`createBranch`, `merge`, `createCommit`, notes,
-tags, etc.) — define the policy once and reuse it. When minting JWTs by hand,
-add `"refs"` to the payload before signing.
+The `refPolicies` option (`ref_policies` in Python, `RefPolicies` in Go) is also
+accepted by `getEphemeralRemoteURL`, `getImportRemoteURL`, and every
+ref-mutating REST method (`createBranch`, `merge`, `createCommit`, notes, tags,
+etc.). Define the policy once and reuse it. When minting JWTs by hand, add the
+`"refs"` claim to the payload before signing.
 
 > The legacy top-level `ops` claim is still accepted on URL-minting methods for
 > backwards compatibility (folded into a catch-all `*` rule on verify), but new
-> code should use `refs` everywhere.
+> code should use `refPolicies` everywhere.
 
 ## PROCEDURE 8: Rollback a Branch
 
@@ -943,5 +946,5 @@ git push origin feature-branch
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
-| Policy ops            | JWT-level guards via `refs` (per-ref, first match wins; preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates; `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. Top-level `ops` is a legacy alias on URL-minting methods only. |
-| Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`; optional `squash` (not with `ff_only`). 409 on conflict. |
+| Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. Top-level `ops` is a legacy alias on URL-minting methods only. |
+| Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `squash` (not with `ff_only`). 409 on conflict. |

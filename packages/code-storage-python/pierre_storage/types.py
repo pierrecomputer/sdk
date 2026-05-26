@@ -620,7 +620,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
-        refs: Optional[Refs] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get the remote URL for the repository."""
         ...
@@ -631,7 +631,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
-        refs: Optional[Refs] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get the import remote URL for the repository."""
         ...
@@ -642,7 +642,7 @@ class Repo(Protocol):
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
-        refs: Optional[Refs] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get the ephemeral remote URL for the repository."""
         ...

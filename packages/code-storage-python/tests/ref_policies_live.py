@@ -95,7 +95,7 @@ async def main() -> int:
     restricted_url = await repo.get_remote_url(
         permissions=["git:read", "git:write"],
         ttl=600,
-        refs=[
+        ref_policies=[
             {"pattern": "refs/heads/main", "ops": [OP_NO_PUSH]},
         ],
     )
