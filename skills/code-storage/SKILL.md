@@ -44,7 +44,6 @@ Every request requires a JWT signed with your private key. Tokens are per-reposi
   "sub": "@pierre/storage",   // Subject (the SDKs set this to the package name)
   "repo": "team/project",     // Repository the token grants access to
   "scopes": ["git:read", "git:write"],
-  "ops": ["no-force-push"],   // Optional repo-wide policy ops (legacy; see below)
   "refs": [                    // Optional per-ref policy rules (first match wins)
     ["refs/heads/main", ["no-push"]],
     ["refs/heads/feature/*", ["no-force-push"]]
@@ -63,21 +62,21 @@ JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
 | `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush`   | Rejects force pushes / non-fast-forward ref updates. |
 | `no-push`        | TS `OP_NO_PUSH` / Py `OP_NO_PUSH` / Go `storage.OpNoPush`                    | Rejects any push to matching refs.                   |
 
-#### Repo-wide `ops` (legacy)
+#### Per-ref `refs` (preferred — use this for new code)
 
-The optional top-level `ops` claim applies to every ref. On verify it is folded
-into a trailing `*` rule when no explicit catch-all exists.
-
-Pass via `getRemoteURL` / `getEphemeralRemoteURL` / `getImportRemoteURL`
-(`{ ops: [OP_NO_FORCE_PUSH] }`) or include `ops` directly when minting manually.
-
-#### Per-ref `refs` (preferred)
-
-The optional `refs` claim is an **ordered** array of `[pattern, [ops...]]` tuples.
+The `refs` claim is an **ordered** array of `[pattern, [ops...]]` tuples.
 Rules are evaluated in declaration order; the first pattern that matches the ref
 wins. Patterns may be fully-qualified refs (`refs/heads/main`), prefix globs
 (`refs/heads/feature/*`, `refs/tags/*`), or `*` for every ref. Short branch names
-like `main` are normalized to `refs/heads/main` on verify.
+like `main` are normalized to `refs/heads/main` on verify. `refs` is accepted by
+every URL-minting method and every ref-mutating REST method.
+
+#### Repo-wide `ops` (legacy — do not use in new code)
+
+The optional top-level `ops` claim applies to every ref. On verify it is folded
+into a trailing `*` rule when no explicit catch-all exists. Only available on
+the URL-minting methods (`getRemoteURL` / `getEphemeralRemoteURL` /
+`getImportRemoteURL`). Use `refs: [{ pattern: '*', ops: [...] }]` instead.
 
 ```typescript
 await repo.getRemoteURL({
@@ -822,7 +821,7 @@ const repo = store.repo({ id: 'team/project' });
 const safeRemote = await repo.getRemoteURL({
   permissions: ['git:write'],
   ttl: 3600,
-  ops: [OP_NO_FORCE_PUSH],
+  refs: [{ pattern: '*', ops: [OP_NO_FORCE_PUSH] }],
 });
 // git push to safeRemote — non-fast-forward updates are rejected.
 ```
@@ -835,14 +834,18 @@ repo = store.repo(id="team/project")
 safe_remote = await repo.get_remote_url(
     permissions=["git:write"],
     ttl=3600,
-    ops=[OP_NO_FORCE_PUSH],
+    refs=[{"pattern": "*", "ops": [OP_NO_FORCE_PUSH]}],
 )
 ```
 
-The same `ops` array also works on `getEphemeralRemoteURL` and
-`getImportRemoteURL`. For per-ref rules, pass `refs` instead (see Policy
-Operations above). When minting JWTs by hand, add `"ops"` or `"refs"` to the
-payload before signing.
+`refs` is also accepted by `getEphemeralRemoteURL`, `getImportRemoteURL`, and
+every ref-mutating REST method (`createBranch`, `merge`, `createCommit`, notes,
+tags, etc.) — define the policy once and reuse it. When minting JWTs by hand,
+add `"refs"` to the payload before signing.
+
+> The legacy top-level `ops` claim is still accepted on URL-minting methods for
+> backwards compatibility (folded into a catch-all `*` rule on verify), but new
+> code should use `refs` everywhere.
 
 ## PROCEDURE 8: Rollback a Branch
 
@@ -939,5 +942,5 @@ git push origin feature-branch
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
-| Policy ops            | JWT-level guards via `ops` (repo-wide) or `refs` (per-ref, first match wins). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates; `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. |
+| Policy ops            | JWT-level guards via `refs` (per-ref, first match wins; preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates; `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`; strategies: `merge`, `ff_only`, `ff_prefer`; optional `squash` (not with `ff_only`). 409 on conflict. |
