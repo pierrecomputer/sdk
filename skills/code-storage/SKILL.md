@@ -149,7 +149,7 @@ Username is always `t`. Password is the JWT.
 | **FILES**                     |          |                                   |                 |
 | List files at ref             | GET      | `/repos/files`                    | `git:read`      |
 | List files with metadata      | GET      | `/repos/files/metadata`           | `git:read`      |
-| Get file content (stream)     | GET      | `/repos/file`                     | `git:read`      |
+| Get file content (stream)     | GET/HEAD | `/repos/file`                     | `git:read`      |
 | Blame file at ref             | GET      | `/repos/blame`                    | `git:read`      |
 | Search content (grep)         | POST     | `/repos/grep`                     | `git:read`      |
 | Download archive (tar.gz)     | POST     | `/repos/archive`                  | `git:read`      |
@@ -366,9 +366,6 @@ parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
-TypeScript SDK 1.x normalizes a raw `result: "squash"` payload to
-`result: "merge_commit"` in its exported merge result types for semver
-compatibility. Python and Go currently surface the raw label.
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
 ## DELETE /repos/branches — Delete Branch
@@ -418,11 +415,16 @@ Diff must be compatible with `git apply --cached --binary`. Same response schema
 ## GET /repos/commits — List Commits
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20&cursor=CURSOR" \
+curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&path=docs/guide.md&limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Optional `ephemeral=true` resolves `branch` from the ephemeral namespace (defaults to `false`).
+Params:
+- `branch` (defaults to repository default branch)
+- `ephemeral=true` (resolve `branch` from the ephemeral namespace; defaults to `false`)
+- `path` (optional repository-relative file or subtree to scope history to —
+  only commits that touched that path are returned)
+- `cursor`, `limit` (default 20, max 100)
 
 Response: `{ "commits": [{ "sha", "message", "author_name", "author_email", "date" }], "next_cursor", "has_more" }`
 
@@ -468,32 +470,111 @@ Response: same schema as commit-pack result. Failed ref updates surface as
 ## GET /repos/files — List Files
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/files?ref=main&ephemeral=false" \
+curl "$CODE_STORAGE_BASE_URL/repos/files?ref=main&path=docs&recursive=false&limit=200" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `ref` (branch/SHA, defaults to default branch), `ephemeral`
-Response: `{ "paths": ["README.md", "src/index.js", ...], "ref": "main" }`
+Params:
+- `ref` (branch/SHA, defaults to the repository default branch)
+- `ephemeral` (resolve `ref` from the ephemeral namespace)
+- `path` (optional repository-relative subtree; empty means repo root)
+- `recursive` (default `true`; set `false` to return only direct children)
+- `cursor` + `limit` (opt into paginated response; `limit` defaults to 1000, max 5000)
+
+Response (paginated shape):
+```json
+{
+  "paths": ["docs/guide.md"],
+  "entries": [
+    { "path": "docs/sub",        "type": "tree", "mode": "040000" },
+    { "path": "docs/guide.md",   "type": "blob", "mode": "100644" }
+  ],
+  "ref": "main",
+  "next_cursor": "docs/zz",
+  "has_more": true
+}
+```
+`paths` is a flat blob-only list (convenience for callers that don't need
+directory entries). `entries` is the structured tree — branch on `type`
+(`blob` / `tree` / `symlink` / `submodule`) rather than checking for a
+trailing `/`, since trees do not carry one. Omit both `cursor` and `limit` to
+get the unpaginated legacy response.
 
 ## GET /repos/files/metadata — List Files with Git Metadata
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/files/metadata?ref=main&ephemeral=false" \
+curl "$CODE_STORAGE_BASE_URL/repos/files/metadata?ref=main&path=src&limit=100" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `ref` (branch/SHA, falls back to default branch then `HEAD` then `main`), `ephemeral`.
-This endpoint is unpaginated and returns the full file list in one response.
-Response: `{ "files": [{ "path", "mode", "size", "last_commit_sha" }], "commits": { "sha": { "author", "date", "message" } }, "ref": "main" }`
+Params:
+- `ref` (branch/SHA, falls back to default branch → `HEAD` → `main`)
+- `ephemeral` (resolve `ref` from the ephemeral namespace)
+- `path` (optional repository-relative subtree)
+- `recursive` (accepted for symmetry with `/files`; this endpoint is always
+  recursive)
+- `cursor` + `limit` (opt into paginated response; `limit` defaults to 200,
+  max 1000)
 
-## GET /repos/file — Get File Content
+Response:
+```json
+{
+  "files": [
+    { "path": "src/main.ts", "mode": "100644", "size": 42, "type": "blob", "last_commit_sha": "deadbeef" }
+  ],
+  "commits": { "deadbeef": { "author": "...", "date": "...", "message": "..." } },
+  "ref": "main",
+  "next_cursor": "src/zz.ts",
+  "has_more": true
+}
+```
+`type` is derived from each entry's git mode. Omit both `cursor` and `limit`
+for the unpaginated legacy response.
+
+## GET|HEAD /repos/file — Get File Content
 
 ```bash
+# Stream the full file
 curl "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+
+# Fetch just metadata (no body)
+curl -I "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+
+# Partial read + cached revalidation
+curl "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H 'Range: bytes=0-1023' \
+  -H 'If-None-Match: "b10b5ha"'
 ```
 
-Response: raw file bytes (streaming), `Content-Type` set appropriately.
+Methods: `GET` returns the file bytes; `HEAD` returns only the headers.
+Query params: `path` (required), `ref`, `ephemeral`, `ephemeral_base`.
+Both accept `Range`, `If-Range`, `If-Match`, `If-None-Match`,
+`If-Modified-Since`, and `If-Unmodified-Since`.
+
+Status codes:
+- `200 OK` — full body returned (GET) or metadata-only (HEAD).
+- `206 Partial Content` — byte range satisfied; `Content-Range` identifies it.
+- `304 Not Modified` — cached representation still valid.
+- `412 Precondition Failed` — `If-Match`/`If-Unmodified-Since` failed.
+- `416 Requested Range Not Satisfiable` — range outside blob size.
+
+Response headers for successful/ranged responses:
+- `ETag` — strong validator equal to the quoted Git blob SHA.
+- `Last-Modified` — committer date of the most recent commit reachable from
+  `ref` that touched `path`.
+- `Accept-Ranges: bytes`.
+- `Content-Type: application/octet-stream`.
+- `Content-Length` — full size on 200, range size on 206.
+- `Content-Range` — present on 206 responses and 416 unsatisfied ranges.
+- `X-Blob-Sha` — Git blob SHA of the served file.
+- `X-Last-Commit-Sha` — SHA of the most recent commit touching `path`.
+
+SDK HEAD metadata helpers preserve the HTTP status and ranged metadata:
+TypeScript exposes `status` and `contentRange`; Python exposes `status_code`
+and `content_range`; Go exposes `StatusCode` and `ContentRange`.
 
 ## GET /repos/blame — Blame File
 

@@ -4,6 +4,8 @@ import { getUserAgent } from './version';
 
 interface RequestOptions {
   allowedStatus?: number[];
+  /** Extra request headers merged on top of the SDK defaults. */
+  extraHeaders?: Record<string, string>;
 }
 
 export class ApiError extends Error {
@@ -70,16 +72,30 @@ export class ApiFetcher {
   ) {
     const requestUrl = this.getRequestUrl(path);
 
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+      'Code-Storage-Agent': getUserAgent(),
+    };
+    if (options?.extraHeaders) {
+      for (const [key, value] of Object.entries(options.extraHeaders)) {
+        if (typeof value === 'string' && value !== '') {
+          headers[key] = value;
+        }
+      }
+    }
+
     const requestOptions: RequestInit = {
       method,
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
-        'Code-Storage-Agent': getUserAgent(),
-      },
+      headers,
     };
 
-    if (method !== 'GET' && typeof path !== 'string' && path.body) {
+    if (
+      method !== 'GET' &&
+      method !== 'HEAD' &&
+      typeof path !== 'string' &&
+      path.body
+    ) {
       requestOptions.body = JSON.stringify(path.body);
     }
 
@@ -142,6 +158,10 @@ export class ApiFetcher {
 
   async get(path: ValidPath, jwt: string, options?: RequestOptions) {
     return this.fetch(path, 'GET', jwt, options);
+  }
+
+  async head(path: ValidPath, jwt: string, options?: RequestOptions) {
+    return this.fetch(path, 'HEAD', jwt, options);
   }
 
   async post(path: ValidPath, jwt: string, options?: RequestOptions) {

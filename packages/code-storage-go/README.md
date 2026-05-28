@@ -45,6 +45,24 @@ func main() {
 }
 ```
 
+### Inspect file metadata
+
+```go
+meta, err := repo.HeadFile(context.Background(), storage.HeadFileOptions{
+	Path: "README.md",
+	Ref:  "main",
+	Headers: storage.FileRequestHeaders{
+		IfNoneMatch: `"b10b5ha"`,
+		Range:       "bytes=0-1023",
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(meta.StatusCode, meta.ETag, meta.ContentRange)
+```
+
 ### Download an archive
 
 ```go

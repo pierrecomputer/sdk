@@ -69,6 +69,7 @@ import type {
   DeleteRepoOptions,
   DeleteRepoResult,
   DiffFileState,
+  FileMetadata,
   FileWithMetadata,
   FileDiff,
   FilteredFile,
@@ -87,6 +88,7 @@ import type {
   GetCommitResponse,
   GetCommitResult,
   GetFileOptions,
+  HeadFileOptions,
   GetNoteOptions,
   GetNoteResult,
   GetRemoteURLOptions,
@@ -112,7 +114,6 @@ import type {
   ListReposResponse,
   ListReposResult,
   MergeOptions,
-  MergeResultLabel,
   MergeResult,
   ListTagsOptions,
   ListTagsResponse,
@@ -126,12 +127,14 @@ import type {
   RawFileDiff,
   RawFilteredFile,
   RawTagInfo,
+  RawTreeEntry,
   RefUpdate,
   RepoOptions,
   Repo,
   RestoreCommitOptions,
   RestoreCommitResult,
   TagInfo,
+  TreeEntry,
   UpdateGitCredentialOptions,
   ValidAPIVersion,
 } from './types';
@@ -198,6 +201,12 @@ const NOTE_WRITE_ALLOWED_STATUS = [
   502, // Bad Gateway - storage/gateway bridge issues
   503, // Service Unavailable - storage selection failures
   504, // Gateway Timeout - long-running storage operations
+] as const;
+
+const FILE_RESPONSE_ALLOWED_STATUS = [
+  304, // Not Modified - cache revalidation
+  412, // Precondition Failed - conditional request failed
+  416, // Range Not Satisfiable - caller needs Content-Range metadata
 ] as const;
 
 function resolveInvocationTtlSeconds(
@@ -387,13 +396,25 @@ function transformBlameResult(raw: BlameResponse): BlameResult {
   };
 }
 
-function transformFileWithMetadata(raw: RawFileWithMetadata): FileWithMetadata {
+function transformTreeEntry(raw: RawTreeEntry): TreeEntry {
   return {
+    path: raw.path,
+    type: raw.type,
+    mode: raw.mode,
+  };
+}
+
+function transformFileWithMetadata(raw: RawFileWithMetadata): FileWithMetadata {
+  const file: FileWithMetadata = {
     path: raw.path,
     mode: raw.mode,
     size: raw.size,
     lastCommitSha: raw.last_commit_sha,
   };
+  if (raw.type) {
+    file.type = raw.type;
+  }
+  return file;
 }
 
 function transformCommitMetadata(raw: RawCommitMetadata): CommitMetadata {
@@ -417,6 +438,8 @@ function transformListFilesWithMetadataResult(
     files: raw.files.map(transformFileWithMetadata),
     commits,
     ref: raw.ref,
+    nextCursor: raw.next_cursor ?? undefined,
+    hasMore: raw.has_more ?? false,
   };
 }
 
@@ -506,19 +529,9 @@ function transformCreateBranchResult(
   };
 }
 
-function normalizeMergeResultLabel(
-  result: MergeResponseRaw['result']
-): MergeResultLabel {
-  if (result === 'squash') {
-    return 'merge_commit';
-  }
-
-  return result;
-}
-
 function transformMergeResult(raw: MergeResponseRaw): MergeResult {
   return {
-    result: normalizeMergeResultLabel(raw.result),
+    result: raw.result,
     commitSha: raw.commit_sha,
     treeSha: raw.tree_sha,
     source: {
@@ -684,6 +697,103 @@ function buildNoteWriteBody(
   return body;
 }
 
+function buildGetFileParams(
+  options: Pick<GetFileOptions, 'path' | 'ref' | 'ephemeral' | 'ephemeralBase'>
+): Record<string, string> {
+  const params: Record<string, string> = {
+    path: options.path,
+  };
+  if (options.ref) {
+    params.ref = options.ref;
+  }
+  if (typeof options.ephemeral === 'boolean') {
+    params.ephemeral = String(options.ephemeral);
+  }
+  if (typeof options.ephemeralBase === 'boolean') {
+    params.ephemeral_base = String(options.ephemeralBase);
+  }
+  return params;
+}
+
+function buildConditionalHeaders(
+  headers?: GetFileOptions['headers']
+): Record<string, string> | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  if (headers.range) {
+    out['Range'] = headers.range;
+  }
+  if (headers.ifMatch) {
+    out['If-Match'] = headers.ifMatch;
+  }
+  if (headers.ifNoneMatch) {
+    out['If-None-Match'] = headers.ifNoneMatch;
+  }
+  if (headers.ifModifiedSince) {
+    out['If-Modified-Since'] = headers.ifModifiedSince;
+  }
+  if (headers.ifUnmodifiedSince) {
+    out['If-Unmodified-Since'] = headers.ifUnmodifiedSince;
+  }
+  if (headers.ifRange) {
+    out['If-Range'] = headers.ifRange;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function parseFileMetadataHeaders(response: Response): FileMetadata {
+  const headers = response.headers;
+  const blobSha = headers.get('x-blob-sha') ?? '';
+  const lastCommitSha = headers.get('x-last-commit-sha') ?? '';
+  const contentLength = headers.get('content-length');
+  const size =
+    contentLength !== null && contentLength !== ''
+      ? Number(contentLength)
+      : undefined;
+  const etag = headers.get('etag') ?? undefined;
+  const rawLastModified = headers.get('last-modified') ?? undefined;
+  let lastModified: Date | undefined;
+  if (rawLastModified) {
+    const parsed = new Date(rawLastModified);
+    if (!Number.isNaN(parsed.getTime())) {
+      lastModified = parsed;
+    }
+  }
+  const acceptRanges = headers.get('accept-ranges') ?? undefined;
+  const contentRange = headers.get('content-range') ?? undefined;
+  const contentType = headers.get('content-type') ?? undefined;
+
+  const metadata: FileMetadata = {
+    status: response.status,
+    blobSha,
+    lastCommitSha,
+  };
+  if (typeof size === 'number' && Number.isFinite(size)) {
+    metadata.size = size;
+  }
+  if (etag) {
+    metadata.etag = etag;
+  }
+  if (rawLastModified) {
+    metadata.rawLastModified = rawLastModified;
+  }
+  if (lastModified) {
+    metadata.lastModified = lastModified;
+  }
+  if (acceptRanges) {
+    metadata.acceptRanges = acceptRanges;
+  }
+  if (contentRange) {
+    metadata.contentRange = contentRange;
+  }
+  if (contentType) {
+    metadata.contentType = contentType;
+  }
+  return metadata;
+}
+
 async function parseNoteWriteResponse(
   response: Response,
   method: 'POST' | 'DELETE'
@@ -791,22 +901,34 @@ class RepoImpl implements Repo {
       ttl,
     });
 
-    const params: Record<string, string> = {
-      path: options.path,
-    };
+    const params = buildGetFileParams(options);
+    const extraHeaders = buildConditionalHeaders(options.headers);
 
-    if (options.ref) {
-      params.ref = options.ref;
-    }
-    if (typeof options.ephemeral === 'boolean') {
-      params.ephemeral = String(options.ephemeral);
-    }
-    if (typeof options.ephemeralBase === 'boolean') {
-      params.ephemeral_base = String(options.ephemeralBase);
-    }
+    // Allow range and conditional outcomes to surface as normal responses.
+    return this.api.get(
+      { path: 'repos/file', params },
+      jwt,
+      { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
+    );
+  }
 
-    // Return the raw fetch Response for streaming
-    return this.api.get({ path: 'repos/file', params }, jwt);
+  async headFile(options: HeadFileOptions): Promise<FileMetadata> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const params = buildGetFileParams(options);
+    const extraHeaders = buildConditionalHeaders(options.headers);
+
+    const response = await this.api.head(
+      { path: 'repos/file', params },
+      jwt,
+      { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
+    );
+
+    return parseFileMetadataHeaders(response);
   }
 
   async getArchiveStream(options: ArchiveOptions = {}): Promise<Response> {
@@ -857,6 +979,18 @@ class RepoImpl implements Repo {
     if (typeof options?.ephemeral === 'boolean') {
       params.ephemeral = String(options.ephemeral);
     }
+    if (typeof options?.path === 'string' && options.path !== '') {
+      params.path = options.path;
+    }
+    if (typeof options?.recursive === 'boolean') {
+      params.recursive = String(options.recursive);
+    }
+    if (typeof options?.cursor === 'string' && options.cursor !== '') {
+      params.cursor = options.cursor;
+    }
+    if (typeof options?.limit === 'number') {
+      params.limit = options.limit.toString();
+    }
     const response = await this.api.get(
       {
         path: 'repos/files',
@@ -866,7 +1000,13 @@ class RepoImpl implements Repo {
     );
 
     const raw = listFilesResponseSchema.parse(await response.json());
-    return { paths: raw.paths, ref: raw.ref };
+    return {
+      paths: raw.paths,
+      ref: raw.ref,
+      entries: (raw.entries ?? []).map(transformTreeEntry),
+      nextCursor: raw.next_cursor ?? undefined,
+      hasMore: raw.has_more ?? false,
+    };
   }
 
   async listFilesWithMetadata(
@@ -884,6 +1024,18 @@ class RepoImpl implements Repo {
     }
     if (typeof options?.ephemeral === 'boolean') {
       params.ephemeral = String(options.ephemeral);
+    }
+    if (typeof options?.path === 'string' && options.path !== '') {
+      params.path = options.path;
+    }
+    if (typeof options?.recursive === 'boolean') {
+      params.recursive = String(options.recursive);
+    }
+    if (typeof options?.cursor === 'string' && options.cursor !== '') {
+      params.cursor = options.cursor;
+    }
+    if (typeof options?.limit === 'number') {
+      params.limit = options.limit.toString();
     }
     const response = await this.api.get(
       {
@@ -984,6 +1136,7 @@ class RepoImpl implements Repo {
       options?.branch ||
       options?.cursor ||
       options?.limit ||
+      options?.path ||
       typeof options?.ephemeral === 'boolean'
     ) {
       params = {};
@@ -998,6 +1151,9 @@ class RepoImpl implements Repo {
       }
       if (typeof options?.ephemeral === 'boolean') {
         params.ephemeral = String(options.ephemeral);
+      }
+      if (typeof options?.path === 'string' && options.path !== '') {
+        params.path = options.path;
       }
     }
 

@@ -28,7 +28,9 @@ import type {
   RawRepoBaseInfo as SchemaRawRepoBaseInfo,
   RawRepoInfo as SchemaRawRepoInfo,
   RawTagInfo as SchemaRawTagInfo,
-} from "./schemas";
+  RawTreeEntry as SchemaRawTreeEntry,
+  TreeEntryTypeRaw as SchemaTreeEntryTypeRaw,
+} from './schemas';
 
 export interface OverrideableGitStorageOptions {
   apiBaseUrl?: string;
@@ -90,6 +92,7 @@ export interface Repo {
   getImportRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
 
   getFileStream(options: GetFileOptions): Promise<Response>;
+  headFile(options: HeadFileOptions): Promise<FileMetadata>;
   getArchiveStream(options?: ArchiveOptions): Promise<Response>;
   listFiles(options?: ListFilesOptions): Promise<ListFilesResult>;
   listFilesWithMetadata(
@@ -120,7 +123,7 @@ export interface Repo {
   ): Promise<CommitResult>;
 }
 
-export type ValidMethod = "GET" | "POST" | "PUT" | "DELETE";
+export type ValidMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD';
 type SimplePath = string;
 type ComplexPath = {
   path: string;
@@ -269,11 +272,36 @@ export interface DeleteRepoResult {
 }
 
 // Get File API types
+export interface FileRequestHeaders {
+  range?: string;
+  ifMatch?: string;
+  ifNoneMatch?: string;
+  ifModifiedSince?: string;
+  ifUnmodifiedSince?: string;
+  ifRange?: string;
+}
+
 export interface GetFileOptions extends GitStorageInvocationOptions {
   path: string;
   ref?: string;
   ephemeral?: boolean;
   ephemeralBase?: boolean;
+  headers?: FileRequestHeaders;
+}
+
+export type HeadFileOptions = GetFileOptions;
+
+export interface FileMetadata {
+  status?: number;
+  blobSha: string;
+  lastCommitSha: string;
+  size?: number;
+  etag?: string;
+  lastModified?: Date;
+  rawLastModified?: string;
+  acceptRanges?: string;
+  contentRange?: string;
+  contentType?: string;
 }
 
 export interface ArchiveOptions extends GitStorageInvocationOptions {
@@ -289,10 +317,23 @@ export interface PullUpstreamOptions
   ref?: string;
 }
 
+export type RawTreeEntry = SchemaRawTreeEntry;
+export type TreeEntryType = SchemaTreeEntryTypeRaw;
+
+export interface TreeEntry {
+  path: string;
+  type: TreeEntryType;
+  mode: string;
+}
+
 // List Files API types
 export interface ListFilesOptions extends GitStorageInvocationOptions {
   ref?: string;
   ephemeral?: boolean;
+  path?: string;
+  recursive?: boolean;
+  cursor?: string;
+  limit?: number;
 }
 
 export type ListFilesResponse = ListFilesResponseRaw;
@@ -300,11 +341,19 @@ export type ListFilesResponse = ListFilesResponseRaw;
 export interface ListFilesResult {
   paths: string[];
   ref: string;
+  entries: TreeEntry[];
+  nextCursor?: string;
+  hasMore: boolean;
 }
 
 export interface ListFilesWithMetadataOptions extends GitStorageInvocationOptions {
   ref?: string;
   ephemeral?: boolean;
+  path?: string;
+  /** Accepted for symmetry with listFiles; metadata listings are always recursive. */
+  recursive?: boolean;
+  cursor?: string;
+  limit?: number;
 }
 
 export type RawFileWithMetadata = SchemaRawFileWithMetadata;
@@ -314,6 +363,7 @@ export interface FileWithMetadata {
   mode: string;
   size: number;
   lastCommitSha: string;
+  type?: TreeEntryType;
 }
 
 export type RawCommitMetadata = SchemaRawCommitMetadata;
@@ -331,6 +381,8 @@ export interface ListFilesWithMetadataResult {
   files: FileWithMetadata[];
   commits: Record<string, CommitMetadata>;
   ref: string;
+  nextCursor?: string;
+  hasMore: boolean;
 }
 
 // List Branches API types
@@ -444,6 +496,7 @@ export interface ListCommitsOptions extends GitStorageInvocationOptions {
   cursor?: string;
   limit?: number;
   ephemeral?: boolean;
+  path?: string;
 }
 
 export type RawCommitInfo = SchemaRawCommitInfo;
@@ -849,6 +902,7 @@ export type MergeResultLabel =
   | "merge_commit"
   | "fast_forward"
   | "no_op"
+  | "squash"
   | "unknown";
 
 export interface MergeOptions

@@ -230,6 +230,435 @@ func TestListFilesWithMetadataEphemeral(t *testing.T) {
 	}
 }
 
+func TestListFilesSubtreeAndPagination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/files" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("ref") != "main" || q.Get("path") != "docs" ||
+			q.Get("recursive") != "false" || q.Get("cursor") != "docs/a.md" ||
+			q.Get("limit") != "50" {
+			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"paths":["docs/guide.md"],"ref":"main","entries":[{"path":"docs/sub","type":"tree","mode":"040000"},{"path":"docs/guide.md","type":"blob","mode":"100644"}],"next_cursor":"docs/zz","has_more":true}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	recursive := false
+	result, err := repo.ListFiles(nil, ListFilesOptions{
+		Ref:       "main",
+		Path:      "docs",
+		Recursive: &recursive,
+		Cursor:    "docs/a.md",
+		Limit:     50,
+	})
+	if err != nil {
+		t.Fatalf("list files error: %v", err)
+	}
+	if result.NextCursor != "docs/zz" || !result.HasMore {
+		t.Fatalf("expected pagination state: %+v", result)
+	}
+	if len(result.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(result.Entries))
+	}
+	if result.Entries[0].Type != TreeEntryTree || result.Entries[0].Path != "docs/sub" ||
+		result.Entries[0].Mode != "040000" {
+		t.Fatalf("unexpected first entry: %+v", result.Entries[0])
+	}
+	if result.Entries[1].Type != TreeEntryBlob {
+		t.Fatalf("expected blob, got %s", result.Entries[1].Type)
+	}
+}
+
+func TestListFilesLegacyResponseDefaults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"paths":["README.md"],"ref":"main"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListFiles(nil, ListFilesOptions{})
+	if err != nil {
+		t.Fatalf("list files error: %v", err)
+	}
+	if len(result.Entries) != 0 {
+		t.Fatalf("expected no entries, got %d", len(result.Entries))
+	}
+	if result.HasMore {
+		t.Fatalf("expected has_more=false")
+	}
+	if result.NextCursor != "" {
+		t.Fatalf("expected empty next_cursor")
+	}
+}
+
+func TestListFilesWithMetadataPaginationAndType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("path") != "src" || q.Get("cursor") != "src/a.ts" || q.Get("limit") != "100" {
+			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"files":[{"path":"src/main.ts","mode":"100644","size":42,"last_commit_sha":"deadbeef","type":"blob"}],"commits":{"deadbeef":{"author":"Test","date":"2026-02-19T12:00:00Z","message":"init"}},"ref":"main","next_cursor":"src/zz.ts","has_more":true}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListFilesWithMetadata(nil, ListFilesWithMetadataOptions{
+		Path:   "src",
+		Cursor: "src/a.ts",
+		Limit:  100,
+	})
+	if err != nil {
+		t.Fatalf("list files with metadata error: %v", err)
+	}
+	if result.Files[0].Type != TreeEntryBlob {
+		t.Fatalf("expected blob type, got %s", result.Files[0].Type)
+	}
+	if result.NextCursor != "src/zz.ts" || !result.HasMore {
+		t.Fatalf("unexpected pagination: %+v", result)
+	}
+}
+
+func TestListCommitsPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("branch") != "main" || q.Get("path") != "docs/guide.md" {
+			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commits":[],"next_cursor":"","has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.ListCommits(nil, ListCommitsOptions{Branch: "main", Path: "docs/guide.md"}); err != nil {
+		t.Fatalf("list commits error: %v", err)
+	}
+}
+
+func TestFileStreamForwardsConditionalHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/file" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Range"); got != "bytes=0-15" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		if got := r.Header.Get("If-None-Match"); got != `"abc"` {
+			t.Fatalf("unexpected If-None-Match: %q", got)
+		}
+		if got := r.Header.Get("If-Modified-Since"); got != "Wed, 21 Oct 2026 07:28:00 GMT" {
+			t.Fatalf("unexpected If-Modified-Since: %q", got)
+		}
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.FileStream(nil, GetFileOptions{
+		Path: "README.md",
+		Headers: FileRequestHeaders{
+			Range:           "bytes=0-15",
+			IfNoneMatch:     `"abc"`,
+			IfModifiedSince: "Wed, 21 Oct 2026 07:28:00 GMT",
+		},
+	})
+	if err != nil {
+		t.Fatalf("file stream error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("expected 206, got %d", resp.StatusCode)
+	}
+}
+
+func TestFileStreamPasses304Through(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.FileStream(nil, GetFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{IfNoneMatch: `"abc"`},
+	})
+	if err != nil {
+		t.Fatalf("expected 304 not to raise: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotModified {
+		t.Fatalf("expected 304, got %d", resp.StatusCode)
+	}
+}
+
+func TestFileStreamPasses416ThroughWithContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Range"); got != "bytes=256-511" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Range", "bytes */128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.FileStream(nil, GetFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=256-511"},
+	})
+	if err != nil {
+		t.Fatalf("expected 416 not to raise: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected 416, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Range"); got != "bytes */128" {
+		t.Fatalf("unexpected content-range: %s", got)
+	}
+}
+
+func TestHeadFileParsesMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Fatalf("expected HEAD, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/file" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("path") != "README.md" {
+			t.Fatalf("expected path=README.md, got %s", r.URL.RawQuery)
+		}
+		w.Header().Set("X-Blob-Sha", "b10b5ha")
+		w.Header().Set("X-Last-Commit-Sha", "c0mm1tsha")
+		w.Header().Set("Content-Length", "128")
+		w.Header().Set("ETag", `"b10b5ha"`)
+		w.Header().Set("Last-Modified", "Wed, 21 Oct 2026 07:28:00 GMT")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	meta, err := repo.HeadFile(nil, HeadFileOptions{Path: "README.md"})
+	if err != nil {
+		t.Fatalf("head file error: %v", err)
+	}
+	if meta.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", meta.StatusCode)
+	}
+	if meta.BlobSHA != "b10b5ha" || meta.LastCommitSHA != "c0mm1tsha" {
+		t.Fatalf("unexpected blob/commit sha: %+v", meta)
+	}
+	if meta.Size != 128 {
+		t.Fatalf("expected size 128, got %d", meta.Size)
+	}
+	if meta.ETag != `"b10b5ha"` {
+		t.Fatalf("unexpected etag: %s", meta.ETag)
+	}
+	if meta.AcceptRanges != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", meta.AcceptRanges)
+	}
+	if meta.ContentType != "application/octet-stream" {
+		t.Fatalf("unexpected content-type: %s", meta.ContentType)
+	}
+	if meta.RawLastModified != "Wed, 21 Oct 2026 07:28:00 GMT" {
+		t.Fatalf("unexpected raw last-modified: %s", meta.RawLastModified)
+	}
+	if meta.LastModified.IsZero() {
+		t.Fatalf("expected parsed last modified")
+	}
+}
+
+func TestHeadFilePreservesRangeStatusAndContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Fatalf("expected HEAD, got %s", r.Method)
+		}
+		if got := r.Header.Get("Range"); got != "bytes=0-15" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Length", "16")
+		w.Header().Set("Content-Range", "bytes 0-15/128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	meta, err := repo.HeadFile(nil, HeadFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=0-15"},
+	})
+	if err != nil {
+		t.Fatalf("head file error: %v", err)
+	}
+	if meta.StatusCode != http.StatusPartialContent {
+		t.Fatalf("expected status 206, got %d", meta.StatusCode)
+	}
+	if meta.Size != 16 {
+		t.Fatalf("expected size 16, got %d", meta.Size)
+	}
+	if meta.ContentRange != "bytes 0-15/128" {
+		t.Fatalf("unexpected content-range: %s", meta.ContentRange)
+	}
+	if meta.AcceptRanges != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", meta.AcceptRanges)
+	}
+}
+
+func TestHeadFilePreservesUnsatisfiedRangeStatusAndContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Fatalf("expected HEAD, got %s", r.Method)
+		}
+		if got := r.Header.Get("Range"); got != "bytes=256-511" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Range", "bytes */128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	meta, err := repo.HeadFile(nil, HeadFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=256-511"},
+	})
+	if err != nil {
+		t.Fatalf("head file error: %v", err)
+	}
+	if meta.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected status 416, got %d", meta.StatusCode)
+	}
+	if meta.ContentRange != "bytes */128" {
+		t.Fatalf("unexpected content-range: %s", meta.ContentRange)
+	}
+	if meta.AcceptRanges != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", meta.AcceptRanges)
+	}
+}
+
+func TestHeadFilePreservesConditionalStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		headers FileRequestHeaders
+	}{
+		{
+			name:    "not modified",
+			status:  http.StatusNotModified,
+			headers: FileRequestHeaders{IfNoneMatch: `"abc"`},
+		},
+		{
+			name:    "precondition failed",
+			status:  http.StatusPreconditionFailed,
+			headers: FileRequestHeaders{IfMatch: `"abc"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodHead {
+					t.Fatalf("expected HEAD, got %s", r.Method)
+				}
+				if tt.headers.IfNoneMatch != "" {
+					if got := r.Header.Get("If-None-Match"); got != tt.headers.IfNoneMatch {
+						t.Fatalf("unexpected If-None-Match header: %q", got)
+					}
+				}
+				if tt.headers.IfMatch != "" {
+					if got := r.Header.Get("If-Match"); got != tt.headers.IfMatch {
+						t.Fatalf("unexpected If-Match header: %q", got)
+					}
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer server.Close()
+
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatalf("client error: %v", err)
+			}
+			repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+			meta, err := repo.HeadFile(nil, HeadFileOptions{
+				Path:    "README.md",
+				Headers: tt.headers,
+			})
+			if err != nil {
+				t.Fatalf("head file error: %v", err)
+			}
+			if meta.StatusCode != tt.status {
+				t.Fatalf("expected status %d, got %d", tt.status, meta.StatusCode)
+			}
+		})
+	}
+}
+
 func TestGrepRequestBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/grep" {

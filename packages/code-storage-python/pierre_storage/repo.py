@@ -3,6 +3,7 @@
 import contextlib
 import warnings
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Literal, Optional
 from urllib.parse import urlencode
@@ -31,6 +32,8 @@ from pierre_storage.types import (
     DeleteTagResult,
     DiffFileState,
     FileDiff,
+    FileMetadata,
+    FileRequestHeaders,
     FileSource,
     FileWithMetadata,
     FilteredFile,
@@ -53,6 +56,7 @@ from pierre_storage.types import (
     RefUpdate,
     RestoreCommitResult,
     TagInfo,
+    TreeEntry,
 )
 from pierre_storage.version import get_user_agent
 
@@ -75,7 +79,12 @@ def _build_jwt_options(
 class StreamingResponse:
     """Stream wrapper that keeps the HTTP client alive until closed."""
 
-    def __init__(self, response: httpx.Response, client: httpx.AsyncClient, stream_context: Optional[contextlib.AbstractAsyncContextManager] = None) -> None:
+    def __init__(
+        self,
+        response: httpx.Response,
+        client: httpx.AsyncClient,
+        stream_context: Optional[contextlib.AbstractAsyncContextManager] = None,
+    ) -> None:
         self._response = response
         self._client = client
         self._stream_context = stream_context
@@ -147,6 +156,66 @@ def normalize_optional_string(value: Optional[str]) -> Optional[str]:
 
     normalized = value.strip()
     return normalized or None
+
+
+_CONDITIONAL_HEADER_NAMES = {
+    "range": "Range",
+    "if_match": "If-Match",
+    "if_none_match": "If-None-Match",
+    "if_modified_since": "If-Modified-Since",
+    "if_unmodified_since": "If-Unmodified-Since",
+    "if_range": "If-Range",
+}
+
+_FILE_RESPONSE_ALLOWED_STATUS_CODES = (200, 206, 304, 412, 416)
+
+
+def build_conditional_headers(
+    headers: Optional[FileRequestHeaders],
+) -> Dict[str, str]:
+    """Convert SDK header dict (snake_case) to HTTP headers (canonical case)."""
+    if not headers:
+        return {}
+    out: Dict[str, str] = {}
+    for key, http_name in _CONDITIONAL_HEADER_NAMES.items():
+        value = headers.get(key)  # type: ignore[call-overload]
+        if isinstance(value, str) and value:
+            out[http_name] = value
+    return out
+
+
+def parse_file_metadata_headers(response: httpx.Response) -> FileMetadata:
+    """Parse FileMetadata from HEAD or GET response headers."""
+    headers = response.headers
+    metadata: FileMetadata = {
+        "status_code": response.status_code,
+        "blob_sha": headers.get("x-blob-sha", ""),
+        "last_commit_sha": headers.get("x-last-commit-sha", ""),
+    }
+    content_length = headers.get("content-length")
+    if content_length is not None and content_length != "":
+        with contextlib.suppress(TypeError, ValueError):
+            metadata["size"] = int(content_length)
+    etag = headers.get("etag")
+    if etag:
+        metadata["etag"] = etag
+    raw_last_modified = headers.get("last-modified")
+    if raw_last_modified:
+        metadata["raw_last_modified"] = raw_last_modified
+        with contextlib.suppress(TypeError, ValueError):
+            parsed = parsedate_to_datetime(raw_last_modified)
+            if parsed is not None:
+                metadata["last_modified"] = parsed
+    accept_ranges = headers.get("accept-ranges")
+    if accept_ranges:
+        metadata["accept_ranges"] = accept_ranges
+    content_range = headers.get("content-range")
+    if content_range:
+        metadata["content_range"] = content_range
+    content_type = headers.get("content-type")
+    if content_type:
+        metadata["content_type"] = content_type
+    return metadata
 
 
 def normalize_optional_signature(
@@ -323,6 +392,8 @@ class RepoImpl:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> StreamingResponse:
         """Get file content as streaming response.
@@ -331,6 +402,9 @@ class RepoImpl:
             path: File path to retrieve
             ref: Git ref (branch, tag, or commit SHA)
             ephemeral: Whether to read from the ephemeral namespace
+            ephemeral_base: Whether to resolve the base branch under the ephemeral namespace
+            headers: Optional ``Range``/conditional headers forwarded to the
+                server. 206/304/412/416 are passed through without raising.
             ttl: Token TTL in seconds
 
         Returns:
@@ -344,29 +418,82 @@ class RepoImpl:
             params["ref"] = ref
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if ephemeral_base is not None:
+            params["ephemeral_base"] = "true" if ephemeral_base else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
         if params:
             url += f"?{urlencode(params)}"
+
+        request_headers: Dict[str, str] = {
+            "Authorization": f"Bearer {jwt}",
+            "Code-Storage-Agent": get_user_agent(),
+        }
+        request_headers.update(build_conditional_headers(headers))
 
         client = httpx.AsyncClient()
         try:
             stream_context = client.stream(
                 "GET",
                 url,
-                headers={
-                    "Authorization": f"Bearer {jwt}",
-                    "Code-Storage-Agent": get_user_agent(),
-                },
+                headers=request_headers,
                 timeout=30.0,
             )
             response = await stream_context.__aenter__()
-            response.raise_for_status()
+            # Range and conditional outcomes should remain inspectable.
+            if response.status_code not in _FILE_RESPONSE_ALLOWED_STATUS_CODES:
+                response.raise_for_status()
         except Exception:
             await client.aclose()
             raise
 
         return StreamingResponse(response, client, stream_context)
+
+    async def head_file(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
+        ttl: Optional[int] = None,
+    ) -> FileMetadata:
+        """Issue ``HEAD /repos/file`` and return parsed response metadata.
+
+        Returns blob SHA, last-commit SHA, size, ETag and Last-Modified
+        without downloading the file body.
+        """
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+
+        params = {"path": path}
+        if ref:
+            params["ref"] = ref
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
+        if ephemeral_base is not None:
+            params["ephemeral_base"] = "true" if ephemeral_base else "false"
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
+        if params:
+            url += f"?{urlencode(params)}"
+
+        request_headers: Dict[str, str] = {
+            "Authorization": f"Bearer {jwt}",
+            "Code-Storage-Agent": get_user_agent(),
+        }
+        request_headers.update(build_conditional_headers(headers))
+
+        async with httpx.AsyncClient() as client:
+            response = await client.head(
+                url,
+                headers=request_headers,
+                timeout=30.0,
+            )
+            if response.status_code not in _FILE_RESPONSE_ALLOWED_STATUS_CODES:
+                response.raise_for_status()
+            return parse_file_metadata_headers(response)
 
     async def get_archive_stream(
         self,
@@ -433,6 +560,10 @@ class RepoImpl:
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesResult:
         """List files in repository.
@@ -440,19 +571,32 @@ class RepoImpl:
         Args:
             ref: Git ref (branch, tag, or commit SHA)
             ephemeral: Whether to read from the ephemeral namespace
+            path: Optional repository-relative subtree to list
+            recursive: When false, only direct children are returned
+            cursor: Pagination cursor returned by a previous call
+            limit: Maximum number of entries to return (default 1000, max 5000)
             ttl: Token TTL in seconds
 
         Returns:
-            List of file paths and ref
+            Paths, structured ``entries`` (blobs+trees+symlinks+submodules),
+            resolved ref, and pagination state.
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params = {}
+        params: Dict[str, str] = {}
         if ref:
             params["ref"] = ref
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if path:
+            params["path"] = path
+        if recursive is not None:
+            params["recursive"] = "true" if recursive else "false"
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = str(limit)
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/files"
         if params:
@@ -469,13 +613,37 @@ class RepoImpl:
             )
             response.raise_for_status()
             data = response.json()
-            return {"paths": data["paths"], "ref": data["ref"]}
+
+            entries: List[TreeEntry] = []
+            for entry in data.get("entries") or []:
+                entries.append(
+                    {
+                        "path": entry["path"],
+                        "type": entry["type"],
+                        "mode": entry["mode"],
+                    }
+                )
+
+            result: ListFilesResult = {
+                "paths": list(data.get("paths") or []),
+                "ref": data["ref"],
+                "entries": entries,
+                "has_more": bool(data.get("has_more", False)),
+            }
+            next_cursor = data.get("next_cursor")
+            if next_cursor:
+                result["next_cursor"] = next_cursor
+            return result
 
     async def list_files_with_metadata(
         self,
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesWithMetadataResult:
         """List files with metadata in repository.
@@ -483,19 +651,32 @@ class RepoImpl:
         Args:
             ref: Git ref (branch, tag, or commit SHA)
             ephemeral: Whether to read from the ephemeral namespace
+            path: Optional repository-relative subtree to list
+            recursive: Accepted for API symmetry; listings are always recursive
+            cursor: Pagination cursor from a previous response
+            limit: Maximum number of files to return (default 200, max 1000)
             ttl: Token TTL in seconds
 
         Returns:
-            Files with mode/size/last commit metadata and resolved ref
+            Files with mode/size/type/last commit metadata, resolved ref and
+            pagination state.
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params = {}
+        params: Dict[str, str] = {}
         if ref:
             params["ref"] = ref
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if path:
+            params["path"] = path
+        if recursive is not None:
+            params["recursive"] = "true" if recursive else "false"
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = str(limit)
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/files/metadata"
         if params:
@@ -513,15 +694,18 @@ class RepoImpl:
             response.raise_for_status()
             data = response.json()
 
-            files: List[FileWithMetadata] = [
-                {
+            files: List[FileWithMetadata] = []
+            for file in data["files"]:
+                entry: FileWithMetadata = {
                     "path": file["path"],
                     "mode": file["mode"],
                     "size": file["size"],
                     "last_commit_sha": file["last_commit_sha"],
                 }
-                for file in data["files"]
-            ]
+                file_type = file.get("type")
+                if file_type:
+                    entry["type"] = file_type
+                files.append(entry)
 
             commits: Dict[str, CommitMetadata] = {}
             for sha, commit in data["commits"].items():
@@ -537,7 +721,16 @@ class RepoImpl:
                     "message": commit["message"],
                 }
 
-            return {"files": files, "commits": commits, "ref": data["ref"]}
+            result: ListFilesWithMetadataResult = {
+                "files": files,
+                "commits": commits,
+                "ref": data["ref"],
+                "has_more": bool(data.get("has_more", False)),
+            }
+            next_cursor = data.get("next_cursor")
+            if next_cursor:
+                result["next_cursor"] = next_cursor
+            return result
 
     async def list_branches(
         self,
@@ -1075,6 +1268,7 @@ class RepoImpl:
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in repository.
@@ -1084,6 +1278,8 @@ class RepoImpl:
             cursor: Pagination cursor
             limit: Maximum number of commits to return
             ephemeral: When true, resolve `branch` under the ephemeral namespace
+            path: Optional repository-relative path to scope the history to
+                commits that touched that file or subtree.
             ttl: Token TTL in seconds
 
         Returns:
@@ -1101,6 +1297,8 @@ class RepoImpl:
             params["limit"] = str(limit)
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if path:
+            params["path"] = path
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/commits"
         if params:
@@ -1236,10 +1434,7 @@ class RepoImpl:
         if detect_moves:
             params.append(("detect_moves", "true"))
 
-        url = (
-            f"{self.api_base_url}/api/v{self.api_version}/repos/blame"
-            f"?{urlencode(params)}"
-        )
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/blame?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1264,9 +1459,7 @@ class RepoImpl:
                     "original_path": entry["original_path"],
                     "author_name": entry["author_name"],
                     "author_email": entry["author_email"],
-                    "author_time": datetime.fromisoformat(
-                        author_time_raw.replace("Z", "+00:00")
-                    ),
+                    "author_time": datetime.fromisoformat(author_time_raw.replace("Z", "+00:00")),
                     "raw_author_time": author_time_raw,
                     "committer_name": entry["committer_name"],
                     "committer_email": entry["committer_email"],

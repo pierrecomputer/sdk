@@ -183,6 +183,17 @@ const resp = await repo.getFileStream({
 const text = await resp.text();
 console.log(text);
 
+// Fetch metadata or validate cached/ranged content without a body
+const meta = await repo.headFile({
+  path: 'README.md',
+  ref: 'main',
+  headers: {
+    ifNoneMatch: '"b10b5ha"',
+    range: 'bytes=0-1023',
+  },
+});
+console.log(meta.status, meta.etag, meta.contentRange);
+
 // Download repository archive (streaming tar.gz)
 const archiveResp = await repo.getArchiveStream({
   ref: 'main',
@@ -330,8 +341,9 @@ const mergeResult = await repo.merge({
   author: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
   committer: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
   allowUnrelatedHistories: false, // optional
+  squash: false, // optional; incompatible with ff_only
 });
-console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', or 'unknown'
+console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', 'squash', or 'unknown'
 console.log(mergeResult.commitSha, mergeResult.target.newSha);
 
 // repo.merge() requires sourceBranch, targetBranch, and strategy. It returns
@@ -521,12 +533,23 @@ interface RepoOptions {
   createdAt?: string; // Defaults to ""
 }
 
+type MergeResultLabel =
+  | 'merge_commit'
+  | 'fast_forward'
+  | 'no_op'
+  | 'squash'
+  | 'unknown';
+
 interface Repo {
   id: string;
+  defaultBranch: string;
+  createdAt: string;
   getRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
   getEphemeralRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
+  getImportRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
 
   getFileStream(options: GetFileOptions): Promise<Response>;
+  headFile(options: HeadFileOptions): Promise<FileMetadata>;
   getArchiveStream(options?: ArchiveOptions): Promise<Response>;
   listFiles(options?: ListFilesOptions): Promise<ListFilesResult>;
   listFilesWithMetadata(
@@ -542,21 +565,53 @@ interface Repo {
   deleteNote(options: DeleteNoteOptions): Promise<NoteWriteResult>;
   getBranchDiff(options: GetBranchDiffOptions): Promise<GetBranchDiffResult>;
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
+  restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
+  merge(options: MergeOptions): Promise<MergeResult>;
 }
 
 interface GetRemoteURLOptions {
-  permissions?: ('git:write' | 'git:read' | 'repo:write')[];
+  permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
   ttl?: number; // Time to live in seconds (default: 31536000 = 1 year)
+  refPolicies?: Array<{ pattern: string; ops?: string[] }>;
+  /** @deprecated Use refPolicies instead. */
+  ops?: string[];
 }
 
 // Git operation interfaces
 interface GetFileOptions {
   path: string;
   ref?: string; // Branch, tag, or commit SHA
+  ephemeral?: boolean;
+  ephemeralBase?: boolean;
+  headers?: FileRequestHeaders;
   ttl?: number;
 }
 
 // getFileStream() returns a standard Fetch Response for streaming bytes
+
+type HeadFileOptions = GetFileOptions;
+
+interface FileRequestHeaders {
+  range?: string;
+  ifMatch?: string;
+  ifNoneMatch?: string;
+  ifModifiedSince?: string;
+  ifUnmodifiedSince?: string;
+  ifRange?: string;
+}
+
+interface FileMetadata {
+  status?: number; // 200, 206, 304, 412, 416, etc.
+  blobSha: string;
+  lastCommitSha: string;
+  size?: number;
+  etag?: string;
+  lastModified?: Date;
+  rawLastModified?: string;
+  acceptRanges?: string;
+  contentRange?: string; // Present on 206 and 416 ranged HEAD responses
+  contentType?: string;
+}
 
 interface ArchiveOptions {
   ref?: string; // Branch, tag, or commit SHA (defaults to default branch)
@@ -572,6 +627,10 @@ interface ArchiveOptions {
 interface ListFilesOptions {
   ref?: string; // Branch, tag, or commit SHA
   ephemeral?: boolean; // Resolve ref in ephemeral namespace
+  path?: string;
+  recursive?: boolean;
+  cursor?: string;
+  limit?: number;
   ttl?: number;
 }
 
@@ -580,14 +639,29 @@ interface ListFilesResponse {
   ref: string; // The resolved reference
 }
 
+type TreeEntryType = 'blob' | 'tree' | 'symlink' | 'submodule';
+
+interface TreeEntry {
+  path: string;
+  type: TreeEntryType;
+  mode: string;
+}
+
 interface ListFilesResult {
   paths: string[];
   ref: string;
+  entries: TreeEntry[];
+  nextCursor?: string;
+  hasMore: boolean;
 }
 
 interface ListFilesWithMetadataOptions {
   ref?: string; // Branch, tag, or commit SHA
   ephemeral?: boolean; // Resolve ref in ephemeral namespace
+  path?: string;
+  recursive?: boolean;
+  cursor?: string;
+  limit?: number;
   ttl?: number;
 }
 
@@ -596,6 +670,7 @@ interface FileWithMetadata {
   mode: string;
   size: number;
   lastCommitSha: string;
+  type?: TreeEntryType;
 }
 
 interface CommitMetadata {
@@ -609,6 +684,8 @@ interface ListFilesWithMetadataResult {
   files: FileWithMetadata[];
   commits: Record<string, CommitMetadata>;
   ref: string;
+  nextCursor?: string;
+  hasMore: boolean;
 }
 
 interface GetNoteOptions {
@@ -688,6 +765,7 @@ interface ListCommitsOptions {
   cursor?: string;
   limit?: number;
   ephemeral?: boolean;
+  path?: string;
   ttl?: number;
 }
 
@@ -762,10 +840,13 @@ interface GetBranchDiffOptions {
   ttl?: number;
   ephemeral?: boolean;
   ephemeralBase?: boolean;
+  paths?: string[];
 }
 
 interface GetCommitDiffOptions {
   sha: string;
+  baseSha?: string;
+  paths?: string[];
   ttl?: number;
 }
 
@@ -798,6 +879,40 @@ interface GetCommitDiffResult {
   files: FileDiff[];
   filteredFiles: FilteredFile[];
 }
+
+type MergeStrategy = 'merge' | 'ff_only' | 'ff_prefer';
+
+interface MergeOptions {
+  sourceBranch: string;
+  sourceIsEphemeral?: boolean;
+  targetBranch: string;
+  targetIsEphemeral?: boolean;
+  expectedTargetSha?: string;
+  commitMessage?: string;
+  author?: CommitSignature;
+  committer?: CommitSignature;
+  strategy: MergeStrategy;
+  allowUnrelatedHistories?: boolean;
+  squash?: boolean; // Incompatible with ff_only
+  ttl?: number;
+  refPolicies?: Array<{ pattern: string; ops?: string[] }>;
+}
+
+interface MergeResult {
+  result: MergeResultLabel;
+  commitSha: string;
+  treeSha: string;
+  source: { branch: string; ephemeral: boolean; sha: string };
+  target: {
+    branch: string;
+    ephemeral: boolean;
+    oldSha: string;
+    newSha: string;
+  };
+  mergeBaseSha?: string;
+  promotedCommits: number;
+}
+
 interface DiffStats {
   files: number;
   additions: number;
@@ -867,6 +982,8 @@ interface RestoreCommitOptions {
   expectedHeadSha?: string;
   author: CommitSignature;
   committer?: CommitSignature;
+  ttl?: number;
+  refPolicies?: Array<{ pattern: string; ops?: string[] }>;
 }
 
 interface RestoreCommitResult {
