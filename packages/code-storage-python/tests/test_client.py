@@ -1133,6 +1133,36 @@ class TestPublicJWTHelper:
         payload = jwt.decode(token, options={"verify_signature": False})
         assert "ops" not in payload
 
+    def test_generate_jwt_with_refs(self, test_key: str) -> None:
+        """Test JWT generation with per-ref policy rules."""
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+            refs=[
+                {"pattern": "refs/heads/main", "ops": ["no-push"]},
+                {"pattern": "*", "ops": ["no-force-push"]},
+            ],
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert payload["refs"] == [
+            ["refs/heads/main", ["no-push"]],
+            ["*", ["no-force-push"]],
+        ]
+        assert "ops" not in payload
+
+    def test_generate_jwt_without_refs(self, test_key: str) -> None:
+        """Test JWT generation omits refs when not provided."""
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert "refs" not in payload
+
     def test_generate_jwt_default_ttl(self, test_key: str) -> None:
         """Test JWT generation uses 1 year default TTL."""
         token = generate_jwt(

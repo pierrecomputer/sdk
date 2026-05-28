@@ -35,16 +35,31 @@ type Op = string
 
 const (
 	OpNoForcePush Op = "no-force-push"
+	OpNoPush      Op = "no-push"
 )
 
 // Ops is a list of policy operations.
 type Ops []Op
 
+// RefPolicy is a single ordered ref-matching policy rule (first match wins).
+type RefPolicy struct {
+	Pattern string
+	Ops     Ops
+}
+
+// RefPolicyList is an ordered list of per-ref policy rules for the JWT `refs` claim.
+type RefPolicyList []RefPolicy
+
 // RemoteURLOptions configure token generation for remote URLs.
 type RemoteURLOptions struct {
 	Permissions []Permission
 	TTL         time.Duration
-	Ops         Ops
+	// Ops is a repo-wide policy ops list.
+	//
+	// Deprecated: Use RefPolicies instead.
+	Ops Ops
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // InvocationOptions holds common request options.
@@ -258,6 +273,8 @@ type ArchiveOptions struct {
 type PullUpstreamOptions struct {
 	InvocationOptions
 	Ref string
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // TreeEntryType identifies the kind of object at a tree entry.
@@ -368,6 +385,8 @@ type CreateBranchOptions struct {
 	TargetBranch      string
 	BaseIsEphemeral   bool
 	TargetIsEphemeral bool
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CreateBranchResult describes branch creation result.
@@ -383,6 +402,8 @@ type DeleteBranchOptions struct {
 	InvocationOptions
 	Name      string
 	Ephemeral *bool
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteBranchResult describes branch deletion result.
@@ -416,6 +437,8 @@ type MergeOptions struct {
 	AllowUnrelatedHistories bool
 	// Squash is incompatible with MergeStrategyFFOnly.
 	Squash bool
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // MergeResultStatus describes a merge operation outcome.
@@ -481,6 +504,8 @@ type CreateTagOptions struct {
 	InvocationOptions
 	Name   string
 	Target string
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CreateTagResult describes tag creation result.
@@ -494,6 +519,8 @@ type CreateTagResult struct {
 type DeleteTagOptions struct {
 	InvocationOptions
 	Name string
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteTagResult describes tag deletion result.
@@ -604,6 +631,8 @@ type CreateNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // AppendNoteOptions configures note append.
@@ -613,6 +642,8 @@ type AppendNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // DeleteNoteOptions configures note delete.
@@ -621,6 +652,8 @@ type DeleteNoteOptions struct {
 	SHA            string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // NoteWriteResult describes note write response.
@@ -859,6 +892,8 @@ type CommitOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // CommitFromDiffOptions configures diff commit.
@@ -873,6 +908,8 @@ type CommitFromDiffOptions struct {
 	EphemeralBase   bool
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // RestoreCommitOptions configures restore commit.
@@ -884,6 +921,8 @@ type RestoreCommitOptions struct {
 	ExpectedHeadSHA string
 	Author          CommitSignature
 	Committer       *CommitSignature
+	// RefPolicies is evaluated in declaration order. The first matching rule wins.
+	RefPolicies RefPolicyList
 }
 
 // RestoreCommitResult describes restore commit.

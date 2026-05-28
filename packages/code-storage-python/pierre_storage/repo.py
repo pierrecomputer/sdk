@@ -52,6 +52,7 @@ from pierre_storage.types import (
     MergeStrategy,
     NoteReadResult,
     NoteWriteResult,
+    Refs,
     RefUpdate,
     RestoreCommitResult,
     TagInfo,
@@ -61,6 +62,18 @@ from pierre_storage.version import get_user_agent
 
 DEFAULT_TOKEN_TTL_SECONDS = 3600  # 1 hour
 ZERO_DATETIME_UTC = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _build_jwt_options(
+    permissions: List[str],
+    ttl: int,
+    ref_policies: Optional[Refs] = None,
+) -> Dict[str, Any]:
+    """Assemble the JWT options dict, attaching ref policies when supplied."""
+    options: Dict[str, Any] = {"permissions": permissions, "ttl": ttl}
+    if ref_policies:
+        options["refs"] = ref_policies
+    return options
 
 
 class StreamingResponse:
@@ -271,17 +284,26 @@ class RepoImpl:
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
-            ops: List of policy operations (e.g., ["no-force-push"])
+            ops: Deprecated. Repo-wide policy operations. Use
+                ``ref_policies=[{"pattern": "*", "ops": [...]}]`` instead.
+            ref_policies: Ordered per-ref policy rules (first match wins)
 
         Returns:
             Git remote URL with embedded JWT
         """
+        if ops is not None:
+            warnings.warn(
+                "ops is deprecated. Use ref_policies=[{'pattern': '*', 'ops': [...]}] instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         options: Dict[str, Any] = {}
         if permissions is not None:
             options["permissions"] = permissions
@@ -289,6 +311,8 @@ class RepoImpl:
             options["ttl"] = ttl
         if ops is not None:
             options["ops"] = ops
+        if ref_policies is not None:
+            options["refs"] = ref_policies
 
         jwt_token = self.generate_jwt(self._id, options if options else None)
         url = f"https://t:{jwt_token}@{self.storage_base_url}/{self._id}.git"
@@ -300,18 +324,29 @@ class RepoImpl:
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get import remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
-            ops: List of policy operations (e.g., ["no-force-push"])
+            ops: Deprecated. See :meth:`get_remote_url` for details. Use
+                ``ref_policies=[{"pattern": "*", "ops": [...]}]`` instead.
+            ref_policies: Ordered per-ref policy rules (first match wins)
 
         Returns:
             Git remote URL with embedded JWT pointing to import namespace
         """
-        url = await self.get_remote_url(permissions=permissions, ttl=ttl, ops=ops)
+        if ops is not None:
+            warnings.warn(
+                "ops is deprecated. Use ref_policies=[{'pattern': '*', 'ops': [...]}] instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        url = await self.get_remote_url(
+            permissions=permissions, ttl=ttl, ops=ops, ref_policies=ref_policies
+        )
         return url.replace(".git", "+import.git")
 
     async def get_ephemeral_remote_url(
@@ -320,18 +355,29 @@ class RepoImpl:
         permissions: Optional[list[str]] = None,
         ttl: Optional[int] = None,
         ops: Optional[list[str]] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> str:
         """Get ephemeral remote URL for Git operations.
 
         Args:
             permissions: List of permissions (e.g., ["git:write", "git:read"])
             ttl: Token TTL in seconds
-            ops: List of policy operations (e.g., ["no-force-push"])
+            ops: Deprecated. See :meth:`get_remote_url` for details. Use
+                ``ref_policies=[{"pattern": "*", "ops": [...]}]`` instead.
+            ref_policies: Ordered per-ref policy rules (first match wins)
 
         Returns:
             Git remote URL with embedded JWT pointing to ephemeral namespace
         """
-        url = await self.get_remote_url(permissions=permissions, ttl=ttl, ops=ops)
+        if ops is not None:
+            warnings.warn(
+                "ops is deprecated. Use ref_policies=[{'pattern': '*', 'ops': [...]}] instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        url = await self.get_remote_url(
+            permissions=permissions, ttl=ttl, ops=ops, ref_policies=ref_policies
+        )
         return url.replace(".git", "+ephemeral.git")
 
     async def get_file_stream(
@@ -745,6 +791,7 @@ class RepoImpl:
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CreateBranchResult:
         """Create or promote a branch.
 
@@ -776,7 +823,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            {"permissions": ["git:write"], "ttl": ttl_value},
+            _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
         payload: Dict[str, Any] = {
@@ -809,6 +856,8 @@ class RepoImpl:
                     error_data = response.json()
                     if isinstance(error_data, dict) and error_data.get("message"):
                         message = str(error_data["message"])
+                    elif isinstance(error_data, dict) and error_data.get("error"):
+                        message = str(error_data["error"])
                     else:
                         message = f"{message} with HTTP {response.status_code}"
                 except Exception:
@@ -833,6 +882,7 @@ class RepoImpl:
         name: str,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> DeleteBranchResult:
         """Delete a branch.
 
@@ -848,7 +898,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            {"permissions": ["git:write"], "ttl": ttl_value},
+            _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
@@ -906,6 +956,7 @@ class RepoImpl:
         allow_unrelated_histories: Optional[bool] = None,
         squash: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""
         source_branch_clean = source_branch.strip()
@@ -958,7 +1009,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            {"permissions": ["git:write"], "ttl": ttl_value},
+            _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge"
@@ -1066,6 +1117,7 @@ class RepoImpl:
         name: str,
         target: str,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CreateTagResult:
         """Create a tag."""
         name_clean = name.strip()
@@ -1081,7 +1133,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            {"permissions": ["git:write"], "ttl": ttl_value},
+            _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
         payload = {"name": name_clean, "target": target_clean}
@@ -1125,6 +1177,7 @@ class RepoImpl:
         *,
         name: str,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> DeleteTagResult:
         """Delete a tag."""
         name_clean = name.strip()
@@ -1136,7 +1189,7 @@ class RepoImpl:
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
             self._id,
-            {"permissions": ["git:read", "git:write"], "ttl": ttl_value},
+            _build_jwt_options(["git:read", "git:write"], ttl_value, ref_policies),
         )
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
@@ -1457,6 +1510,7 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Create a git note."""
         return await self._write_note(
@@ -1467,6 +1521,7 @@ class RepoImpl:
             expected_ref_sha=expected_ref_sha,
             author=author,
             ttl=ttl,
+            ref_policies=ref_policies,
         )
 
     async def append_note(
@@ -1477,6 +1532,7 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Append to a git note."""
         return await self._write_note(
@@ -1487,6 +1543,7 @@ class RepoImpl:
             expected_ref_sha=expected_ref_sha,
             author=author,
             ttl=ttl,
+            ref_policies=ref_policies,
         )
 
     async def delete_note(
@@ -1496,6 +1553,7 @@ class RepoImpl:
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Delete a git note."""
         sha_clean = sha.strip()
@@ -1503,7 +1561,7 @@ class RepoImpl:
             raise ValueError("delete_note sha is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, {"permissions": ["git:write"], "ttl": ttl})
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         payload: Dict[str, Any] = {"sha": sha_clean}
         if expected_ref_sha and expected_ref_sha.strip():
@@ -1814,18 +1872,20 @@ class RepoImpl:
         *,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository.
 
         Args:
             ref: Git ref to pull
             ttl: Token TTL in seconds
+            ref_policies: Ordered per-ref policy rules (first match wins)
 
         Raises:
             ApiError: If pull fails
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, {"permissions": ["git:write"], "ttl": ttl})
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         body = {}
         if ref:
@@ -1859,6 +1919,7 @@ class RepoImpl:
         expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> RestoreCommitResult:
         """Restore a previous commit.
 
@@ -1894,7 +1955,7 @@ class RepoImpl:
             raise ValueError("restoreCommit author name and email are required")
 
         ttl = ttl or resolve_commit_ttl_seconds(None)
-        jwt = self.generate_jwt(self._id, {"permissions": ["git:write"], "ttl": ttl})
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         metadata: Dict[str, Any] = {
             "target_branch": target_branch,
@@ -1998,6 +2059,7 @@ class RepoImpl:
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CommitBuilder:
         """Create a new commit builder.
 
@@ -2037,7 +2099,7 @@ class RepoImpl:
         def get_auth_token() -> str:
             return self.generate_jwt(
                 self._id,
-                {"permissions": ["git:write"], "ttl": ttl},
+                _build_jwt_options(["git:write"], ttl, ref_policies),
             )
 
         return CommitBuilderImpl(
@@ -2060,6 +2122,7 @@ class RepoImpl:
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CommitResult:
         """Create a commit by applying a unified diff."""
         if diff is None:
@@ -2087,7 +2150,7 @@ class RepoImpl:
         def get_auth_token() -> str:
             return self.generate_jwt(
                 self._id,
-                {"permissions": ["git:write"], "ttl": ttl_value},
+                _build_jwt_options(["git:write"], ttl_value, ref_policies),
             )
 
         return await send_diff_commit_request(
@@ -2108,6 +2171,7 @@ class RepoImpl:
         expected_ref_sha: Optional[str],
         author: Optional[CommitSignature],
         ttl: Optional[int],
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         sha_clean = sha.strip()
         if not sha_clean:
@@ -2118,7 +2182,7 @@ class RepoImpl:
             raise ValueError(f"{action_label} note is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        jwt = self.generate_jwt(self._id, {"permissions": ["git:write"], "ttl": ttl})
+        jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         payload: Dict[str, Any] = {
             "sha": sha_clean,

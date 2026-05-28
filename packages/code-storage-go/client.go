@@ -470,6 +470,9 @@ func (c *Client) generateJWT(repoID string, options RemoteURLOptions) (string, e
 		"iat":    issuedAt.Unix(),
 		"exp":    issuedAt.Add(ttl).Unix(),
 	}
+	if len(options.RefPolicies) > 0 {
+		claims["refs"] = encodeRefsClaim(options.RefPolicies)
+	}
 	if len(options.Ops) > 0 {
 		claims["ops"] = options.Ops
 	}

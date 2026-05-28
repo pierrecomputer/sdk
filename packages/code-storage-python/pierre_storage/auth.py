@@ -1,10 +1,22 @@
 """JWT authentication utilities for Pierre Git Storage SDK."""
 
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import jwt
 from cryptography.hazmat.primitives import serialization
+
+from pierre_storage.types import Refs
+
+
+def encode_refs_claim(refs: Refs) -> List[List[Union[str, List[str]]]]:
+    """Encode per-ref policy rules for the JWT ``refs`` claim."""
+    out: List[List[Union[str, List[str]]]] = []
+    for rule in refs:
+        pattern = rule["pattern"]
+        ops = rule.get("ops")
+        out.append([pattern, list(ops) if ops is not None else []])
+    return out
 
 
 def generate_jwt(
@@ -14,6 +26,7 @@ def generate_jwt(
     scopes: Optional[List[str]] = None,
     ttl: int = 31536000,  # 1 year default
     ops: Optional[List[str]] = None,
+    refs: Optional[Refs] = None,
 ) -> str:
     """Generate a JWT token for Git storage authentication.
 
@@ -24,6 +37,7 @@ def generate_jwt(
         scopes: List of permission scopes (defaults to ['git:write', 'git:read'])
         ttl: Time-to-live in seconds (defaults to 1 year)
         ops: List of policy operations (e.g., ['no-force-push'])
+        refs: Ordered per-ref policy rules (first match wins)
 
     Returns:
         Signed JWT token string
@@ -43,6 +57,8 @@ def generate_jwt(
         "iat": now,
         "exp": now + ttl,
     }
+    if refs:
+        payload["refs"] = encode_refs_claim(refs)
     if ops:
         payload["ops"] = ops
 

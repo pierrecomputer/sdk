@@ -50,14 +50,36 @@ export type ValidAPIVersion = 1;
 /** A policy operation included in the JWT. */
 export type Op = string;
 
-export const OP_NO_FORCE_PUSH: Op = 'no-force-push';
+export const OP_NO_FORCE_PUSH: Op = "no-force-push";
+
+export const OP_NO_PUSH: Op = "no-push";
 
 /** A list of policy operations. */
 export type Ops = Op[];
 
-export interface GetRemoteURLOptions {
-  permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
+/** A single ordered ref-matching policy rule (first match wins). */
+export interface RefPolicy {
+  pattern: string;
+  ops?: Ops;
+}
+
+/** Ordered per-ref policy rules for the JWT `refs` claim. */
+export type RefPolicies = RefPolicy[];
+
+/** Optional per-ref policies that can be attached to a minted JWT for any ref-mutating call. */
+export interface PolicyOptions {
+  /** Per-ref policy rules evaluated in declaration order (first match wins). */
+  refPolicies?: RefPolicies;
+}
+
+export interface GetRemoteURLOptions extends PolicyOptions {
+  permissions?: ("git:write" | "git:read" | "repo:write" | "org:read")[];
   ttl?: number;
+  /**
+   * Repo-wide policy ops.
+   *
+   * @deprecated Use `refPolicies` instead.
+   */
   ops?: Ops;
 }
 
@@ -74,7 +96,7 @@ export interface Repo {
   getArchiveStream(options?: ArchiveOptions): Promise<Response>;
   listFiles(options?: ListFilesOptions): Promise<ListFilesResult>;
   listFilesWithMetadata(
-    options?: ListFilesWithMetadataOptions
+    options?: ListFilesWithMetadataOptions,
   ): Promise<ListFilesWithMetadataResult>;
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
   listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
@@ -97,7 +119,7 @@ export interface Repo {
   deleteBranch(options: DeleteBranchOptions): Promise<DeleteBranchResult>;
   createCommit(options: CreateCommitOptions): CommitBuilder;
   createCommitFromDiff(
-    options: CreateCommitFromDiffOptions
+    options: CreateCommitFromDiffOptions,
   ): Promise<CommitResult>;
 }
 
@@ -125,26 +147,26 @@ export interface RepoOptions {
 }
 
 export type SupportedRepoProvider =
-  | 'github'
-  | 'gitlab'
-  | 'bitbucket'
-  | 'gitea'
-  | 'forgejo'
-  | 'codeberg'
-  | 'sr.ht';
+  | "github"
+  | "gitlab"
+  | "bitbucket"
+  | "gitea"
+  | "forgejo"
+  | "codeberg"
+  | "sr.ht";
 
 export interface PublicGitHubBaseRepoAuth {
   /**
    * Force public GitHub mode (no GitHub App installation required).
    */
-  authType: 'public';
+  authType: "public";
 }
 
 export interface GitHubBaseRepo {
   /**
    * @default github
    */
-  provider?: 'github';
+  provider?: "github";
   owner: string;
   name: string;
   defaultBranch?: string;
@@ -155,7 +177,7 @@ export interface GenericGitBaseRepo {
   /**
    * The git host provider. Must be one of the supported generic git providers.
    */
-  provider: Exclude<SupportedRepoProvider, 'github'>;
+  provider: Exclude<SupportedRepoProvider, "github">;
   owner: string;
   name: string;
   defaultBranch?: string;
@@ -288,7 +310,8 @@ export interface ArchiveOptions extends GitStorageInvocationOptions {
   archivePrefix?: string;
 }
 
-export interface PullUpstreamOptions extends GitStorageInvocationOptions {
+export interface PullUpstreamOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   ref?: string;
 }
 
@@ -385,7 +408,8 @@ export interface ListBranchesResult {
 }
 
 // Create Branch API types
-export interface CreateBranchOptions extends GitStorageInvocationOptions {
+export interface CreateBranchOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   baseRef?: string;
   /** @deprecated Use baseRef instead. */
   baseBranch?: string;
@@ -403,7 +427,8 @@ export interface CreateBranchResult {
   commitSha?: string;
 }
 
-export interface DeleteBranchOptions extends GitStorageInvocationOptions {
+export interface DeleteBranchOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
   ephemeral?: boolean;
 }
@@ -437,7 +462,8 @@ export interface ListTagsResult {
   hasMore: boolean;
 }
 
-export interface CreateTagOptions extends GitStorageInvocationOptions {
+export interface CreateTagOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
   target: string;
 }
@@ -450,7 +476,8 @@ export interface CreateTagResult {
   message: string;
 }
 
-export interface DeleteTagOptions extends GitStorageInvocationOptions {
+export interface DeleteTagOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
 }
 
@@ -550,7 +577,8 @@ export interface GetNoteResult {
   refSha: string;
 }
 
-interface NoteWriteBaseOptions extends GitStorageInvocationOptions {
+interface NoteWriteBaseOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   sha: string;
   note: string;
   expectedRefSha?: string;
@@ -561,7 +589,8 @@ export type CreateNoteOptions = NoteWriteBaseOptions;
 
 export type AppendNoteOptions = NoteWriteBaseOptions;
 
-export interface DeleteNoteOptions extends GitStorageInvocationOptions {
+export interface DeleteNoteOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   sha: string;
   expectedRefSha?: string;
   author?: CommitSignature;
@@ -694,14 +723,14 @@ export type RawFileDiff = SchemaRawFileDiff;
 export type RawFilteredFile = SchemaRawFilteredFile;
 
 export type DiffFileState =
-  | 'added'
-  | 'modified'
-  | 'deleted'
-  | 'renamed'
-  | 'copied'
-  | 'type_changed'
-  | 'unmerged'
-  | 'unknown';
+  | "added"
+  | "modified"
+  | "deleted"
+  | "renamed"
+  | "copied"
+  | "type_changed"
+  | "unmerged"
+  | "unknown";
 
 export interface DiffFileBase {
   path: string;
@@ -720,7 +749,8 @@ export interface FileDiff extends DiffFileBase {
 
 export interface FilteredFile extends DiffFileBase {}
 
-interface CreateCommitBaseOptions extends GitStorageInvocationOptions {
+interface CreateCommitBaseOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   commitMessage: string;
   expectedHeadSha?: string;
   baseBranch?: string;
@@ -771,21 +801,21 @@ export interface FileLike extends BlobLike {
   lastModified?: number;
 }
 
-export type GitFileMode = '100644' | '100755' | '120000' | '160000';
+export type GitFileMode = "100644" | "100755" | "120000" | "160000";
 
 export type TextEncoding =
-  | 'ascii'
-  | 'utf8'
-  | 'utf-8'
-  | 'utf16le'
-  | 'utf-16le'
-  | 'ucs2'
-  | 'ucs-2'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'binary'
-  | 'hex';
+  | "ascii"
+  | "utf8"
+  | "utf-8"
+  | "utf16le"
+  | "utf-16le"
+  | "ucs2"
+  | "ucs-2"
+  | "base64"
+  | "base64url"
+  | "latin1"
+  | "binary"
+  | "hex";
 
 export type CommitFileSource =
   | string
@@ -809,12 +839,12 @@ export interface CommitBuilder {
   addFile(
     path: string,
     source: CommitFileSource,
-    options?: CommitFileOptions
+    options?: CommitFileOptions,
   ): CommitBuilder;
   addFileFromString(
     path: string,
     contents: string,
-    options?: CommitTextFileOptions
+    options?: CommitTextFileOptions,
   ): CommitBuilder;
   deletePath(path: string): CommitBuilder;
   send(): Promise<CommitResult>;
@@ -823,7 +853,7 @@ export interface CommitBuilder {
 export type DiffSource = CommitFileSource;
 
 export interface CreateCommitFromDiffOptions
-  extends GitStorageInvocationOptions {
+  extends GitStorageInvocationOptions, PolicyOptions {
   targetBranch: string;
   commitMessage: string;
   diff: DiffSource;
@@ -843,17 +873,17 @@ export interface RefUpdate {
 }
 
 export type RefUpdateReason =
-  | 'precondition_failed'
-  | 'conflict'
-  | 'not_found'
-  | 'invalid'
-  | 'timeout'
-  | 'unauthorized'
-  | 'forbidden'
-  | 'unavailable'
-  | 'internal'
-  | 'failed'
-  | 'unknown';
+  | "precondition_failed"
+  | "conflict"
+  | "not_found"
+  | "invalid"
+  | "timeout"
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "internal"
+  | "failed"
+  | "unknown";
 
 export interface CommitResult {
   commitSha: string;
@@ -864,15 +894,16 @@ export interface CommitResult {
   refUpdate: RefUpdate;
 }
 
-export type MergeStrategy = 'merge' | 'ff_only' | 'ff_prefer';
+export type MergeStrategy = "merge" | "ff_only" | "ff_prefer";
 
 export type MergeResultLabel =
-  | 'merge_commit'
-  | 'fast_forward'
-  | 'no_op'
-  | 'unknown';
+  | "merge_commit"
+  | "fast_forward"
+  | "no_op"
+  | "unknown";
 
-export interface MergeOptions extends GitStorageInvocationOptions {
+export interface MergeOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   sourceBranch: string;
   sourceIsEphemeral?: boolean;
   targetBranch: string;
@@ -887,7 +918,7 @@ export interface MergeOptions extends GitStorageInvocationOptions {
   squash?: boolean;
 }
 
-export type MergeResponse = Omit<MergeResponseRaw, 'result'> & {
+export type MergeResponse = Omit<MergeResponseRaw, "result"> & {
   result: MergeResultLabel;
 };
 
@@ -914,7 +945,8 @@ export interface MergeResult {
   promotedCommits: number;
 }
 
-export interface RestoreCommitOptions extends GitStorageInvocationOptions {
+export interface RestoreCommitOptions
+  extends GitStorageInvocationOptions, PolicyOptions {
   targetBranch: string;
   targetCommitSha: string;
   commitMessage?: string;
@@ -973,7 +1005,7 @@ export interface RawWebhookPushEvent {
 }
 
 export interface WebhookPushEvent {
-  type: 'push';
+  type: "push";
   repository: {
     id: string;
     url: string;

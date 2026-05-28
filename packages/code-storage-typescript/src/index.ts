@@ -4,6 +4,7 @@
  * A TypeScript SDK for interacting with Pierre's git storage system
  */
 import { SignJWT, importPKCS8 } from 'jose';
+import { encodeRefsClaim } from './jwt_claims';
 import snakecaseKeys from 'snakecase-keys';
 
 import {
@@ -147,6 +148,7 @@ export { RefUpdateError } from './errors';
 export { ApiError } from './fetch';
 // Import additional types from types.ts
 export * from './types';
+export { encodeRefsClaim } from './jwt_claims';
 
 // Export webhook validation utilities
 export {
@@ -1255,6 +1257,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body = buildNoteWriteBody(sha, note, 'add', {
@@ -1300,6 +1303,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body = buildNoteWriteBody(sha, note, 'append', {
@@ -1340,6 +1344,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body: Record<string, unknown> = {
@@ -1548,6 +1553,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body: Record<string, string> = {};
@@ -1587,6 +1593,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body: Record<string, unknown> = {
@@ -1628,6 +1635,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body: Record<string, unknown> = { name };
@@ -1669,6 +1677,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const body: Record<string, unknown> = {
@@ -1745,6 +1754,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const response = await this.api.post(
@@ -1768,6 +1778,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:read', 'git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const response = await this.api.delete(
@@ -1807,6 +1818,7 @@ class RepoImpl implements Repo {
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:write'],
       ttl,
+      refPolicies: options.refPolicies,
     });
 
     const metadata: Record<string, unknown> = {
@@ -1884,6 +1896,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
+        refPolicies: options.refPolicies,
       });
 
     return createCommitBuilder({
@@ -1910,6 +1923,7 @@ class RepoImpl implements Repo {
       this.generateJWT(this.id, {
         permissions: ['git:write'],
         ttl,
+        refPolicies: options.refPolicies,
       });
 
     return sendCommitFromDiff({
@@ -2290,6 +2304,9 @@ export class GitStorage {
       scopes: permissions,
       iat: now,
       exp: now + ttl,
+      ...(options?.refPolicies && options.refPolicies.length > 0
+        ? { refs: encodeRefsClaim(options.refPolicies) }
+        : {}),
       ...(options?.ops && options.ops.length > 0 ? { ops: options.ops } : {}),
     };
 
