@@ -204,6 +204,12 @@ const NOTE_WRITE_ALLOWED_STATUS = [
   504, // Gateway Timeout - long-running storage operations
 ] as const;
 
+const FILE_RESPONSE_ALLOWED_STATUS = [
+  304, // Not Modified - cache revalidation
+  412, // Precondition Failed - conditional request failed
+  416, // Range Not Satisfiable - caller needs Content-Range metadata
+] as const;
+
 function resolveInvocationTtlSeconds(
   options?: { ttl?: number },
   defaultValue: number = DEFAULT_TOKEN_TTL_SECONDS
@@ -909,11 +915,11 @@ class RepoImpl implements Repo {
     const params = buildGetFileParams(options);
     const extraHeaders = buildConditionalHeaders(options.headers);
 
-    // Allow 304 and 412 to surface as normal responses for conditional callers
+    // Allow range and conditional outcomes to surface as normal responses.
     return this.api.get(
       { path: 'repos/file', params },
       jwt,
-      { allowedStatus: [304, 412], extraHeaders }
+      { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
   }
 
@@ -930,7 +936,7 @@ class RepoImpl implements Repo {
     const response = await this.api.head(
       { path: 'repos/file', params },
       jwt,
-      { allowedStatus: [304, 412], extraHeaders }
+      { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
 
     return parseFileMetadataHeaders(response);

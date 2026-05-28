@@ -453,6 +453,45 @@ class TestRepoFileOperations:
             sent_headers = client_instance.head.call_args.kwargs["headers"]
             assert sent_headers["Range"] == "bytes=0-15"
 
+    @pytest.mark.asyncio
+    async def test_head_file_preserves_unsatisfied_range_status_and_content_range(
+        self, git_storage_options: dict
+    ) -> None:
+        """head_file exposes 416 status and unsatisfied Content-Range metadata."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        head_response = MagicMock()
+        head_response.status_code = 416
+        head_response.is_success = False
+        head_response.headers = {
+            "content-range": "bytes */128",
+            "accept-ranges": "bytes",
+        }
+        head_response.raise_for_status = MagicMock()
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.head = AsyncMock(return_value=head_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            meta = await repo.head_file(
+                path="README.md",
+                headers={"range": "bytes=256-511"},
+            )
+
+            assert meta["status_code"] == 416
+            assert meta["accept_ranges"] == "bytes"
+            assert meta["content_range"] == "bytes */128"
+            head_response.raise_for_status.assert_not_called()
+            sent_headers = client_instance.head.call_args.kwargs["headers"]
+            assert sent_headers["Range"] == "bytes=256-511"
+
     @pytest.mark.parametrize(
         ("status_code", "headers"),
         [
@@ -543,6 +582,57 @@ class TestRepoFileOperations:
             assert sent_headers["Range"] == "bytes=0-15"
             assert sent_headers["If-None-Match"] == '"abc"'
             assert sent_headers["If-Modified-Since"] == "Wed, 21 Oct 2026 07:28:00 GMT"
+
+    @pytest.mark.asyncio
+    async def test_get_file_stream_preserves_unsatisfied_range_response(
+        self, git_storage_options: dict
+    ) -> None:
+        """get_file_stream exposes 416 status and Content-Range metadata."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        stream_response = MagicMock()
+        stream_response.status_code = 416
+        stream_response.is_success = False
+        stream_response.headers = {
+            "content-range": "bytes */128",
+            "accept-ranges": "bytes",
+        }
+        stream_response.raise_for_status = MagicMock()
+        stream_response.aclose = AsyncMock()
+
+        stream_cm = MagicMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=stream_response)
+        stream_cm.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value
+            client_instance.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            client_instance.stream = MagicMock(return_value=stream_cm)
+            client_instance.aclose = AsyncMock()
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.get_file_stream(
+                path="README.md",
+                headers={"range": "bytes=256-511"},
+            )
+            assert result.status_code == 416
+            assert result.headers["content-range"] == "bytes */128"
+            stream_response.raise_for_status.assert_not_called()
+
+            stream_args = client_instance.stream.call_args
+            sent_headers = stream_args.kwargs["headers"]
+            assert sent_headers["Range"] == "bytes=256-511"
+
+            await result.aclose()
+            stream_response.aclose.assert_awaited_once()
+            client_instance.aclose.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_list_files_with_metadata_ephemeral_flag(self, git_storage_options: dict) -> None:

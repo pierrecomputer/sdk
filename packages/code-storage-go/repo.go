@@ -93,7 +93,7 @@ func (r *Repo) ImportRemoteURL(ctx context.Context, options RemoteURLOptions) (s
 }
 
 // FileStream returns the raw response for streaming file contents.
-// 206, 304 and 412 status codes pass through to the caller.
+// 206, 304, 412 and 416 status codes pass through to the caller.
 func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Response, error) {
 	if strings.TrimSpace(options.Path) == "" {
 		return nil, errors.New("getFileStream path is required")
@@ -176,7 +176,7 @@ func buildFileRequestOptions(headers FileRequestHeaders) *requestOptions {
 		extra["If-Range"] = headers.IfRange
 	}
 
-	allowed := map[int]bool{304: true, 412: true}
+	allowed := map[int]bool{304: true, 412: true, 416: true}
 	opts := &requestOptions{allowedStatus: allowed}
 	if len(extra) > 0 {
 		opts.extraHeaders = extra

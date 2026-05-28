@@ -563,14 +563,14 @@ Status codes:
 - `412 Precondition Failed` — `If-Match`/`If-Unmodified-Since` failed.
 - `416 Requested Range Not Satisfiable` — range outside blob size.
 
-Response headers always set on 200/206:
+Response headers for successful/ranged responses:
 - `ETag` — strong validator equal to the quoted Git blob SHA.
 - `Last-Modified` — committer date of the most recent commit reachable from
   `ref` that touched `path`.
 - `Accept-Ranges: bytes`.
 - `Content-Type: application/octet-stream`.
 - `Content-Length` — full size on 200, range size on 206.
-- `Content-Range` — present on 206 responses.
+- `Content-Range` — present on 206 responses and 416 unsatisfied ranges.
 - `X-Blob-Sha` — Git blob SHA of the served file.
 - `X-Last-Commit-Sha` — SHA of the most recent commit touching `path`.
 

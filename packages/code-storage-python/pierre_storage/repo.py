@@ -167,6 +167,8 @@ _CONDITIONAL_HEADER_NAMES = {
     "if_range": "If-Range",
 }
 
+_FILE_RESPONSE_ALLOWED_STATUS_CODES = (200, 206, 304, 412, 416)
+
 
 def build_conditional_headers(
     headers: Optional[FileRequestHeaders],
@@ -400,7 +402,7 @@ class RepoImpl:
             ref: Git ref (branch, tag, or commit SHA)
             ephemeral: Whether to read from the ephemeral namespace
             headers: Optional ``Range``/conditional headers forwarded to the
-                server. 206/304/412 are passed through without raising.
+                server. 206/304/412/416 are passed through without raising.
             ttl: Token TTL in seconds
 
         Returns:
@@ -434,9 +436,8 @@ class RepoImpl:
                 timeout=30.0,
             )
             response = await stream_context.__aenter__()
-            # 200, 206 are success; 304 and 412 are conditional outcomes that
-            # callers handle explicitly. Anything else still raises.
-            if response.status_code not in (200, 206, 304, 412):
+            # Range and conditional outcomes should remain inspectable.
+            if response.status_code not in _FILE_RESPONSE_ALLOWED_STATUS_CODES:
                 response.raise_for_status()
         except Exception:
             await client.aclose()
@@ -483,7 +484,7 @@ class RepoImpl:
                 headers=request_headers,
                 timeout=30.0,
             )
-            if response.status_code not in (200, 206, 304, 412):
+            if response.status_code not in _FILE_RESPONSE_ALLOWED_STATUS_CODES:
                 response.raise_for_status()
             return parse_file_metadata_headers(response)
 

@@ -430,6 +430,39 @@ func TestFileStreamPasses304Through(t *testing.T) {
 	}
 }
 
+func TestFileStreamPasses416ThroughWithContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Range"); got != "bytes=256-511" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Range", "bytes */128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.FileStream(nil, GetFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=256-511"},
+	})
+	if err != nil {
+		t.Fatalf("expected 416 not to raise: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected 416, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Range"); got != "bytes */128" {
+		t.Fatalf("unexpected content-range: %s", got)
+	}
+}
+
 func TestHeadFileParsesMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodHead {
@@ -523,6 +556,44 @@ func TestHeadFilePreservesRangeStatusAndContentRange(t *testing.T) {
 		t.Fatalf("expected size 16, got %d", meta.Size)
 	}
 	if meta.ContentRange != "bytes 0-15/128" {
+		t.Fatalf("unexpected content-range: %s", meta.ContentRange)
+	}
+	if meta.AcceptRanges != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", meta.AcceptRanges)
+	}
+}
+
+func TestHeadFilePreservesUnsatisfiedRangeStatusAndContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Fatalf("expected HEAD, got %s", r.Method)
+		}
+		if got := r.Header.Get("Range"); got != "bytes=256-511" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Range", "bytes */128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	meta, err := repo.HeadFile(nil, HeadFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=256-511"},
+	})
+	if err != nil {
+		t.Fatalf("head file error: %v", err)
+	}
+	if meta.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected status 416, got %d", meta.StatusCode)
+	}
+	if meta.ContentRange != "bytes */128" {
 		t.Fatalf("unexpected content-range: %s", meta.ContentRange)
 	}
 	if meta.AcceptRanges != "bytes" {

@@ -583,7 +583,7 @@ interface FileRequestHeaders {
 }
 
 interface FileMetadata {
-  status?: number; // 200, 206, 304, 412, etc.
+  status?: number; // 200, 206, 304, 412, 416, etc.
   blobSha: string;
   lastCommitSha: string;
   size?: number;
@@ -591,7 +591,7 @@ interface FileMetadata {
   lastModified?: Date;
   rawLastModified?: string;
   acceptRanges?: string;
-  contentRange?: string; // Present on 206 ranged HEAD responses
+  contentRange?: string; // Present on 206 and 416 ranged HEAD responses
   contentType?: string;
 }
 

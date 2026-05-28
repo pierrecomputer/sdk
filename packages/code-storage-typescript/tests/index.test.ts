@@ -942,6 +942,40 @@ describe('GitStorage', () => {
     expect(response.status).toBe(304);
   });
 
+  it('passes 416 through getFileStream with range metadata', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-416' });
+
+    const headerMap: Record<string, string> = {
+      'content-range': 'bytes */128',
+      'accept-ranges': 'bytes',
+    };
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['Range']).toBe('bytes=256-511');
+      return Promise.resolve({
+        ok: false,
+        status: 416,
+        statusText: 'Range Not Satisfiable',
+        headers: {
+          get: (key: string) => headerMap[key.toLowerCase()] ?? null,
+        } as any,
+        text: async () => '',
+      } as any);
+    });
+
+    const response = await repo.getFileStream({
+      path: 'README.md',
+      headers: { range: 'bytes=256-511' },
+    });
+    expect(response.status).toBe(416);
+    expect(response.headers.get('content-range')).toBe('bytes */128');
+  });
+
   it('issues HEAD and parses file metadata headers', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-file-head' });
@@ -1019,6 +1053,41 @@ describe('GitStorage', () => {
     expect(meta.size).toBe(16);
     expect(meta.acceptRanges).toBe('bytes');
     expect(meta.contentRange).toBe('bytes 0-15/128');
+  });
+
+  it('preserves unsatisfied range HEAD status and content range', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-head-416' });
+
+    const headerMap: Record<string, string> = {
+      'content-range': 'bytes */128',
+      'accept-ranges': 'bytes',
+    };
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('HEAD');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['Range']).toBe('bytes=256-511');
+      return Promise.resolve({
+        ok: false,
+        status: 416,
+        statusText: 'Range Not Satisfiable',
+        headers: {
+          get: (key: string) => headerMap[key.toLowerCase()] ?? null,
+        } as any,
+        text: async () => '',
+      } as any);
+    });
+
+    const meta = await repo.headFile({
+      path: 'README.md',
+      headers: { range: 'bytes=256-511' },
+    });
+    expect(meta.status).toBe(416);
+    expect(meta.acceptRanges).toBe('bytes');
+    expect(meta.contentRange).toBe('bytes */128');
   });
 
   it.each([
