@@ -183,6 +183,17 @@ const resp = await repo.getFileStream({
 const text = await resp.text();
 console.log(text);
 
+// Fetch metadata or validate cached/ranged content without a body
+const meta = await repo.headFile({
+  path: 'README.md',
+  ref: 'main',
+  headers: {
+    ifNoneMatch: '"b10b5ha"',
+    range: 'bytes=0-1023',
+  },
+});
+console.log(meta.status, meta.etag, meta.contentRange);
+
 // Download repository archive (streaming tar.gz)
 const archiveResp = await repo.getArchiveStream({
   ref: 'main',
@@ -527,6 +538,7 @@ interface Repo {
   getEphemeralRemoteURL(options?: GetRemoteURLOptions): Promise<string>;
 
   getFileStream(options: GetFileOptions): Promise<Response>;
+  headFile(options: HeadFileOptions): Promise<FileMetadata>;
   getArchiveStream(options?: ArchiveOptions): Promise<Response>;
   listFiles(options?: ListFilesOptions): Promise<ListFilesResult>;
   listFilesWithMetadata(
@@ -553,10 +565,35 @@ interface GetRemoteURLOptions {
 interface GetFileOptions {
   path: string;
   ref?: string; // Branch, tag, or commit SHA
+  headers?: FileRequestHeaders;
   ttl?: number;
 }
 
 // getFileStream() returns a standard Fetch Response for streaming bytes
+
+type HeadFileOptions = GetFileOptions;
+
+interface FileRequestHeaders {
+  range?: string;
+  ifMatch?: string;
+  ifNoneMatch?: string;
+  ifModifiedSince?: string;
+  ifUnmodifiedSince?: string;
+  ifRange?: string;
+}
+
+interface FileMetadata {
+  status?: number; // 200, 206, 304, 412, etc.
+  blobSha: string;
+  lastCommitSha: string;
+  size?: number;
+  etag?: string;
+  lastModified?: Date;
+  rawLastModified?: string;
+  acceptRanges?: string;
+  contentRange?: string; // Present on 206 ranged HEAD responses
+  contentType?: string;
+}
 
 interface ArchiveOptions {
   ref?: string; // Branch, tag, or commit SHA (defaults to default branch)

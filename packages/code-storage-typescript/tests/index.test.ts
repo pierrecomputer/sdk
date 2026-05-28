@@ -973,6 +973,7 @@ describe('GitStorage', () => {
     });
 
     const meta = await repo.headFile({ path: 'README.md' });
+    expect(meta.status).toBe(200);
     expect(meta.blobSha).toBe('b10b5ha');
     expect(meta.lastCommitSha).toBe('c0mm1tsha');
     expect(meta.size).toBe(128);
@@ -982,6 +983,87 @@ describe('GitStorage', () => {
     expect(meta.lastModified).toBeInstanceOf(Date);
     expect(meta.rawLastModified).toBe('Wed, 21 Oct 2026 07:28:00 GMT');
   });
+
+  it('preserves ranged HEAD status and content range', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-file-head-range' });
+
+    const headerMap: Record<string, string> = {
+      'content-length': '16',
+      'content-range': 'bytes 0-15/128',
+      'accept-ranges': 'bytes',
+    };
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('HEAD');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['Range']).toBe('bytes=0-15');
+      return Promise.resolve({
+        ok: true,
+        status: 206,
+        statusText: 'Partial Content',
+        headers: {
+          get: (key: string) => headerMap[key.toLowerCase()] ?? null,
+        } as any,
+        text: async () => '',
+      } as any);
+    });
+
+    const meta = await repo.headFile({
+      path: 'README.md',
+      headers: { range: 'bytes=0-15' },
+    });
+    expect(meta.status).toBe(206);
+    expect(meta.size).toBe(16);
+    expect(meta.acceptRanges).toBe('bytes');
+    expect(meta.contentRange).toBe('bytes 0-15/128');
+  });
+
+  it.each([
+    {
+      name: 'not modified',
+      status: 304,
+      statusText: 'Not Modified',
+      headers: { ifNoneMatch: '"abc"' },
+    },
+    {
+      name: 'precondition failed',
+      status: 412,
+      statusText: 'Precondition Failed',
+      headers: { ifMatch: '"abc"' },
+    },
+  ])(
+    'preserves conditional HEAD status for $name',
+    async ({ status, statusText, headers }) => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: `repo-file-head-${status}` });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        expect(init?.method).toBe('HEAD');
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+        const sentHeaders = init?.headers as Record<string, string>;
+        if ('ifNoneMatch' in headers) {
+          expect(sentHeaders['If-None-Match']).toBe(headers.ifNoneMatch);
+        }
+        if ('ifMatch' in headers) {
+          expect(sentHeaders['If-Match']).toBe(headers.ifMatch);
+        }
+        return Promise.resolve({
+          ok: false,
+          status,
+          statusText,
+          headers: { get: () => null } as any,
+          text: async () => '',
+        } as any);
+      });
+
+      const meta = await repo.headFile({ path: 'README.md', headers });
+      expect(meta.status).toBe(status);
+    }
+  );
 
   it('posts grep request body and parses response', async () => {
     const store = new GitStorage({ name: 'v0', key });

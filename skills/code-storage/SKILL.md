@@ -574,6 +574,10 @@ Response headers always set on 200/206:
 - `X-Blob-Sha` — Git blob SHA of the served file.
 - `X-Last-Commit-Sha` — SHA of the most recent commit touching `path`.
 
+SDK HEAD metadata helpers preserve the HTTP status and ranged metadata:
+TypeScript exposes `status` and `contentRange`; Python exposes `status_code`
+and `content_range`; Go exposes `StatusCode` and `ContentRange`.
+
 ## GET /repos/blame — Blame File
 
 ```bash

@@ -186,10 +186,12 @@ func buildFileRequestOptions(headers FileRequestHeaders) *requestOptions {
 
 func parseFileMetadataHeaders(resp *http.Response) FileMetadata {
 	meta := FileMetadata{
+		StatusCode:      resp.StatusCode,
 		BlobSHA:         resp.Header.Get("X-Blob-Sha"),
 		LastCommitSHA:   resp.Header.Get("X-Last-Commit-Sha"),
 		ETag:            resp.Header.Get("ETag"),
 		AcceptRanges:    resp.Header.Get("Accept-Ranges"),
+		ContentRange:    resp.Header.Get("Content-Range"),
 		ContentType:     resp.Header.Get("Content-Type"),
 		RawLastModified: resp.Header.Get("Last-Modified"),
 	}

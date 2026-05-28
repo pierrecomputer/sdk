@@ -163,6 +163,17 @@ response = await repo.get_file_stream(
 text = await response.aread()
 print(text.decode())
 
+# Fetch metadata or validate cached/ranged content without a body
+metadata = await repo.head_file(
+    path="README.md",
+    ref="main",
+    headers={
+        "if_none_match": '"b10b5ha"',
+        "range": "bytes=0-1023",
+    },
+)
+print(metadata["status_code"], metadata.get("etag"), metadata.get("content_range"))
+
 # Download repository archive (streaming tar.gz)
 archive_response = await repo.get_archive_stream(
     ref="main",
@@ -675,8 +686,19 @@ class Repo:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> Response: ...
+
+    async def head_file(
+        self,
+        *,
+        path: str,
+        ref: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        headers: Optional[FileRequestHeaders] = None,
+        ttl: Optional[int] = None,
+    ) -> FileMetadata: ...
 
     async def get_archive_stream(
         self,

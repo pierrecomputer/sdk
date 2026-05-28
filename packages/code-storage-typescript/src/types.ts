@@ -292,6 +292,7 @@ export interface GetFileOptions extends GitStorageInvocationOptions {
 export type HeadFileOptions = GetFileOptions;
 
 export interface FileMetadata {
+  status?: number;
   blobSha: string;
   lastCommitSha: string;
   size?: number;
@@ -299,6 +300,7 @@ export interface FileMetadata {
   lastModified?: Date;
   rawLastModified?: string;
   acceptRanges?: string;
+  contentRange?: string;
   contentType?: string;
 }
 

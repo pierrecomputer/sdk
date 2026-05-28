@@ -249,6 +249,7 @@ type HeadFileOptions = GetFileOptions
 
 // FileMetadata is the parsed result of a HEAD /repos/file request.
 type FileMetadata struct {
+	StatusCode      int
 	BlobSHA         string
 	LastCommitSHA   string
 	Size            int64
@@ -256,6 +257,7 @@ type FileMetadata struct {
 	LastModified    time.Time
 	RawLastModified string
 	AcceptRanges    string
+	ContentRange    string
 	ContentType     string
 }
 

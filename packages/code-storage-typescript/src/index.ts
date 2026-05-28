@@ -767,9 +767,11 @@ function parseFileMetadataHeaders(response: Response): FileMetadata {
     }
   }
   const acceptRanges = headers.get('accept-ranges') ?? undefined;
+  const contentRange = headers.get('content-range') ?? undefined;
   const contentType = headers.get('content-type') ?? undefined;
 
   const metadata: FileMetadata = {
+    status: response.status,
     blobSha,
     lastCommitSha,
   };
@@ -787,6 +789,9 @@ function parseFileMetadataHeaders(response: Response): FileMetadata {
   }
   if (acceptRanges) {
     metadata.acceptRanges = acceptRanges;
+  }
+  if (contentRange) {
+    metadata.contentRange = contentRange;
   }
   if (contentType) {
     metadata.contentType = contentType;

@@ -221,6 +221,7 @@ class FileRequestHeaders(TypedDict, total=False):
 class FileMetadata(TypedDict, total=False):
     """Parsed response headers from HEAD /repos/file."""
 
+    status_code: int
     blob_sha: str
     last_commit_sha: str
     size: int
@@ -228,6 +229,7 @@ class FileMetadata(TypedDict, total=False):
     last_modified: datetime
     raw_last_modified: str
     accept_ranges: str
+    content_range: str
     content_type: str
 
 

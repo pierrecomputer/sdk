@@ -186,6 +186,7 @@ def parse_file_metadata_headers(response: httpx.Response) -> FileMetadata:
     """Parse FileMetadata from HEAD or GET response headers."""
     headers = response.headers
     metadata: FileMetadata = {
+        "status_code": response.status_code,
         "blob_sha": headers.get("x-blob-sha", ""),
         "last_commit_sha": headers.get("x-last-commit-sha", ""),
     }
@@ -206,6 +207,9 @@ def parse_file_metadata_headers(response: httpx.Response) -> FileMetadata:
     accept_ranges = headers.get("accept-ranges")
     if accept_ranges:
         metadata["accept_ranges"] = accept_ranges
+    content_range = headers.get("content-range")
+    if content_range:
+        metadata["content_range"] = content_range
     content_type = headers.get("content-type")
     if content_type:
         metadata["content_type"] = content_type
@@ -479,7 +483,7 @@ class RepoImpl:
                 headers=request_headers,
                 timeout=30.0,
             )
-            if response.status_code not in (200, 304, 412):
+            if response.status_code not in (200, 206, 304, 412):
                 response.raise_for_status()
             return parse_file_metadata_headers(response)
 

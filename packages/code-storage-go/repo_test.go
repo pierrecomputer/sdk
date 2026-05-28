@@ -462,6 +462,9 @@ func TestHeadFileParsesMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("head file error: %v", err)
 	}
+	if meta.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", meta.StatusCode)
+	}
 	if meta.BlobSHA != "b10b5ha" || meta.LastCommitSHA != "c0mm1tsha" {
 		t.Fatalf("unexpected blob/commit sha: %+v", meta)
 	}
@@ -482,6 +485,106 @@ func TestHeadFileParsesMetadata(t *testing.T) {
 	}
 	if meta.LastModified.IsZero() {
 		t.Fatalf("expected parsed last modified")
+	}
+}
+
+func TestHeadFilePreservesRangeStatusAndContentRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Fatalf("expected HEAD, got %s", r.Method)
+		}
+		if got := r.Header.Get("Range"); got != "bytes=0-15" {
+			t.Fatalf("unexpected Range header: %q", got)
+		}
+		w.Header().Set("Content-Length", "16")
+		w.Header().Set("Content-Range", "bytes 0-15/128")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	meta, err := repo.HeadFile(nil, HeadFileOptions{
+		Path:    "README.md",
+		Headers: FileRequestHeaders{Range: "bytes=0-15"},
+	})
+	if err != nil {
+		t.Fatalf("head file error: %v", err)
+	}
+	if meta.StatusCode != http.StatusPartialContent {
+		t.Fatalf("expected status 206, got %d", meta.StatusCode)
+	}
+	if meta.Size != 16 {
+		t.Fatalf("expected size 16, got %d", meta.Size)
+	}
+	if meta.ContentRange != "bytes 0-15/128" {
+		t.Fatalf("unexpected content-range: %s", meta.ContentRange)
+	}
+	if meta.AcceptRanges != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %s", meta.AcceptRanges)
+	}
+}
+
+func TestHeadFilePreservesConditionalStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		headers FileRequestHeaders
+	}{
+		{
+			name:    "not modified",
+			status:  http.StatusNotModified,
+			headers: FileRequestHeaders{IfNoneMatch: `"abc"`},
+		},
+		{
+			name:    "precondition failed",
+			status:  http.StatusPreconditionFailed,
+			headers: FileRequestHeaders{IfMatch: `"abc"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodHead {
+					t.Fatalf("expected HEAD, got %s", r.Method)
+				}
+				if tt.headers.IfNoneMatch != "" {
+					if got := r.Header.Get("If-None-Match"); got != tt.headers.IfNoneMatch {
+						t.Fatalf("unexpected If-None-Match header: %q", got)
+					}
+				}
+				if tt.headers.IfMatch != "" {
+					if got := r.Header.Get("If-Match"); got != tt.headers.IfMatch {
+						t.Fatalf("unexpected If-Match header: %q", got)
+					}
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer server.Close()
+
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatalf("client error: %v", err)
+			}
+			repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+			meta, err := repo.HeadFile(nil, HeadFileOptions{
+				Path:    "README.md",
+				Headers: tt.headers,
+			})
+			if err != nil {
+				t.Fatalf("head file error: %v", err)
+			}
+			if meta.StatusCode != tt.status {
+				t.Fatalf("expected status %d, got %d", tt.status, meta.StatusCode)
+			}
+		})
 	}
 }
 

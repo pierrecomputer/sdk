@@ -400,6 +400,7 @@ class TestRepoFileOperations:
             repo = await storage.create_repo(id="test-repo")
             meta = await repo.head_file(path="README.md")
 
+            assert meta["status_code"] == 200
             assert meta["blob_sha"] == "b10b5ha"
             assert meta["last_commit_sha"] == "c0mm1tsha"
             assert meta["size"] == 128
@@ -412,6 +413,87 @@ class TestRepoFileOperations:
             called_url = client_instance.head.call_args.args[0]
             assert urlparse(called_url).path.endswith("/repos/file")
             assert parse_qs(urlparse(called_url).query).get("path") == ["README.md"]
+
+    @pytest.mark.asyncio
+    async def test_head_file_preserves_range_status_and_content_range(
+        self, git_storage_options: dict
+    ) -> None:
+        """head_file exposes 206 status and Content-Range metadata."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        head_response = MagicMock()
+        head_response.status_code = 206
+        head_response.is_success = True
+        head_response.headers = {
+            "content-length": "16",
+            "content-range": "bytes 0-15/128",
+            "accept-ranges": "bytes",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.head = AsyncMock(return_value=head_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            meta = await repo.head_file(
+                path="README.md",
+                headers={"range": "bytes=0-15"},
+            )
+
+            assert meta["status_code"] == 206
+            assert meta["size"] == 16
+            assert meta["accept_ranges"] == "bytes"
+            assert meta["content_range"] == "bytes 0-15/128"
+            sent_headers = client_instance.head.call_args.kwargs["headers"]
+            assert sent_headers["Range"] == "bytes=0-15"
+
+    @pytest.mark.parametrize(
+        ("status_code", "headers"),
+        [
+            (304, {"if_none_match": '"abc"'}),
+            (412, {"if_match": '"abc"'}),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_head_file_preserves_conditional_status(
+        self,
+        git_storage_options: dict,
+        status_code: int,
+        headers: dict[str, str],
+    ) -> None:
+        """head_file exposes conditional HEAD status without a body."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        head_response = MagicMock()
+        head_response.status_code = status_code
+        head_response.is_success = False
+        head_response.headers = {}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.head = AsyncMock(return_value=head_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            meta = await repo.head_file(path="README.md", headers=headers)
+
+            assert meta["status_code"] == status_code
+            sent_headers = client_instance.head.call_args.kwargs["headers"]
+            if status_code == 304:
+                assert sent_headers["If-None-Match"] == '"abc"'
+            else:
+                assert sent_headers["If-Match"] == '"abc"'
 
     @pytest.mark.asyncio
     async def test_get_file_stream_forwards_conditional_headers(
