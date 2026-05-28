@@ -366,9 +366,6 @@ parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
-TypeScript SDK 1.x normalizes a raw `result: "squash"` payload to
-`result: "merge_commit"` in its exported merge result types for semver
-compatibility. Python and Go currently surface the raw label.
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
 ## DELETE /repos/branches — Delete Branch

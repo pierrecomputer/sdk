@@ -2167,7 +2167,7 @@ describe('GitStorage', () => {
       });
     });
 
-    it('normalizes squash merge results to merge_commit for 1.x compatibility', async () => {
+    it('preserves squash merge results', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge-squash' });
 
@@ -2208,7 +2208,7 @@ describe('GitStorage', () => {
       });
 
       expect(result).toEqual({
-        result: 'merge_commit',
+        result: 'squash',
         commitSha: 'squash-sha',
         treeSha: 'tree-sha',
         source: { branch: 'feature', ephemeral: false, sha: 'source-sha' },

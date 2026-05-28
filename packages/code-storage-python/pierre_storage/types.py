@@ -779,6 +779,7 @@ class Repo(Protocol):
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CreateBranchResult:
         """Create or promote a branch.
 
@@ -792,6 +793,7 @@ class Repo(Protocol):
         name: str,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> DeleteBranchResult:
         """Delete a branch."""
         ...
@@ -811,6 +813,7 @@ class Repo(Protocol):
         allow_unrelated_histories: Optional[bool] = None,
         squash: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""
         ...
@@ -831,6 +834,7 @@ class Repo(Protocol):
         name: str,
         target: str,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CreateTagResult:
         """Create a tag."""
         ...
@@ -840,6 +844,7 @@ class Repo(Protocol):
         *,
         name: str,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> DeleteTagResult:
         """Delete a tag."""
         ...
@@ -906,6 +911,7 @@ class Repo(Protocol):
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Create a git note."""
         ...
@@ -918,6 +924,7 @@ class Repo(Protocol):
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Append to a git note."""
         ...
@@ -929,6 +936,7 @@ class Repo(Protocol):
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Delete a git note."""
         ...
@@ -986,6 +994,7 @@ class Repo(Protocol):
         *,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository."""
         ...
@@ -1000,6 +1009,7 @@ class Repo(Protocol):
         expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> RestoreCommitResult:
         """Restore a previous commit."""
         ...
@@ -1016,6 +1026,7 @@ class Repo(Protocol):
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CommitBuilder:
         """Create a new commit builder."""
         ...
@@ -1033,6 +1044,7 @@ class Repo(Protocol):
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CommitResult:
         """Create a commit by applying a diff."""
         ...

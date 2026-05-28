@@ -666,6 +666,8 @@ class Repo:
         *,
         permissions: Optional[List[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[List[str]] = None,  # deprecated; use ref_policies
+        ref_policies: Optional[Refs] = None,
     ) -> str: ...
 
     async def get_import_remote_url(
@@ -673,6 +675,8 @@ class Repo:
         *,
         permissions: Optional[List[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[List[str]] = None,  # deprecated; use ref_policies
+        ref_policies: Optional[Refs] = None,
     ) -> str: ...
 
     async def get_ephemeral_remote_url(
@@ -680,6 +684,8 @@ class Repo:
         *,
         permissions: Optional[List[str]] = None,
         ttl: Optional[int] = None,
+        ops: Optional[List[str]] = None,  # deprecated; use ref_policies
+        ref_policies: Optional[Refs] = None,
     ) -> str: ...
 
     async def get_file_stream(
@@ -720,6 +726,10 @@ class Repo:
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesResult: ...
 
@@ -728,6 +738,10 @@ class Repo:
         *,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
+        recursive: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListFilesWithMetadataResult: ...
 
@@ -749,6 +763,7 @@ class Repo:
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CreateBranchResult: ...
 
     async def delete_branch(
@@ -757,6 +772,7 @@ class Repo:
         name: str,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> DeleteBranchResult: ...
 
     async def merge(
@@ -772,8 +788,35 @@ class Repo:
         author: Optional[CommitSignature] = None,
         committer: Optional[CommitSignature] = None,
         allow_unrelated_histories: Optional[bool] = None,
+        squash: Optional[bool] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult: ...
+
+    async def list_tags(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListTagsResult: ...
+
+    async def create_tag(
+        self,
+        *,
+        name: str,
+        target: str,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> CreateTagResult: ...
+
+    async def delete_tag(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> DeleteTagResult: ...
 
     async def promote_ephemeral_branch(
         self,
@@ -790,6 +833,7 @@ class Repo:
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        path: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult: ...
 
@@ -811,6 +855,45 @@ class Repo:
         ttl: Optional[int] = None,
     ) -> BlameResult: ...
 
+    async def get_note(
+        self,
+        *,
+        sha: str,
+        ttl: Optional[int] = None,
+    ) -> NoteReadResult: ...
+
+    async def create_note(
+        self,
+        *,
+        sha: str,
+        note: str,
+        expected_ref_sha: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> NoteWriteResult: ...
+
+    async def append_note(
+        self,
+        *,
+        sha: str,
+        note: str,
+        expected_ref_sha: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> NoteWriteResult: ...
+
+    async def delete_note(
+        self,
+        *,
+        sha: str,
+        expected_ref_sha: Optional[str] = None,
+        author: Optional[CommitSignature] = None,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> NoteWriteResult: ...
+
     async def get_branch_diff(
         self,
         *,
@@ -818,6 +901,7 @@ class Repo:
         base: Optional[str] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
+        paths: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetBranchDiffResult: ...
 
@@ -825,13 +909,17 @@ class Repo:
         self,
         *,
         sha: str,
+        base_sha: Optional[str] = None,
+        paths: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitDiffResult: ...
 
     async def pull_upstream(
         self,
         *,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> None: ...
 
     async def restore_commit(
@@ -839,26 +927,44 @@ class Repo:
         *,
         target_branch: str,
         target_commit_sha: str,
-        expected_head_sha: Optional[str] = None,
-        commit_message: str,
         author: CommitSignature,
+        commit_message: Optional[str] = None,
+        expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> RestoreCommitResult: ...
 
     def create_commit(
         self,
         *,
         target_branch: str,
+        commit_message: str,
+        author: CommitSignature,
         expected_head_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
-        commit_message: str,
-        author: CommitSignature,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
     ) -> CommitBuilder: ...
+
+    async def create_commit_from_diff(
+        self,
+        *,
+        target_branch: str,
+        commit_message: str,
+        diff: FileSource,
+        author: CommitSignature,
+        expected_head_sha: Optional[str] = None,
+        base_branch: Optional[str] = None,
+        ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
+        committer: Optional[CommitSignature] = None,
+        ttl: Optional[int] = None,
+        ref_policies: Optional[Refs] = None,
+    ) -> CommitResult: ...
 ```
 
 ### Type Definitions
@@ -868,6 +974,8 @@ Key types are provided via TypedDict for better IDE support:
 ```python
 from pierre_storage.types import (
     GitStorageOptions,
+    Refs,
+    FileSource,
     BaseRepo,
     PublicGitHubBaseRepoAuth,
     GitHubBaseRepo,
@@ -877,12 +985,20 @@ from pierre_storage.types import (
     ListFilesResult,
     ListFilesWithMetadataResult,
     ListBranchesResult,
+    ListTagsResult,
     ListCommitsResult,
+    BlameResult,
     GetBranchDiffResult,
     GetCommitDiffResult,
     CreateBranchResult,
     DeleteBranchResult,
+    CreateTagResult,
+    DeleteTagResult,
+    MergeBranchesResult,
     RestoreCommitResult,
+    CommitResult,
+    NoteReadResult,
+    NoteWriteResult,
     RefUpdate,
     # ... and more
 )

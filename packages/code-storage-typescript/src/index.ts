@@ -114,7 +114,6 @@ import type {
   ListReposResponse,
   ListReposResult,
   MergeOptions,
-  MergeResultLabel,
   MergeResult,
   ListTagsOptions,
   ListTagsResponse,
@@ -530,19 +529,9 @@ function transformCreateBranchResult(
   };
 }
 
-function normalizeMergeResultLabel(
-  result: MergeResponseRaw['result']
-): MergeResultLabel {
-  if (result === 'squash') {
-    return 'merge_commit';
-  }
-
-  return result;
-}
-
 function transformMergeResult(raw: MergeResponseRaw): MergeResult {
   return {
-    result: normalizeMergeResultLabel(raw.result),
+    result: raw.result,
     commitSha: raw.commit_sha,
     treeSha: raw.tree_sha,
     source: {

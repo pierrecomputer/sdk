@@ -902,6 +902,7 @@ export type MergeResultLabel =
   | "merge_commit"
   | "fast_forward"
   | "no_op"
+  | "squash"
   | "unknown";
 
 export interface MergeOptions
