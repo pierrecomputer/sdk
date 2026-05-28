@@ -698,6 +698,7 @@ class Repo(Protocol):
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> Any:  # httpx.Response
@@ -710,6 +711,7 @@ class Repo(Protocol):
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> FileMetadata:

@@ -553,6 +553,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/file?path=src/main.go&ref=main" \
 ```
 
 Methods: `GET` returns the file bytes; `HEAD` returns only the headers.
+Query params: `path` (required), `ref`, `ephemeral`, `ephemeral_base`.
 Both accept `Range`, `If-Range`, `If-Match`, `If-None-Match`,
 `If-Modified-Since`, and `If-Unmodified-Since`.
 

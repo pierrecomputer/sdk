@@ -392,6 +392,7 @@ class RepoImpl:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> StreamingResponse:
@@ -401,6 +402,7 @@ class RepoImpl:
             path: File path to retrieve
             ref: Git ref (branch, tag, or commit SHA)
             ephemeral: Whether to read from the ephemeral namespace
+            ephemeral_base: Whether to resolve the base branch under the ephemeral namespace
             headers: Optional ``Range``/conditional headers forwarded to the
                 server. 206/304/412/416 are passed through without raising.
             ttl: Token TTL in seconds
@@ -416,6 +418,8 @@ class RepoImpl:
             params["ref"] = ref
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if ephemeral_base is not None:
+            params["ephemeral_base"] = "true" if ephemeral_base else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
         if params:
@@ -451,6 +455,7 @@ class RepoImpl:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> FileMetadata:
@@ -467,6 +472,8 @@ class RepoImpl:
             params["ref"] = ref
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
+        if ephemeral_base is not None:
+            params["ephemeral_base"] = "true" if ephemeral_base else "false"
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
         if params:

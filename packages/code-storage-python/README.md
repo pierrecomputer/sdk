@@ -159,6 +159,7 @@ response = await repo.get_file_stream(
     path="README.md",
     ref="main",  # optional, defaults to default branch
     ephemeral=False,  # optional, set to True to read from ephemeral namespace
+    ephemeral_base=False,  # optional, resolve base under ephemeral namespace
 )
 text = await response.aread()
 print(text.decode())
@@ -167,6 +168,7 @@ print(text.decode())
 metadata = await repo.head_file(
     path="README.md",
     ref="main",
+    ephemeral_base=False,
     headers={
         "if_none_match": '"b10b5ha"',
         "range": "bytes=0-1023",
@@ -686,6 +688,7 @@ class Repo:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> Response: ...
@@ -696,6 +699,7 @@ class Repo:
         path: str,
         ref: Optional[str] = None,
         ephemeral: Optional[bool] = None,
+        ephemeral_base: Optional[bool] = None,
         headers: Optional[FileRequestHeaders] = None,
         ttl: Optional[int] = None,
     ) -> FileMetadata: ...
