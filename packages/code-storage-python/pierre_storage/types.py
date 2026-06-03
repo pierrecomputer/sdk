@@ -47,7 +47,7 @@ Op = str
 OP_NO_FORCE_PUSH: Op = "no-force-push"
 OP_NO_PUSH: Op = "no-push"
 # Requires every commit introduced by a push to a matching ref to carry a valid
-# signature from a signing key registered for the tenant.
+# signature from a registered signing key.
 OP_VERIFY_SIG: Op = "verify-sig"
 
 # Ops is a list of policy operations.

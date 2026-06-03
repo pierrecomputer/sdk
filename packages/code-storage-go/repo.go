@@ -554,20 +554,25 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 		return GetCommitResult{}, err
 	}
 
-	return GetCommitResult{
-		Commit: CommitInfo{
-			SHA:            payload.Commit.SHA,
-			Message:        payload.Commit.Message,
-			AuthorName:     payload.Commit.AuthorName,
-			AuthorEmail:    payload.Commit.AuthorEmail,
-			CommitterName:  payload.Commit.CommitterName,
-			CommitterEmail: payload.Commit.CommitterEmail,
-			Date:           parseTime(payload.Commit.Date),
-			RawDate:        payload.Commit.Date,
-			Signature:      payload.Commit.Signature,
-			Payload:        payload.Commit.Payload,
-		},
-	}, nil
+	commit := CommitInfo{
+		SHA:            payload.Commit.SHA,
+		Message:        payload.Commit.Message,
+		AuthorName:     payload.Commit.AuthorName,
+		AuthorEmail:    payload.Commit.AuthorEmail,
+		CommitterName:  payload.Commit.CommitterName,
+		CommitterEmail: payload.Commit.CommitterEmail,
+		Date:           parseTime(payload.Commit.Date),
+		RawDate:        payload.Commit.Date,
+	}
+	// Only surface these for signed commits, which carry both the armored
+	// signature and the signed payload. If either is missing the commit is
+	// treated as unsigned and neither field is set.
+	if payload.Commit.Signature != "" && payload.Commit.Payload != "" {
+		commit.Signature = payload.Commit.Signature
+		commit.Payload = payload.Commit.Payload
+	}
+
+	return GetCommitResult{Commit: commit}, nil
 }
 
 // GetBlame returns per-line authorship for a file at a ref.

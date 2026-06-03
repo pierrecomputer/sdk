@@ -37,7 +37,7 @@ const (
 	OpNoForcePush Op = "no-force-push"
 	OpNoPush      Op = "no-push"
 	// OpVerifySig requires every commit introduced by a push to a matching ref
-	// to carry a valid signature from a signing key registered for the tenant.
+	// to carry a valid signature from a registered signing key.
 	OpVerifySig Op = "verify-sig"
 )
 
@@ -555,12 +555,13 @@ type CommitInfo struct {
 	Date           time.Time
 	RawDate        string
 	// Signature is the armored OpenPGP/SSH signature from the commit's gpgsig
-	// header. Only populated by GetCommit for signed commits; always empty for
-	// ListCommits entries and for unsigned commits.
+	// header. Only populated by GetCommit for signed commits. Always empty for
+	// ListCommits entries and unsigned commits.
 	Signature string
 	// Payload is the exact bytes the signature is computed over (the raw commit
 	// object with the gpgsig header removed). Only populated by GetCommit for
-	// signed commits; always empty otherwise.
+	// signed commits. Always empty for ListCommits entries and unsigned
+	// commits.
 	Payload string
 }
 

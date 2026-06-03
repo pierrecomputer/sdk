@@ -1390,13 +1390,14 @@ class RepoImpl:
                 "date": date,
                 "raw_date": commit_raw["date"],
             }
-            # Only present for signed commits, matching the server which omits
-            # both fields when a commit is unsigned.
+            # Only surface these for signed commits, which carry both the
+            # armored signature and the signed payload. If either is missing
+            # (absent/null/empty) the commit is treated as unsigned and
+            # neither key is attached.
             signature = commit_raw.get("signature")
-            if signature is not None:
-                commit["signature"] = signature
             payload = commit_raw.get("payload")
-            if payload is not None:
+            if signature and payload:
+                commit["signature"] = signature
                 commit["payload"] = payload
             return {"commit": commit}
 

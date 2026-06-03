@@ -367,14 +367,15 @@ function transformListCommitsResult(
 }
 
 function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
+  // Only surface these for signed commits, which carry both the armored
+  // signature and the signed payload. If either is missing the commit is
+  // treated as unsigned and neither key is attached.
+  const signed = Boolean(raw.commit.signature) && Boolean(raw.commit.payload);
   return {
     commit: {
       ...transformCommitInfo(raw.commit),
-      ...(raw.commit.signature !== undefined
-        ? { signature: raw.commit.signature }
-        : {}),
-      ...(raw.commit.payload !== undefined
-        ? { payload: raw.commit.payload }
+      ...(signed
+        ? { signature: raw.commit.signature, payload: raw.commit.payload }
         : {}),
     },
   };
