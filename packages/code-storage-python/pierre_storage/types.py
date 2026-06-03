@@ -305,7 +305,14 @@ class DeleteBranchResult(TypedDict):
 
 
 class CommitInfo(TypedDict):
-    """Information about a commit."""
+    """Information about a commit.
+
+    ``signature`` and ``payload`` are populated only by ``get_commit`` for
+    signed commits (``signature`` is the armored OpenPGP/SSH block from the
+    commit's gpgsig header; ``payload`` is the exact bytes the signature is
+    computed over). Both keys are absent for list-commits entries and for
+    unsigned commits.
+    """
 
     sha: str
     message: str
@@ -315,6 +322,8 @@ class CommitInfo(TypedDict):
     committer_email: str
     date: datetime
     raw_date: str
+    signature: NotRequired[str]
+    payload: NotRequired[str]
 
 
 class ListCommitsResult(TypedDict):
@@ -325,25 +334,13 @@ class ListCommitsResult(TypedDict):
     has_more: bool
 
 
-class CommitInfoWithSignature(CommitInfo, total=False):
-    """Commit metadata for a single resolved revision.
+class GetCommitResult(TypedDict):
+    """Result from fetching metadata for a single commit.
 
-    Extends :class:`CommitInfo` with signature details surfaced only by the
-    single-commit endpoint. Mirrors GitHub's commit verification object:
-    ``signature`` is the armored block from the commit's gpgsig header (OpenPGP
-    or SSH) and ``payload`` is the exact bytes the signature is computed over
-    (the raw commit object with the gpgsig header removed). Both keys are
-    omitted for unsigned commits.
+    For signed commits, ``commit`` carries ``signature`` and ``payload``.
     """
 
-    signature: str
-    payload: str
-
-
-class GetCommitResult(TypedDict):
-    """Result from fetching metadata for a single commit."""
-
-    commit: CommitInfoWithSignature
+    commit: CommitInfo
 
 
 class BlameLine(TypedDict):

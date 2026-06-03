@@ -555,19 +555,17 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 	}
 
 	return GetCommitResult{
-		Commit: CommitInfoWithSignature{
-			CommitInfo: CommitInfo{
-				SHA:            payload.Commit.SHA,
-				Message:        payload.Commit.Message,
-				AuthorName:     payload.Commit.AuthorName,
-				AuthorEmail:    payload.Commit.AuthorEmail,
-				CommitterName:  payload.Commit.CommitterName,
-				CommitterEmail: payload.Commit.CommitterEmail,
-				Date:           parseTime(payload.Commit.Date),
-				RawDate:        payload.Commit.Date,
-			},
-			Signature: payload.Commit.Signature,
-			Payload:   payload.Commit.Payload,
+		Commit: CommitInfo{
+			SHA:            payload.Commit.SHA,
+			Message:        payload.Commit.Message,
+			AuthorName:     payload.Commit.AuthorName,
+			AuthorEmail:    payload.Commit.AuthorEmail,
+			CommitterName:  payload.Commit.CommitterName,
+			CommitterEmail: payload.Commit.CommitterEmail,
+			Date:           parseTime(payload.Commit.Date),
+			RawDate:        payload.Commit.Date,
+			Signature:      payload.Commit.Signature,
+			Payload:        payload.Commit.Payload,
 		},
 	}, nil
 }

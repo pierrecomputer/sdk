@@ -22,7 +22,6 @@ from pierre_storage.types import (
     BranchInfo,
     CommitBuilder,
     CommitInfo,
-    CommitInfoWithSignature,
     CommitMetadata,
     CommitResult,
     CommitSignature,
@@ -1381,7 +1380,7 @@ class RepoImpl:
 
             commit_raw = data["commit"]
             date = datetime.fromisoformat(commit_raw["date"].replace("Z", "+00:00"))
-            commit: CommitInfoWithSignature = {
+            commit: CommitInfo = {
                 "sha": commit_raw["sha"],
                 "message": commit_raw["message"],
                 "author_name": commit_raw["author_name"],

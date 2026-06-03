@@ -551,6 +551,14 @@ type CommitInfo struct {
 	CommitterEmail string
 	Date           time.Time
 	RawDate        string
+	// Signature is the armored OpenPGP/SSH signature from the commit's gpgsig
+	// header. Only populated by GetCommit for signed commits; always empty for
+	// ListCommits entries and for unsigned commits.
+	Signature string
+	// Payload is the exact bytes the signature is computed over (the raw commit
+	// object with the gpgsig header removed). Only populated by GetCommit for
+	// signed commits; always empty otherwise.
+	Payload string
 }
 
 // ListCommitsResult describes commits list.
@@ -566,21 +574,10 @@ type GetCommitOptions struct {
 	SHA string
 }
 
-// CommitInfoWithSignature extends CommitInfo with signature details that are
-// only surfaced on the single-commit endpoint. The shape mirrors GitHub's
-// commit verification object: Signature is the armored block (from the
-// commit's gpgsig header, OpenPGP or SSH) and Payload is the exact bytes the
-// signature is computed over (the raw commit object with the gpgsig header
-// removed). Both are empty for unsigned commits.
-type CommitInfoWithSignature struct {
-	CommitInfo
-	Signature string
-	Payload   string
-}
-
-// GetCommitResult is the result returned by Repo.GetCommit.
+// GetCommitResult is the result returned by Repo.GetCommit. For signed commits
+// the returned CommitInfo carries the armored Signature and signed Payload.
 type GetCommitResult struct {
-	Commit CommitInfoWithSignature
+	Commit CommitInfo
 }
 
 // BlameOptions configures a per-line blame lookup.

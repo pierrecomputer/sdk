@@ -510,6 +510,17 @@ export interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+  /**
+   * Armored OpenPGP/SSH signature from the commit's gpgsig header. Only set by
+   * `getCommit` for signed commits; always undefined for list-commits entries
+   * and unsigned commits.
+   */
+  signature?: string;
+  /**
+   * The exact bytes the signature is computed over (the raw commit object with
+   * the gpgsig header removed). Only set by `getCommit` for signed commits.
+   */
+  payload?: string;
 }
 
 export type ListCommitsResponse = ListCommitsResponseRaw;
@@ -527,21 +538,8 @@ export interface GetCommitOptions extends GitStorageInvocationOptions {
 
 export type GetCommitResponse = GetCommitResponseRaw;
 
-/**
- * Commit metadata for a single resolved revision, extending {@link CommitInfo}
- * with signature details surfaced only by the single-commit endpoint. Mirrors
- * GitHub's commit verification object: `signature` is the armored block from
- * the commit's gpgsig header (OpenPGP or SSH) and `payload` is the exact bytes
- * the signature is computed over (the raw commit object with the gpgsig header
- * removed). Both are absent for unsigned commits.
- */
-export interface CommitInfoWithSignature extends CommitInfo {
-  signature?: string;
-  payload?: string;
-}
-
 export interface GetCommitResult {
-  commit: CommitInfoWithSignature;
+  commit: CommitInfo;
 }
 
 // Blame API types

@@ -796,6 +796,9 @@ interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+  // Populated only by getCommit for signed commits; undefined otherwise.
+  signature?: string;
+  payload?: string;
 }
 
 interface GetCommitOptions {
@@ -803,17 +806,11 @@ interface GetCommitOptions {
   ttl?: number;
 }
 
-interface CommitInfoWithSignature extends CommitInfo {
-  // Armored OpenPGP/SSH signature from the commit's gpgsig header. Present
-  // only for signed commits.
-  signature?: string;
-  // The exact signed bytes: the raw commit object with the gpgsig header
-  // removed. Present only for signed commits.
-  payload?: string;
-}
-
 interface GetCommitResult {
-  commit: CommitInfoWithSignature;
+  // For signed commits, commit.signature (armored OpenPGP/SSH block) and
+  // commit.payload (the exact signed bytes) are populated. Both are undefined
+  // for unsigned commits.
+  commit: CommitInfo;
 }
 
 interface BlameOptions {
