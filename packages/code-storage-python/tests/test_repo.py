@@ -1805,6 +1805,8 @@ class TestRepoCommitOperations:
                 "committer_name": "Jane Doe",
                 "committer_email": "jane@example.com",
                 "date": "2024-01-15T14:32:18Z",
+                "signature": "-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n",
+                "payload": "tree deadbeef\n",
             },
         }
 
@@ -1826,6 +1828,10 @@ class TestRepoCommitOperations:
             assert commit["raw_date"] == "2024-01-15T14:32:18Z"
             assert isinstance(commit["date"], datetime)
             assert commit["date"] == datetime(2024, 1, 15, 14, 32, 18, tzinfo=timezone.utc)
+            assert commit["signature"] == (
+                "-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n"
+            )
+            assert commit["payload"] == "tree deadbeef\n"
 
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
@@ -1838,6 +1844,44 @@ class TestRepoCommitOperations:
             payload = jwt.decode(token, options={"verify_signature": False})
             assert payload["scopes"] == ["git:read"]
             assert payload["repo"] == "test-repo"
+
+    @pytest.mark.asyncio
+    async def test_get_commit_unsigned_omits_signature(self, git_storage_options: dict) -> None:
+        """get_commit should omit signature/payload keys for unsigned commits."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commit_response = MagicMock()
+        commit_response.status_code = 200
+        commit_response.is_success = True
+        commit_response.raise_for_status = MagicMock()
+        commit_response.json.return_value = {
+            "commit": {
+                "sha": "abc123",
+                "message": "chore: noop",
+                "author_name": "Jane Doe",
+                "author_email": "jane@example.com",
+                "committer_name": "Jane Doe",
+                "committer_email": "jane@example.com",
+                "date": "2024-01-15T14:32:18Z",
+            },
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_response)
+            client_instance.get = AsyncMock(return_value=commit_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.get_commit(sha="abc123")
+
+            commit = result["commit"]
+            assert "signature" not in commit
+            assert "payload" not in commit
 
     @pytest.mark.asyncio
     async def test_get_commit_trims_sha_and_honors_ttl(self, git_storage_options: dict) -> None:

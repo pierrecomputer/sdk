@@ -1,7 +1,12 @@
 import { importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CodeStorage, GitStorage, createClient } from '../src/index';
+import {
+  CodeStorage,
+  GitStorage,
+  OP_VERIFY_SIG,
+  createClient,
+} from '../src/index';
 
 // Mock fetch globally if it is not already stubbed
 const existingFetch = globalThis.fetch as unknown;
@@ -284,6 +289,9 @@ describe('GitStorage', () => {
             committer_name: 'Jane Doe',
             committer_email: 'jane@example.com',
             date: '2024-01-15T14:32:18Z',
+            signature:
+              '-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n',
+            payload: 'tree deadbeef\n',
           },
         }),
       } as any);
@@ -299,6 +307,38 @@ describe('GitStorage', () => {
     expect(result.commit.rawDate).toBe('2024-01-15T14:32:18Z');
     expect(result.commit.date).toBeInstanceOf(Date);
     expect(result.commit.date.toISOString()).toBe('2024-01-15T14:32:18.000Z');
+    expect(result.commit.signature).toBe(
+      '-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n'
+    );
+    expect(result.commit.payload).toBe('tree deadbeef\n');
+  });
+
+  it('omits signature and payload for unsigned commits', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-get-commit-unsigned' });
+
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          commit: {
+            sha: 'abc123',
+            message: 'chore: noop',
+            author_name: 'Jane Doe',
+            author_email: 'jane@example.com',
+            committer_name: 'Jane Doe',
+            committer_email: 'jane@example.com',
+            date: '2024-01-15T14:32:18Z',
+          },
+        }),
+      } as any)
+    );
+
+    const result = await repo.getCommit({ sha: 'abc123' });
+    expect(result.commit.signature).toBeUndefined();
+    expect(result.commit.payload).toBeUndefined();
   });
 
   it('trims sha and honors ttl override on getCommit', async () => {
@@ -2956,6 +2996,22 @@ describe('GitStorage', () => {
         ['*', ['no-force-push']],
       ]);
       expect(payload).not.toHaveProperty('ops');
+    });
+
+    it('should include the verify-sig op in the refs claim', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      expect(OP_VERIFY_SIG).toBe('verify-sig');
+
+      const url = await repo.getRemoteURL({
+        refPolicies: [{ pattern: 'refs/heads/main', ops: [OP_VERIFY_SIG] }],
+      });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload.refs).toEqual([['refs/heads/main', ['verify-sig']]]);
     });
 
     it('should encode allow-rules with empty ops array in refs claim', async () => {

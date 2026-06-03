@@ -54,6 +54,12 @@ export const OP_NO_FORCE_PUSH: Op = "no-force-push";
 
 export const OP_NO_PUSH: Op = "no-push";
 
+/**
+ * Requires every commit introduced by a push to a matching ref to carry a
+ * valid signature from a registered signing key.
+ */
+export const OP_VERIFY_SIG: Op = "verify-sig";
+
 /** A list of policy operations. */
 export type Ops = Op[];
 
@@ -510,6 +516,18 @@ export interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+  /**
+   * Armored OpenPGP/SSH signature from the commit's gpgsig header. Only set by
+   * `getCommit` for signed commits. Always undefined for list-commits entries
+   * and unsigned commits.
+   */
+  signature?: string;
+  /**
+   * The exact bytes the signature is computed over (the raw commit object with
+   * the gpgsig header removed). Only set by `getCommit` for signed commits.
+   * Always undefined for list-commits entries and unsigned commits.
+   */
+  payload?: string;
 }
 
 export type ListCommitsResponse = ListCommitsResponseRaw;

@@ -273,6 +273,11 @@ print(commits["commits"])
 # Get a single commit's metadata (no diff)
 result = await repo.get_commit(sha="abc123...")
 print(result["commit"]["message"], result["commit"]["author_name"])
+# Signed commits also include the armored signature plus the exact signed
+# payload (raw commit object minus the gpgsig header) so you can verify it
+# yourself. Both keys are absent for unsigned commits.
+if "signature" in result["commit"]:
+    print(result["commit"]["signature"], result["commit"]["payload"])
 
 # Blame a file (per-line authorship). The top-level "commit_sha" is the SHA the
 # `ref` resolved to; each entry in "lines" carries its own author/committer

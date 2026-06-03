@@ -142,6 +142,30 @@ func TestRemoteURLRefs(t *testing.T) {
 		}
 	})
 
+	t.Run("includes verify-sig op in refs claim", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{
+			RefPolicies: RefPolicyList{
+				{Pattern: "refs/heads/main", Ops: Ops{OpVerifySig}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		refs, ok := claims["refs"].([]interface{})
+		if !ok || len(refs) != 1 {
+			t.Fatalf("expected 1 ref rule, got %v", claims["refs"])
+		}
+		rule, ok := refs[0].([]interface{})
+		if !ok || len(rule) != 2 {
+			t.Fatalf("unexpected rule shape: %v", refs[0])
+		}
+		ops, ok := rule[1].([]interface{})
+		if !ok || len(ops) != 1 || ops[0] != "verify-sig" {
+			t.Fatalf("unexpected ops: %v", rule[1])
+		}
+	})
+
 	t.Run("omits refs from JWT when not provided", func(t *testing.T) {
 		remote, err := repo.RemoteURL(nil, RemoteURLOptions{})
 		if err != nil {
@@ -1938,7 +1962,7 @@ func TestGetCommit(t *testing.T) {
 			t.Fatalf("unexpected sha query: %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}}`))
+		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z","signature":"-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n","payload":"tree deadbeef\nauthor Jane Doe <jane@example.com> 1700000000 +0000\n"}}`))
 	}))
 	defer server.Close()
 
@@ -1963,6 +1987,34 @@ func TestGetCommit(t *testing.T) {
 	}
 	if result.Commit.RawDate != "2024-01-15T14:32:18Z" || result.Commit.Date.IsZero() {
 		t.Fatalf("unexpected date: %+v", result.Commit)
+	}
+	if !strings.Contains(result.Commit.Signature, "BEGIN PGP SIGNATURE") {
+		t.Fatalf("unexpected signature: %q", result.Commit.Signature)
+	}
+	if !strings.HasPrefix(result.Commit.Payload, "tree deadbeef") {
+		t.Fatalf("unexpected payload: %q", result.Commit.Payload)
+	}
+}
+
+func TestGetCommitUnsigned(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"chore: noop","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.GetCommit(nil, GetCommitOptions{SHA: "abc123"})
+	if err != nil {
+		t.Fatalf("get commit error: %v", err)
+	}
+	if result.Commit.Signature != "" || result.Commit.Payload != "" {
+		t.Fatalf("expected empty signature/payload for unsigned commit, got %+v", result.Commit)
 	}
 }
 

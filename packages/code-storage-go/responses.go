@@ -27,7 +27,7 @@ type fileWithMetadataRaw struct {
 	Mode          string `json:"mode"`
 	Size          int64  `json:"size"`
 	LastCommitSHA string `json:"last_commit_sha"`
-	Type          string `json:"type,omitempty"`
+	Type          string `json:"type"`
 }
 
 type commitMetadataRaw struct {
@@ -56,7 +56,7 @@ type listCommitsResponse struct {
 }
 
 type getCommitResponse struct {
-	Commit commitInfoRaw `json:"commit"`
+	Commit commitInfoWithSignatureRaw `json:"commit"`
 }
 
 type blameResponse struct {
@@ -71,7 +71,7 @@ type blameLineRaw struct {
 	CommitSHA          string `json:"commit_sha"`
 	OriginalLineNumber int32  `json:"original_line_number"`
 	OriginalPath       string `json:"original_path"`
-	PreviousCommitSHA  string `json:"previous_commit_sha,omitempty"`
+	PreviousCommitSHA  string `json:"previous_commit_sha"`
 	AuthorName         string `json:"author_name"`
 	AuthorEmail        string `json:"author_email"`
 	AuthorTime         string `json:"author_time"`
@@ -89,6 +89,15 @@ type commitInfoRaw struct {
 	CommitterName  string `json:"committer_name"`
 	CommitterEmail string `json:"committer_email"`
 	Date           string `json:"date"`
+}
+
+// commitInfoWithSignatureRaw extends commitInfoRaw with the signature details
+// the single-commit endpoint returns for signed commits. Both fields are
+// omitted for unsigned commits.
+type commitInfoWithSignatureRaw struct {
+	commitInfoRaw
+	Signature string `json:"signature"`
+	Payload   string `json:"payload"`
 }
 
 type listReposResponse struct {
@@ -185,7 +194,7 @@ type mergeResponse struct {
 	TreeSHA         string         `json:"tree_sha"`
 	Source          mergeSourceRaw `json:"source"`
 	Target          mergeTargetRaw `json:"target"`
-	MergeBaseSHA    string         `json:"merge_base_sha,omitempty"`
+	MergeBaseSHA    string         `json:"merge_base_sha"`
 	PromotedCommits int            `json:"promoted_commits"`
 }
 

@@ -36,6 +36,9 @@ type Op = string
 const (
 	OpNoForcePush Op = "no-force-push"
 	OpNoPush      Op = "no-push"
+	// OpVerifySig requires every commit introduced by a push to a matching ref
+	// to carry a valid signature from a registered signing key.
+	OpVerifySig Op = "verify-sig"
 )
 
 // Ops is a list of policy operations.
@@ -551,6 +554,15 @@ type CommitInfo struct {
 	CommitterEmail string
 	Date           time.Time
 	RawDate        string
+	// Signature is the armored OpenPGP/SSH signature from the commit's gpgsig
+	// header. Only populated by GetCommit for signed commits. Always empty for
+	// ListCommits entries and unsigned commits.
+	Signature string
+	// Payload is the exact bytes the signature is computed over (the raw commit
+	// object with the gpgsig header removed). Only populated by GetCommit for
+	// signed commits. Always empty for ListCommits entries and unsigned
+	// commits.
+	Payload string
 }
 
 // ListCommitsResult describes commits list.
@@ -566,7 +578,8 @@ type GetCommitOptions struct {
 	SHA string
 }
 
-// GetCommitResult is the result returned by Repo.GetCommit.
+// GetCommitResult is the result returned by Repo.GetCommit. For signed commits
+// the returned CommitInfo carries the armored Signature and signed Payload.
 type GetCommitResult struct {
 	Commit CommitInfo
 }

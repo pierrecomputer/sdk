@@ -46,6 +46,9 @@ Op = str
 
 OP_NO_FORCE_PUSH: Op = "no-force-push"
 OP_NO_PUSH: Op = "no-push"
+# Requires every commit introduced by a push to a matching ref to carry a valid
+# signature from a registered signing key.
+OP_VERIFY_SIG: Op = "verify-sig"
 
 # Ops is a list of policy operations.
 Ops = List[Op]
@@ -305,7 +308,14 @@ class DeleteBranchResult(TypedDict):
 
 
 class CommitInfo(TypedDict):
-    """Information about a commit."""
+    """Information about a commit.
+
+    ``signature`` and ``payload`` are populated only by ``get_commit`` for
+    signed commits (``signature`` is the armored OpenPGP/SSH block from the
+    commit's gpgsig header; ``payload`` is the exact bytes the signature is
+    computed over). Both keys are absent for list-commits entries and for
+    unsigned commits.
+    """
 
     sha: str
     message: str
@@ -315,6 +325,8 @@ class CommitInfo(TypedDict):
     committer_email: str
     date: datetime
     raw_date: str
+    signature: NotRequired[str]
+    payload: NotRequired[str]
 
 
 class ListCommitsResult(TypedDict):
@@ -326,7 +338,10 @@ class ListCommitsResult(TypedDict):
 
 
 class GetCommitResult(TypedDict):
-    """Result from fetching metadata for a single commit."""
+    """Result from fetching metadata for a single commit.
+
+    For signed commits, ``commit`` carries ``signature`` and ``payload``.
+    """
 
     commit: CommitInfo
 

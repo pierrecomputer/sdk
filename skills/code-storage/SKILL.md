@@ -61,6 +61,7 @@ JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
 |------------------|------------------------------------------------------------------------------|-------------------------------------------------------|
 | `no-force-push`  | TS `OP_NO_FORCE_PUSH` / Py `OP_NO_FORCE_PUSH` / Go `storage.OpNoForcePush`   | Rejects force pushes / non-fast-forward ref updates. |
 | `no-push`        | TS `OP_NO_PUSH` / Py `OP_NO_PUSH` / Go `storage.OpNoPush`                    | Rejects any push to matching refs.                   |
+| `verify-sig`     | TS `OP_VERIFY_SIG` / Py `OP_VERIFY_SIG` / Go `storage.OpVerifySig`           | Rejects pushes introducing commits without a valid signature from a registered signing key. |
 
 #### Per-ref policies (preferred, use this for new code)
 
@@ -437,7 +438,11 @@ curl "$CODE_STORAGE_BASE_URL/repos/commit?sha=COMMIT_SHA" \
 
 Params: `sha` (required — full SHA, short SHA, branch name, or any revision Git
 can resolve). Returns commit metadata only; use `/repos/diff` for the diff.
-Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date" } }`
+Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "signature"?, "payload"? } }`
+`signature` (armored OpenPGP/SSH block from the commit's gpgsig header) and
+`payload` (the exact signed bytes: the raw commit object with the gpgsig header
+removed) are present only for signed commits and omitted otherwise. Together
+they let callers verify the signature themselves, mirroring GitHub's `verification` object.
 Errors: `400` missing/blank `sha`, `404` commit not found.
 
 ## GET /repos/diff — Get Commit Diff
@@ -1027,5 +1032,5 @@ git push origin feature-branch
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
-| Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. Top-level `ops` is a legacy alias on URL-minting methods only. |
+| Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `squash` (not with `ff_only`). 409 on conflict. |

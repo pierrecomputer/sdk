@@ -1390,6 +1390,15 @@ class RepoImpl:
                 "date": date,
                 "raw_date": commit_raw["date"],
             }
+            # Only surface these for signed commits, which carry both the
+            # armored signature and the signed payload. If either is missing
+            # (absent/null/empty) the commit is treated as unsigned and
+            # neither key is attached.
+            signature = commit_raw.get("signature")
+            payload = commit_raw.get("payload")
+            if signature and payload:
+                commit["signature"] = signature
+                commit["payload"] = payload
             return {"commit": commit}
 
     async def get_blame(
