@@ -22,6 +22,7 @@ from pierre_storage.types import (
     BranchInfo,
     CommitBuilder,
     CommitInfo,
+    CommitInfoWithSignature,
     CommitMetadata,
     CommitResult,
     CommitSignature,
@@ -1380,7 +1381,7 @@ class RepoImpl:
 
             commit_raw = data["commit"]
             date = datetime.fromisoformat(commit_raw["date"].replace("Z", "+00:00"))
-            commit: CommitInfo = {
+            commit: CommitInfoWithSignature = {
                 "sha": commit_raw["sha"],
                 "message": commit_raw["message"],
                 "author_name": commit_raw["author_name"],
@@ -1390,6 +1391,14 @@ class RepoImpl:
                 "date": date,
                 "raw_date": commit_raw["date"],
             }
+            # Only present for signed commits, matching the server which omits
+            # both fields when a commit is unsigned.
+            signature = commit_raw.get("signature")
+            if signature is not None:
+                commit["signature"] = signature
+            payload = commit_raw.get("payload")
+            if payload is not None:
+                commit["payload"] = payload
             return {"commit": commit}
 
     async def get_blame(

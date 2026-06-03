@@ -527,8 +527,21 @@ export interface GetCommitOptions extends GitStorageInvocationOptions {
 
 export type GetCommitResponse = GetCommitResponseRaw;
 
+/**
+ * Commit metadata for a single resolved revision, extending {@link CommitInfo}
+ * with signature details surfaced only by the single-commit endpoint. Mirrors
+ * GitHub's commit verification object: `signature` is the armored block from
+ * the commit's gpgsig header (OpenPGP or SSH) and `payload` is the exact bytes
+ * the signature is computed over (the raw commit object with the gpgsig header
+ * removed). Both are absent for unsigned commits.
+ */
+export interface CommitInfoWithSignature extends CommitInfo {
+  signature?: string;
+  payload?: string;
+}
+
 export interface GetCommitResult {
-  commit: CommitInfo;
+  commit: CommitInfoWithSignature;
 }
 
 // Blame API types

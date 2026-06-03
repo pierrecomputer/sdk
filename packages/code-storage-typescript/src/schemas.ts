@@ -72,8 +72,13 @@ export const listCommitsResponseSchema = z.object({
   has_more: z.boolean(),
 });
 
+export const commitInfoWithSignatureRawSchema = commitInfoRawSchema.extend({
+  signature: z.string().optional(),
+  payload: z.string().optional(),
+});
+
 export const getCommitResponseSchema = z.object({
-  commit: commitInfoRawSchema,
+  commit: commitInfoWithSignatureRawSchema,
 });
 
 export const blameLineRawSchema = z.object({
@@ -330,6 +335,9 @@ export type ListBranchesResponseRaw = z.infer<
   typeof listBranchesResponseSchema
 >;
 export type RawCommitInfo = z.infer<typeof commitInfoRawSchema>;
+export type RawCommitInfoWithSignature = z.infer<
+  typeof commitInfoWithSignatureRawSchema
+>;
 export type ListCommitsResponseRaw = z.infer<typeof listCommitsResponseSchema>;
 export type GetCommitResponseRaw = z.infer<typeof getCommitResponseSchema>;
 export type BlameLineRaw = z.infer<typeof blameLineRawSchema>;

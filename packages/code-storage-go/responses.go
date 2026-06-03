@@ -56,7 +56,7 @@ type listCommitsResponse struct {
 }
 
 type getCommitResponse struct {
-	Commit commitInfoRaw `json:"commit"`
+	Commit commitInfoWithSignatureRaw `json:"commit"`
 }
 
 type blameResponse struct {
@@ -89,6 +89,15 @@ type commitInfoRaw struct {
 	CommitterName  string `json:"committer_name"`
 	CommitterEmail string `json:"committer_email"`
 	Date           string `json:"date"`
+}
+
+// commitInfoWithSignatureRaw extends commitInfoRaw with the signature details
+// the single-commit endpoint returns for signed commits. Both fields are
+// omitted for unsigned commits.
+type commitInfoWithSignatureRaw struct {
+	commitInfoRaw
+	Signature string `json:"signature,omitempty"`
+	Payload   string `json:"payload,omitempty"`
 }
 
 type listReposResponse struct {

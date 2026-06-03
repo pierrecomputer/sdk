@@ -566,9 +566,21 @@ type GetCommitOptions struct {
 	SHA string
 }
 
+// CommitInfoWithSignature extends CommitInfo with signature details that are
+// only surfaced on the single-commit endpoint. The shape mirrors GitHub's
+// commit verification object: Signature is the armored block (from the
+// commit's gpgsig header, OpenPGP or SSH) and Payload is the exact bytes the
+// signature is computed over (the raw commit object with the gpgsig header
+// removed). Both are empty for unsigned commits.
+type CommitInfoWithSignature struct {
+	CommitInfo
+	Signature string
+	Payload   string
+}
+
 // GetCommitResult is the result returned by Repo.GetCommit.
 type GetCommitResult struct {
-	Commit CommitInfo
+	Commit CommitInfoWithSignature
 }
 
 // BlameOptions configures a per-line blame lookup.

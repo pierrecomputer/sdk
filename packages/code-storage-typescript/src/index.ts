@@ -368,7 +368,15 @@ function transformListCommitsResult(
 
 function transformGetCommitResult(raw: GetCommitResponse): GetCommitResult {
   return {
-    commit: transformCommitInfo(raw.commit),
+    commit: {
+      ...transformCommitInfo(raw.commit),
+      ...(raw.commit.signature !== undefined
+        ? { signature: raw.commit.signature }
+        : {}),
+      ...(raw.commit.payload !== undefined
+        ? { payload: raw.commit.payload }
+        : {}),
+    },
   };
 }
 

@@ -437,7 +437,11 @@ curl "$CODE_STORAGE_BASE_URL/repos/commit?sha=COMMIT_SHA" \
 
 Params: `sha` (required — full SHA, short SHA, branch name, or any revision Git
 can resolve). Returns commit metadata only; use `/repos/diff` for the diff.
-Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date" } }`
+Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "signature"?, "payload"? } }`
+`signature` (armored OpenPGP/SSH block from the commit's gpgsig header) and
+`payload` (the exact signed bytes: the raw commit object with the gpgsig header
+removed) are present only for signed commits and omitted otherwise. Together
+they let callers verify the signature themselves, mirroring GitHub's `verification` object.
 Errors: `400` missing/blank `sha`, `404` commit not found.
 
 ## GET /repos/diff — Get Commit Diff

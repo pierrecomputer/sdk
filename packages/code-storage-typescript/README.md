@@ -254,6 +254,12 @@ console.log(commits.commits);
 // Get a single commit's metadata (no diff)
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
 console.log(commit.message, commit.authorName);
+// Signed commits also expose the armored signature plus the exact signed
+// payload (raw commit object minus the gpgsig header) so you can verify it
+// yourself. Both are undefined for unsigned commits.
+if (commit.signature) {
+  console.log(commit.signature, commit.payload);
+}
 
 // Blame a file (per-line authorship). The top-level `commitSha` is the SHA the
 // `ref` resolved to; each entry in `lines` carries its own author/committer
@@ -797,8 +803,17 @@ interface GetCommitOptions {
   ttl?: number;
 }
 
+interface CommitInfoWithSignature extends CommitInfo {
+  // Armored OpenPGP/SSH signature from the commit's gpgsig header. Present
+  // only for signed commits.
+  signature?: string;
+  // The exact signed bytes: the raw commit object with the gpgsig header
+  // removed. Present only for signed commits.
+  payload?: string;
+}
+
 interface GetCommitResult {
-  commit: CommitInfo;
+  commit: CommitInfoWithSignature;
 }
 
 interface BlameOptions {

@@ -325,10 +325,25 @@ class ListCommitsResult(TypedDict):
     has_more: bool
 
 
+class CommitInfoWithSignature(CommitInfo, total=False):
+    """Commit metadata for a single resolved revision.
+
+    Extends :class:`CommitInfo` with signature details surfaced only by the
+    single-commit endpoint. Mirrors GitHub's commit verification object:
+    ``signature`` is the armored block from the commit's gpgsig header (OpenPGP
+    or SSH) and ``payload`` is the exact bytes the signature is computed over
+    (the raw commit object with the gpgsig header removed). Both keys are
+    omitted for unsigned commits.
+    """
+
+    signature: str
+    payload: str
+
+
 class GetCommitResult(TypedDict):
     """Result from fetching metadata for a single commit."""
 
-    commit: CommitInfo
+    commit: CommitInfoWithSignature
 
 
 class BlameLine(TypedDict):
