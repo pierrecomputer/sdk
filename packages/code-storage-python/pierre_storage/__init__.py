@@ -9,6 +9,7 @@ from pierre_storage.errors import ApiError, RefUpdateError
 from pierre_storage.types import (
     OP_NO_FORCE_PUSH,
     OP_NO_PUSH,
+    OP_VERIFY_SIG,
     BaseRepo,
     BlameLine,
     BlameResult,
@@ -101,6 +102,7 @@ __all__ = [
     "Op",
     "OP_NO_FORCE_PUSH",
     "OP_NO_PUSH",
+    "OP_VERIFY_SIG",
     "Ops",
     "RefPolicy",
     "Refs",

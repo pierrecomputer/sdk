@@ -142,6 +142,30 @@ func TestRemoteURLRefs(t *testing.T) {
 		}
 	})
 
+	t.Run("includes verify-sig op in refs claim", func(t *testing.T) {
+		remote, err := repo.RemoteURL(nil, RemoteURLOptions{
+			RefPolicies: RefPolicyList{
+				{Pattern: "refs/heads/main", Ops: Ops{OpVerifySig}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("remote url error: %v", err)
+		}
+		claims := parseJWTFromURL(t, remote)
+		refs, ok := claims["refs"].([]interface{})
+		if !ok || len(refs) != 1 {
+			t.Fatalf("expected 1 ref rule, got %v", claims["refs"])
+		}
+		rule, ok := refs[0].([]interface{})
+		if !ok || len(rule) != 2 {
+			t.Fatalf("unexpected rule shape: %v", refs[0])
+		}
+		ops, ok := rule[1].([]interface{})
+		if !ok || len(ops) != 1 || ops[0] != "verify-sig" {
+			t.Fatalf("unexpected ops: %v", rule[1])
+		}
+	})
+
 	t.Run("omits refs from JWT when not provided", func(t *testing.T) {
 		remote, err := repo.RemoteURL(nil, RemoteURLOptions{})
 		if err != nil {

@@ -1152,6 +1152,20 @@ class TestPublicJWTHelper:
         ]
         assert "ops" not in payload
 
+    def test_generate_jwt_with_verify_sig_ref(self, test_key: str) -> None:
+        """Test JWT generation with the verify-sig ref policy op."""
+        from pierre_storage import OP_VERIFY_SIG
+
+        token = generate_jwt(
+            key_pem=test_key,
+            issuer="test-customer",
+            repo_id="test-repo",
+            refs=[{"pattern": "refs/heads/main", "ops": [OP_VERIFY_SIG]}],
+        )
+
+        payload = jwt.decode(token, options={"verify_signature": False})
+        assert payload["refs"] == [["refs/heads/main", ["verify-sig"]]]
+
     def test_generate_jwt_without_refs(self, test_key: str) -> None:
         """Test JWT generation omits refs when not provided."""
         token = generate_jwt(

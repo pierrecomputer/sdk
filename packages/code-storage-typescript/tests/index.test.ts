@@ -1,7 +1,12 @@
 import { importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CodeStorage, GitStorage, createClient } from '../src/index';
+import {
+  CodeStorage,
+  GitStorage,
+  OP_VERIFY_SIG,
+  createClient,
+} from '../src/index';
 
 // Mock fetch globally if it is not already stubbed
 const existingFetch = globalThis.fetch as unknown;
@@ -2991,6 +2996,22 @@ describe('GitStorage', () => {
         ['*', ['no-force-push']],
       ]);
       expect(payload).not.toHaveProperty('ops');
+    });
+
+    it('should include the verify-sig op in the refs claim', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({});
+
+      expect(OP_VERIFY_SIG).toBe('verify-sig');
+
+      const url = await repo.getRemoteURL({
+        refPolicies: [{ pattern: 'refs/heads/main', ops: [OP_VERIFY_SIG] }],
+      });
+
+      const jwt = extractJWT(url);
+      const payload = decodeJwtPayload(jwt);
+
+      expect(payload.refs).toEqual([['refs/heads/main', ['verify-sig']]]);
     });
 
     it('should encode allow-rules with empty ops array in refs claim', async () => {

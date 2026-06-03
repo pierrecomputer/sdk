@@ -54,6 +54,12 @@ export const OP_NO_FORCE_PUSH: Op = "no-force-push";
 
 export const OP_NO_PUSH: Op = "no-push";
 
+/**
+ * Requires every commit introduced by a push to a matching ref to carry a
+ * valid signature from a signing key registered for the tenant.
+ */
+export const OP_VERIFY_SIG: Op = "verify-sig";
+
 /** A list of policy operations. */
 export type Ops = Op[];
 

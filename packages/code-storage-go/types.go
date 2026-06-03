@@ -36,6 +36,9 @@ type Op = string
 const (
 	OpNoForcePush Op = "no-force-push"
 	OpNoPush      Op = "no-push"
+	// OpVerifySig requires every commit introduced by a push to a matching ref
+	// to carry a valid signature from a signing key registered for the tenant.
+	OpVerifySig Op = "verify-sig"
 )
 
 // Ops is a list of policy operations.
