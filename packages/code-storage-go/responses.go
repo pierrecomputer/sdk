@@ -27,7 +27,7 @@ type fileWithMetadataRaw struct {
 	Mode          string `json:"mode"`
 	Size          int64  `json:"size"`
 	LastCommitSHA string `json:"last_commit_sha"`
-	Type          string `json:"type,omitempty"`
+	Type          string `json:"type"`
 }
 
 type commitMetadataRaw struct {
@@ -71,7 +71,7 @@ type blameLineRaw struct {
 	CommitSHA          string `json:"commit_sha"`
 	OriginalLineNumber int32  `json:"original_line_number"`
 	OriginalPath       string `json:"original_path"`
-	PreviousCommitSHA  string `json:"previous_commit_sha,omitempty"`
+	PreviousCommitSHA  string `json:"previous_commit_sha"`
 	AuthorName         string `json:"author_name"`
 	AuthorEmail        string `json:"author_email"`
 	AuthorTime         string `json:"author_time"`
@@ -96,8 +96,8 @@ type commitInfoRaw struct {
 // omitted for unsigned commits.
 type commitInfoWithSignatureRaw struct {
 	commitInfoRaw
-	Signature string `json:"signature,omitempty"`
-	Payload   string `json:"payload,omitempty"`
+	Signature string `json:"signature"`
+	Payload   string `json:"payload"`
 }
 
 type listReposResponse struct {
@@ -194,7 +194,7 @@ type mergeResponse struct {
 	TreeSHA         string         `json:"tree_sha"`
 	Source          mergeSourceRaw `json:"source"`
 	Target          mergeTargetRaw `json:"target"`
-	MergeBaseSHA    string         `json:"merge_base_sha,omitempty"`
+	MergeBaseSHA    string         `json:"merge_base_sha"`
 	PromotedCommits int            `json:"promoted_commits"`
 }
 
