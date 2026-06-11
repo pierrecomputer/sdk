@@ -3,6 +3,7 @@
   "include": ["src/**/*", "tsup.config.ts", "package.json"],
   "references": [],
   "compilerOptions": {
+    "lib": ["ES2024"],
     "outDir": "../../.moon/cache/types/packages/git-storage-sdk",
     "tsBuildInfoFile": "../../.moon/cache/types/packages/git-storage-sdk/.tsbuildinfo"
   }

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.options.json",
   "include": ["src/**/*"],
   "compilerOptions": {
+    "lib": ["ES2024"],
     "composite": false,
     "incremental": false,
     "declaration": true,

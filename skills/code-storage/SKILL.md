@@ -785,6 +785,30 @@ git add . && git commit -m "Agent changes"
 git push
 ```
 
+### Stable HTTPS Git remotes with credential helper
+
+The TypeScript package installs `git-credential-code-storage`, a Git credential
+helper that keeps JWTs out of Git config while using normal HTTPS remotes:
+
+```bash
+export PIERRE_PRIVATE_KEY_FILE=/path/to/key.pem
+git remote set-url origin https://ORG.code.storage/REPO_ID.git
+git config credential.https://ORG.code.storage.helper code-storage
+git config credential.https://ORG.code.storage.useHttpPath true
+git push origin main
+```
+
+The URL stored in `.git/config` is just
+`https://ORG.code.storage/REPO_ID.git`. When Git asks for credentials, the helper
+reads `PIERRE_PRIVATE_KEY_FILE` or `PIERRE_PRIVATE_KEY`, derives the org from the
+host and the repo ID from the path, then returns `username=t` and a fresh
+`git:write` + `git:read` JWT as the password. Set `PIERRE_TOKEN_TTL` to override
+the default 1-hour token TTL, and `PIERRE_DEBUG=1` to log token-acquisition
+diagnostics to stderr (tokens themselves are never logged). `useHttpPath=true`
+is required; without it Git does not pass the repo path to the helper.
+Ephemeral and import remote paths (`+ephemeral.git`, `+import.git`) resolve to
+the base repository's credentials.
+
 ## PROCEDURE 3: Ephemeral Branch Workflow (Preview Environment)
 
 **Goal:** Create isolated preview branch, work, then promote to persistent branch.

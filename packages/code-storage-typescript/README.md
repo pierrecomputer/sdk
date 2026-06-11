@@ -123,6 +123,45 @@ const readOnlyUrl = await repo.getRemoteURL({
 // - 'repo:write' - Create a repository
 ```
 
+### Git HTTPS Credential Helper
+
+Installing `@pierre/storage` also installs `git-credential-code-storage`, a Git
+credential helper that lets you keep a plain HTTPS remote URL in Git config and
+mints a fresh JWT each time Git asks for credentials:
+
+```bash
+export PIERRE_PRIVATE_KEY_FILE=/path/to/key.pem
+git remote set-url origin https://your-name.code.storage/repo-id.git
+git config credential.https://your-name.code.storage.helper code-storage
+git config credential.https://your-name.code.storage.useHttpPath true
+```
+
+With this setup, `.git/config` stores only the token-free URL:
+
+```text
+url = https://your-name.code.storage/repo-id.git
+```
+
+At request time, the helper returns username `t` and a newly minted JWT as the
+password. `useHttpPath=true` is required so Git passes the repository path to
+the helper. The helper reads:
+
+- `PIERRE_PRIVATE_KEY_FILE` or `PIERRE_PRIVATE_KEY` for the signing key.
+- `PIERRE_TOKEN_TTL` for the minted JWT TTL in seconds, defaulting to 1 hour
+  (each Git operation requests fresh credentials).
+- `PIERRE_DEBUG` to log token acquisition diagnostics to stderr (set to any
+  value except `0` or `false`). Minted tokens are never logged, and stdout
+  stays reserved for the Git credential protocol.
+
+Nested repo IDs, ephemeral remotes, and import remotes use the same paths as
+authenticated HTTPS URLs:
+
+```bash
+git remote set-url origin https://your-name.code.storage/team/project.git
+git remote add ephemeral https://your-name.code.storage/repo-id+ephemeral.git
+git remote add import https://your-name.code.storage/repo-id+import.git
+```
+
 #### Ephemeral Branches
 
 For working with ephemeral branches (temporary branches isolated from the main
@@ -1002,14 +1041,15 @@ interface RestoreCommitResult {
 ## Authentication
 
 The SDK uses JWT (JSON Web Tokens) for authentication. When you call
-`getRemoteURL()`, it:
+`getRemoteURL()` or configure the HTTPS credential helper, it:
 
 1. Creates a JWT with your name, repository ID, and requested permissions
 2. Signs it with your key
 3. Embeds it in the Git remote URL as the password
 
 The generated URLs are compatible with standard Git clients and include all
-necessary authentication.
+necessary authentication. The HTTPS credential helper keeps the token out of
+Git config and mints a fresh token for each helper invocation.
 
 ## Error Handling
 

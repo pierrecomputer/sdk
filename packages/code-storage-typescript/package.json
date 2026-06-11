@@ -19,6 +19,9 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "git-credential-code-storage": "./dist/git-credential-code-storage.js"
+  },
   "files": [
     "dist",
     "src"
