@@ -534,6 +534,8 @@ class MergeBranchesOptions(TypedDict, total=False):
     source_is_ephemeral: bool
     target_branch: str  # required
     target_is_ephemeral: bool
+    # When provided, target must still point at this SHA; omit to merge current tip.
+    # Native Code Storage targets may retry stale movement while preserving source commit.
     expected_target_sha: str
     commit_message: str
     author: CommitSignature

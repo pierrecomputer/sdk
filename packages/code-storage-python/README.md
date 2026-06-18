@@ -237,7 +237,7 @@ merge_result = await repo.merge(
     target_branch="main",
     target_is_ephemeral=False,  # optional; target branch can independently be ephemeral
     strategy="merge",           # one of: "merge", "ff_only", "ff_prefer"
-    expected_target_sha="abc123",  # optional optimistic concurrency check
+    expected_target_sha="abc123",  # optional; 409 if target moved
     commit_message="Merge feature/preview",  # optional
     author={"name": "Bot", "email": "bot@example.com"},  # optional
     committer={"name": "Bot", "email": "bot@example.com"},  # optional
@@ -246,6 +246,11 @@ merge_result = await repo.merge(
 )
 print(merge_result["result"], merge_result["commit_sha"])
 print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
+# Target-tip modes:
+# - Provide expected_target_sha when target_branch must still point at that commit.
+# - Omit expected_target_sha to merge into the current target tip. For native
+#   Code Storage targets, the gateway may retry stale target/repository movement
+#   internally while keeping the resolved source commit pinned.
 
 # List tags
 tags = await repo.list_tags(limit=10)

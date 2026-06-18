@@ -2087,7 +2087,7 @@ describe('GitStorage', () => {
   });
 
   describe('Repo merge', () => {
-    it('posts merge request and returns transformed response', async () => {
+    it('posts guarded target-tip merge request and returns transformed response', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge' });
 
@@ -2166,7 +2166,7 @@ describe('GitStorage', () => {
       });
     });
 
-    it('omits blank optional string fields from merge request', async () => {
+    it('omits expectedTargetSha for current target tip mode', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge-minimal' });
 
@@ -2201,8 +2201,6 @@ describe('GitStorage', () => {
       await repo.merge({
         sourceBranch: 'feature',
         targetBranch: 'main',
-        expectedTargetSha: ' ',
-        commitMessage: '',
         strategy: 'ff_prefer',
       });
     });

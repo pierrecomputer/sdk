@@ -970,7 +970,13 @@ class RepoImpl:
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult:
-        """Merge a source branch into a target branch."""
+        """Merge a source branch into a target branch.
+
+        Provide expected_target_sha to require the target branch to still point at that
+        commit. Omit it to merge into the current target tip; native Code Storage
+        targets may retry stale target/repository movement while preserving the
+        resolved source commit.
+        """
         source_branch_clean = source_branch.strip()
         target_branch_clean = target_branch.strip()
         strategy_clean = strategy.strip()

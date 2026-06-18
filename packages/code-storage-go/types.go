@@ -430,10 +430,12 @@ const (
 // MergeOptions configures branch merge operations.
 type MergeOptions struct {
 	InvocationOptions
-	SourceBranch            string
-	SourceIsEphemeral       bool
-	TargetBranch            string
-	TargetIsEphemeral       bool
+	SourceBranch      string
+	SourceIsEphemeral bool
+	TargetBranch      string
+	TargetIsEphemeral bool
+	// ExpectedTargetSHA, when non-empty, requires the target branch to still point at
+	// that commit. Leave empty to merge into the current target tip.
 	ExpectedTargetSHA       string
 	CommitMessage           string
 	Author                  *CommitSignature
