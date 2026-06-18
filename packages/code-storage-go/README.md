@@ -174,6 +174,8 @@ result, err := repo.Merge(context.Background(), storage.MergeOptions{
 	SourceBranch:      "feature",
 	SourceIsEphemeral: true,
 	TargetBranch:      "main",
+	// Leave ExpectedTargetSHA empty to merge into the current target tip.
+	// Set it to require TargetBranch to still point at that commit; moved targets return 409.
 	Strategy:          storage.MergeStrategyMerge,
 	Author:            &storage.CommitSignature{Name: "Merge Bot", Email: "merge@example.com"},
 })

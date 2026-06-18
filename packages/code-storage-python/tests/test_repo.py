@@ -1252,8 +1252,10 @@ class TestRepoBranchOperations:
             assert payload["exp"] - payload["iat"] == 900
 
     @pytest.mark.asyncio
-    async def test_merge_omits_blank_optional_fields(self, git_storage_options: dict) -> None:
-        """Blank optional merge fields should be omitted from the request body."""
+    async def test_merge_omits_expected_target_sha_for_current_target_tip(
+        self, git_storage_options: dict
+    ) -> None:
+        """Omitted expected_target_sha requests merge into the current target tip."""
         storage = GitStorage(git_storage_options)
 
         create_repo_response = MagicMock()
@@ -1287,8 +1289,6 @@ class TestRepoBranchOperations:
                 source_branch="feature",
                 target_branch="main",
                 strategy="ff_prefer",
-                expected_target_sha=" ",
-                commit_message=None,
             )
 
             assert "merge_base_sha" not in result

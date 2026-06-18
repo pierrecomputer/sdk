@@ -362,6 +362,14 @@ curl "$CODE_STORAGE_BASE_URL/repos/merge" -X POST \
 Required: `source_branch`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
 Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
 `commit_message`, `author`, `committer`, `allow_unrelated_histories`, `squash`.
+
+Target-tip modes:
+- Set `expected_target_sha` when the target branch must still point at a specific
+  commit; movement returns HTTP 409.
+- Omit `expected_target_sha` to merge into the current target tip. For native Code
+  Storage targets, the gateway may retry stale target/repository movement internally
+  while keeping the originally resolved source commit pinned.
+
 Set `squash: true` to collapse the source into a single new commit whose only
 parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
@@ -1033,4 +1041,4 @@ git push origin feature-branch
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
-| Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `squash` (not with `ff_only`). 409 on conflict. |
+| Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |

@@ -1106,6 +1106,10 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 }
 
 // Merge merges a source branch into a target branch.
+// Set ExpectedTargetSHA to require the target branch to still point at that commit.
+// The server returns 409 if it moved. Leave ExpectedTargetSHA empty to merge into the
+// current target tip. Native Code Storage targets may retry stale target/repository
+// movement while preserving the resolved source commit.
 func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, error) {
 	sourceBranch := strings.TrimSpace(options.SourceBranch)
 	if sourceBranch == "" {

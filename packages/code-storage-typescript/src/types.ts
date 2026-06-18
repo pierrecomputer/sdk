@@ -929,6 +929,12 @@ export interface MergeOptions
   sourceIsEphemeral?: boolean;
   targetBranch: string;
   targetIsEphemeral?: boolean;
+  /**
+   * When provided, the target branch must still point at this commit; the merge
+   * fails with HTTP 409 if it moved. Omit to merge into the current target tip.
+   * Native Code Storage targets may retry stale target/repository movement while
+   * preserving the resolved source commit.
+   */
   expectedTargetSha?: string;
   commitMessage?: string;
   author?: CommitSignature;

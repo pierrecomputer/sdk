@@ -341,7 +341,7 @@ const mergeResult = await repo.merge({
   sourceIsEphemeral: true,
   targetBranch: 'main',
   targetIsEphemeral: false,
-  expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional guard
+  expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional; 409 if target moved
   strategy: 'merge', // 'merge' | 'ff_only' | 'ff_prefer'
   commitMessage: 'Merge feature/demo', // optional
   author: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
@@ -357,6 +357,11 @@ console.log(mergeResult.commitSha, mergeResult.target.newSha);
 // reported), and number of promoted commits. A backend conflict response
 // (HTTP 409) is surfaced as an API error with the response body preserved for
 // callers that need conflict_paths or merge_base_sha.
+// Target-tip modes:
+// - Provide expectedTargetSha when targetBranch must still point at that commit.
+// - Omit expectedTargetSha to merge into the current target tip. For native
+//   Code Storage targets, the gateway may retry stale target/repository
+//   movement internally while keeping the resolved source commit pinned.
 
 // Create a commit using the streaming helper
 const fs = await import('node:fs/promises');
@@ -899,6 +904,7 @@ interface MergeOptions {
   sourceIsEphemeral?: boolean;
   targetBranch: string;
   targetIsEphemeral?: boolean;
+  // Optional target-tip guard. Omit to merge into the current target tip.
   expectedTargetSha?: string;
   commitMessage?: string;
   author?: CommitSignature;

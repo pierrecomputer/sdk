@@ -809,7 +809,7 @@ func TestCreateBranchTTL(t *testing.T) {
 	}
 }
 
-func TestMergeRequestAndResponse(t *testing.T) {
+func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 	var captured map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -903,7 +903,7 @@ func TestMergeRequestAndResponse(t *testing.T) {
 	}
 }
 
-func TestMergeOmitsOptionalFields(t *testing.T) {
+func TestMergeCurrentTargetTipModeOmitsExpectedTargetSHA(t *testing.T) {
 	var captured map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/merge" {
