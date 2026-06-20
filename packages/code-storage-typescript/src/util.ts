@@ -14,10 +14,12 @@ export function timingSafeEqual(
   return result === 0;
 }
 
-export async function getEnvironmentCrypto() {
+export function getEnvironmentCrypto() {
   if (!globalThis.crypto) {
-    const { webcrypto } = await import('node:crypto');
-    return webcrypto;
+    throw new Error(
+      'Web Crypto API is not available in this environment (globalThis.crypto is missing). ' +
+      'Use Node.js >= 20, or a runtime that provides the Web Crypto API.'
+    );
   }
   return globalThis.crypto;
 }
