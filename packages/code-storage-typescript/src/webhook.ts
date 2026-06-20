@@ -78,7 +78,7 @@ export function parseSignatureHeader(
  * ```
  */
 export async function validateWebhookSignature(
-  payload: string | Buffer,
+  payload: string | Uint8Array,
   signatureHeader: string,
   secret: string,
   options: WebhookValidationOptions = {}
@@ -132,9 +132,9 @@ export async function validateWebhookSignature(
     }
   }
 
-  // Convert payload to string if it's a Buffer
+  // Convert payload to string if it's binary
   const payloadStr =
-    typeof payload === 'string' ? payload : payload.toString('utf8');
+    typeof payload === 'string' ? payload : new TextDecoder().decode(payload);
 
   // Compute expected signature
   // Format: HMAC-SHA256(secret, timestamp + "." + payload)
@@ -142,19 +142,7 @@ export async function validateWebhookSignature(
   const expectedSignature = await createHmac('sha256', secret, signedData);
 
   // Compare signatures using constant-time comparison
-  const expectedBuffer = Buffer.from(expectedSignature);
-  const actualBuffer = Buffer.from(parsed.signature);
-
-  // Ensure both buffers are the same length for timing-safe comparison
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return {
-      valid: false,
-      error: 'Invalid signature',
-      timestamp,
-    };
-  }
-
-  const signaturesMatch = timingSafeEqual(expectedBuffer, actualBuffer);
+  const signaturesMatch = timingSafeEqual(expectedSignature, parsed.signature);
   if (!signaturesMatch) {
     return {
       valid: false,
@@ -197,7 +185,7 @@ export async function validateWebhookSignature(
  * ```
  */
 export async function validateWebhook(
-  payload: string | Buffer,
+  payload: string | Uint8Array,
   headers: Record<string, string | string[] | undefined>,
   secret: string,
   options: WebhookValidationOptions = {}
@@ -235,7 +223,7 @@ export async function validateWebhook(
 
   // Parse payload
   const payloadStr =
-    typeof payload === 'string' ? payload : payload.toString('utf8');
+    typeof payload === 'string' ? payload : new TextDecoder().decode(payload);
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(payloadStr);
