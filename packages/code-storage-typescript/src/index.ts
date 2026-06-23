@@ -1951,12 +1951,10 @@ export class GitStorage {
     if (
       !options ||
       options.name === undefined ||
-      options.key === undefined ||
-      options.name === null ||
-      options.key === null
+      options.name === null
     ) {
       throw new Error(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires a name. Please check your configuration and try again.'
       );
     }
 
@@ -1964,8 +1962,21 @@ export class GitStorage {
       throw new Error('GitStorage name must be a non-empty string.');
     }
 
-    if (typeof options.key !== 'string' || options.key.trim() === '') {
+    const hasKey = options.key !== undefined && options.key !== null;
+    const hasToken = options.token !== undefined && options.token !== null;
+
+    if (!hasKey && !hasToken) {
+      throw new Error(
+        'GitStorage requires either a key or a token. Please check your configuration and try again.'
+      );
+    }
+
+    if (hasKey && (typeof options.key !== 'string' || options.key.trim() === '')) {
       throw new Error('GitStorage key must be a non-empty string.');
+    }
+
+    if (hasToken && (typeof options.token !== 'string' || options.token.trim() === '')) {
+      throw new Error('GitStorage token must be a non-empty string.');
     }
 
     const resolvedApiBaseUrl =
@@ -1980,6 +1991,7 @@ export class GitStorage {
 
     this.options = {
       key: options.key,
+      token: options.token,
       name: options.name,
       apiBaseUrl: resolvedApiBaseUrl,
       apiVersion: resolvedApiVersion,
@@ -2297,6 +2309,19 @@ export class GitStorage {
     repoId: string,
     options?: GetRemoteURLOptions
   ): Promise<string> {
+    // When the caller supplied a pre-minted token, use it verbatim. Its own
+    // claims (repo, scopes, exp) govern access, so per-call permission, TTL,
+    // and ref-policy options do not apply.
+    if (this.options.token) {
+      return this.options.token;
+    }
+
+    if (!this.options.key) {
+      throw new Error(
+        'GitStorage requires a key to generate a JWT. Please check your configuration and try again.'
+      );
+    }
+
     // Default permissions and TTL
     const permissions = options?.permissions || ['git:write', 'git:read'];
     const ttl = resolveInvocationTtlSeconds(

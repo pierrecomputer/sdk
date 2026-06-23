@@ -31,6 +31,18 @@ const store = new GitStorage({
 });
 ```
 
+You can also supply a pre-minted JWT instead of a key. The client then sends
+that token on every request rather than signing a fresh one per call. The
+token's own claims (repo, scopes, expiry) govern what the client can do, so
+per-call options like `permissions`, `ttl`, and `refPolicies` are ignored.
+
+```typescript
+const store = new GitStorage({
+  name: 'your-name',
+  token: 'your-pre-minted-jwt', // e.g., issued by your backend for an end user
+});
+```
+
 ### Creating a Repository
 
 ```typescript
@@ -510,7 +522,8 @@ class GitStorage {
 ```typescript
 interface GitStorageOptions {
   name: string; // Your identifier
-  key: string; // Your API key
+  key?: string; // Your ES256 private key, used to mint a JWT per call (required unless `token` is set)
+  token?: string; // A pre-minted JWT sent on every request instead of signing one from `key`
   defaultTTL?: number; // Default TTL for generated JWTs (seconds)
 }
 

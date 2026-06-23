@@ -70,42 +70,51 @@ describe('GitStorage', () => {
       expect(config.key).toBe(key);
     });
 
-    it('should throw error when key is missing', () => {
+    it('should throw error when name is missing', () => {
       expect(() => {
-        // @ts-expect-error - Testing missing key
+        // @ts-expect-error - Testing missing name
         new GitStorage({});
       }).toThrow(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires a name. Please check your configuration and try again.'
       );
     });
 
-    it('should throw error when name or key is null or undefined', () => {
+    it('should throw error when neither key nor token is supplied', () => {
+      expect(() => {
+        // @ts-expect-error - Testing missing credential
+        new GitStorage({ name: 'v0' });
+      }).toThrow(
+        'GitStorage requires either a key or a token. Please check your configuration and try again.'
+      );
+
       expect(() => {
         // @ts-expect-error - Testing null key
         new GitStorage({ name: 'v0', key: null });
       }).toThrow(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires either a key or a token. Please check your configuration and try again.'
       );
 
       expect(() => {
         // @ts-expect-error - Testing undefined key
         new GitStorage({ name: 'v0', key: undefined });
       }).toThrow(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires either a key or a token. Please check your configuration and try again.'
       );
+    });
 
+    it('should throw error when name is null or undefined', () => {
       expect(() => {
         // @ts-expect-error - Testing null name
         new GitStorage({ name: null, key: 'test-key' });
       }).toThrow(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires a name. Please check your configuration and try again.'
       );
 
       expect(() => {
         // @ts-expect-error - Testing undefined name
         new GitStorage({ name: undefined, key: 'test-key' });
       }).toThrow(
-        'GitStorage requires a name and key. Please check your configuration and try again.'
+        'GitStorage requires a name. Please check your configuration and try again.'
       );
     });
 
@@ -156,6 +165,47 @@ describe('GitStorage', () => {
         new GitStorage({ name: {}, key: 'test-key' });
       }).toThrow('GitStorage name must be a non-empty string.');
     });
+
+    it('should construct with a token instead of a key', () => {
+      const store = new GitStorage({ name: 'v0', token: 'supplied.jwt.token' });
+      expect(store).toBeInstanceOf(GitStorage);
+    });
+
+    it('should throw error when token is empty string', () => {
+      expect(() => {
+        new GitStorage({ name: 'v0', token: '   ' });
+      }).toThrow('GitStorage token must be a non-empty string.');
+    });
+  });
+
+  it('sends a supplied token verbatim instead of minting a JWT', async () => {
+    const suppliedToken = 'header.payload.signature';
+    const store = new GitStorage({ name: 'v0', token: suppliedToken });
+    const repo = await store.createRepo({ id: 'repo-supplied-token' });
+
+    mockFetch.mockImplementationOnce((_url, init) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      expect(stripBearer(headers.Authorization)).toBe(suppliedToken);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          commit: {
+            sha: 'abc123',
+            message: 'msg',
+            author_name: 'A',
+            author_email: 'a@example.com',
+            committer_name: 'A',
+            committer_email: 'a@example.com',
+            date: '2024-01-15T14:32:18Z',
+          },
+        }),
+      } as any);
+    });
+
+    const result = await repo.getCommit({ sha: 'abc123' });
+    expect(result.commit.sha).toBe('abc123');
   });
 
   it('parses commit dates into Date instances', async () => {

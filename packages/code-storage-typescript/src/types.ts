@@ -40,8 +40,19 @@ export interface OverrideableGitStorageOptions {
 }
 
 export interface GitStorageOptions extends OverrideableGitStorageOptions {
-  key: string;
+  /**
+   * ES256 private key (PKCS#8 PEM) used to mint a fresh JWT for each API call.
+   * Required unless `token` is supplied.
+   */
+  key?: string;
   name: string;
+  /**
+   * A pre-minted JWT to send on every authenticated request instead of signing
+   * one per call from `key`. When set, `key` is not required and per-call scope,
+   * TTL, and ref-policy options are ignored — the token's own claims (repo,
+   * scopes, exp) govern what the client is allowed to do.
+   */
+  token?: string;
   defaultTTL?: number;
 }
 
