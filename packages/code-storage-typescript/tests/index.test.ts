@@ -2136,6 +2136,169 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('Repo previewMerge', () => {
+    it('gets merge preview with read scope and returns conflict content', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-preview-merge' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe('/api/v1/repos/merge/preview');
+        expect(requestUrl.searchParams.get('source_branch')).toBe('feature/preview');
+        expect(requestUrl.searchParams.get('target_branch')).toBe('main');
+        expect(requestUrl.searchParams.get('include_content')).toBe('true');
+
+        const requestInit = init as RequestInit;
+        expect(requestInit.method).toBe('GET');
+        expect(requestInit.body).toBeUndefined();
+
+        const headers = requestInit.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['git:read']);
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            status: 'conflicted',
+            result: 'merge_commit',
+            source_branch: 'feature/preview',
+            target_branch: 'main',
+            source_tip_sha: 'source-sha',
+            target_tip_sha: 'target-sha',
+            merge_base_sha: 'base-sha',
+            conflict_paths: ['docs/conflict.txt'],
+            conflicts: [
+              {
+                path: 'docs/conflict.txt',
+                result: {
+                  oid: 'result-oid',
+                  content: '<<<<<<< ours',
+                  truncated: false,
+                  binary: false,
+                },
+                base: { oid: 'base-oid', truncated: false, binary: false },
+                ours: {
+                  oid: 'ours-oid',
+                  content: 'ours',
+                  truncated: false,
+                  binary: false,
+                },
+                theirs: {
+                  oid: 'theirs-oid',
+                  content: 'theirs',
+                  truncated: false,
+                  binary: false,
+                },
+              },
+            ],
+            filtered_conflicts: [
+              { path: 'src/app.ts', reason: 'max_conflict_files_exceeded' },
+            ],
+          }),
+        } as any);
+      });
+
+      const result = await repo.previewMerge({
+        sourceBranch: ' feature/preview ',
+        targetBranch: ' main ',
+        includeContent: true,
+      });
+
+      expect(result).toEqual({
+        status: 'conflicted',
+        result: 'merge_commit',
+        sourceBranch: 'feature/preview',
+        targetBranch: 'main',
+        sourceTipSha: 'source-sha',
+        targetTipSha: 'target-sha',
+        mergeBaseSha: 'base-sha',
+        conflictPaths: ['docs/conflict.txt'],
+        conflicts: [
+          {
+            path: 'docs/conflict.txt',
+            result: {
+              oid: 'result-oid',
+              content: '<<<<<<< ours',
+              truncated: false,
+              binary: false,
+            },
+            base: { oid: 'base-oid', truncated: false, binary: false },
+            ours: {
+              oid: 'ours-oid',
+              content: 'ours',
+              truncated: false,
+              binary: false,
+            },
+            theirs: {
+              oid: 'theirs-oid',
+              content: 'theirs',
+              truncated: false,
+              binary: false,
+            },
+          },
+        ],
+        filteredConflicts: [
+          { path: 'src/app.ts', reason: 'max_conflict_files_exceeded' },
+        ],
+      });
+    });
+
+    it('defaults omitted preview merge conflict arrays to empty lists', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-preview-merge-clean' });
+
+      mockFetch.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            status: 'clean',
+            result: 'fast_forward',
+            source_branch: 'feature/preview',
+            target_branch: 'main',
+            source_tip_sha: 'source-sha',
+            target_tip_sha: 'target-sha',
+            merge_base_sha: 'base-sha',
+          }),
+        } as any)
+      );
+
+      const result = await repo.previewMerge({
+        sourceBranch: 'feature/preview',
+        targetBranch: 'main',
+      });
+
+      expect(result).toEqual({
+        status: 'clean',
+        result: 'fast_forward',
+        sourceBranch: 'feature/preview',
+        targetBranch: 'main',
+        sourceTipSha: 'source-sha',
+        targetTipSha: 'target-sha',
+        mergeBaseSha: 'base-sha',
+        conflictPaths: [],
+        conflicts: [],
+        filteredConflicts: [],
+      });
+    });
+
+    it('validates preview merge inputs locally', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-preview-merge-validation' });
+
+      await expect(
+        repo.previewMerge({ sourceBranch: '', targetBranch: 'main' })
+      ).rejects.toThrow('previewMerge sourceBranch is required');
+      await expect(
+        repo.previewMerge({ sourceBranch: 'feature', targetBranch: '' })
+      ).rejects.toThrow('previewMerge targetBranch is required');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Repo merge', () => {
     it('posts guarded target-tip merge request and returns transformed response', async () => {
       const store = new GitStorage({ name: 'v0', key });

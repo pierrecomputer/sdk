@@ -345,6 +345,16 @@ console.log(ephemeralDelete.ephemeral); // true
 // `baseBranch` is still accepted for backwards compatibility, but deprecated.
 // Prefer `baseRef` for new code.
 
+// Preview whether a source branch can merge into a target branch without
+// creating commits or updating refs. Pass includeContent to receive bounded
+// conflict blob content when the preview is conflicted.
+const preview = await repo.previewMerge({
+  sourceBranch: 'feature/demo',
+  targetBranch: 'main',
+  includeContent: true,
+});
+console.log(preview.status, preview.result);
+console.log(preview.conflictPaths, preview.conflicts, preview.filteredConflicts);
 
 // Merge one branch into another. Source and target can independently be
 // ephemeral branches.
@@ -911,6 +921,41 @@ interface GetCommitDiffResult {
 }
 
 type MergeStrategy = 'merge' | 'ff_only' | 'ff_prefer';
+
+interface PreviewMergeOptions {
+  sourceBranch: string;
+  targetBranch: string;
+  includeContent?: boolean;
+  ttl?: number;
+}
+
+interface PreviewMergeBlob {
+  oid?: string;
+  content?: string;
+  truncated: boolean;
+  binary: boolean;
+}
+
+interface PreviewMergeConflict {
+  path: string;
+  result: PreviewMergeBlob;
+  base: PreviewMergeBlob;
+  ours: PreviewMergeBlob;
+  theirs: PreviewMergeBlob;
+}
+
+interface PreviewMergeResult {
+  status: 'clean' | 'conflicted';
+  result: 'merge_commit' | 'fast_forward' | 'no_op';
+  sourceBranch: string;
+  targetBranch: string;
+  sourceTipSha: string;
+  targetTipSha: string;
+  mergeBaseSha?: string;
+  conflictPaths: string[];
+  conflicts: PreviewMergeConflict[];
+  filteredConflicts: Array<{ path: string; reason: string }>;
+}
 
 interface MergeOptions {
   sourceBranch: string;

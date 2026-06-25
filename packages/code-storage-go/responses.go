@@ -211,6 +211,39 @@ type mergeTargetRaw struct {
 	NewSHA    string `json:"new_sha"`
 }
 
+type previewMergeResponse struct {
+	Status            string                         `json:"status"`
+	Result            string                         `json:"result"`
+	SourceBranch      string                         `json:"source_branch"`
+	TargetBranch      string                         `json:"target_branch"`
+	SourceTipSHA      string                         `json:"source_tip_sha"`
+	TargetTipSHA      string                         `json:"target_tip_sha"`
+	MergeBaseSHA      string                         `json:"merge_base_sha"`
+	ConflictPaths     []string                       `json:"conflict_paths"`
+	Conflicts         []previewMergeConflict         `json:"conflicts"`
+	FilteredConflicts []previewMergeFilteredConflict `json:"filtered_conflicts"`
+}
+
+type previewMergeBlob struct {
+	OID       string `json:"oid"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+	Binary    bool   `json:"binary"`
+}
+
+type previewMergeConflict struct {
+	Path   string           `json:"path"`
+	Result previewMergeBlob `json:"result"`
+	Base   previewMergeBlob `json:"base"`
+	Ours   previewMergeBlob `json:"ours"`
+	Theirs previewMergeBlob `json:"theirs"`
+}
+
+type previewMergeFilteredConflict struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
 type listTagsResponse struct {
 	Tags       []tagInfoRaw `json:"tags"`
 	NextCursor string       `json:"next_cursor"`

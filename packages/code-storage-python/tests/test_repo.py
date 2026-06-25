@@ -388,9 +388,7 @@ class TestRepoFileOperations:
             assert params.get("limit") == ["50"]
 
     @pytest.mark.asyncio
-    async def test_list_files_legacy_response_defaults(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_files_legacy_response_defaults(self, git_storage_options: dict) -> None:
         """Servers without entries/has_more still produce a valid result."""
         storage = GitStorage(git_storage_options)
 
@@ -417,9 +415,7 @@ class TestRepoFileOperations:
             assert "next_cursor" not in result
 
     @pytest.mark.asyncio
-    async def test_head_file_parses_response_headers(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_head_file_parses_response_headers(self, git_storage_options: dict) -> None:
         """head_file issues HEAD and returns parsed FileMetadata."""
         storage = GitStorage(git_storage_options)
 
@@ -643,9 +639,7 @@ class TestRepoFileOperations:
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value
             # post() runs under `async with` context for create_repo
-            client_instance.__aenter__.return_value.post = AsyncMock(
-                return_value=create_response
-            )
+            client_instance.__aenter__.return_value.post = AsyncMock(return_value=create_response)
             # stream() is called on the long-lived client used by get_file_stream
             client_instance.stream = MagicMock(return_value=stream_cm)
             client_instance.aclose = AsyncMock()
@@ -696,9 +690,7 @@ class TestRepoFileOperations:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value
-            client_instance.__aenter__.return_value.post = AsyncMock(
-                return_value=create_response
-            )
+            client_instance.__aenter__.return_value.post = AsyncMock(return_value=create_response)
             client_instance.stream = MagicMock(return_value=stream_cm)
             client_instance.aclose = AsyncMock()
 
@@ -1087,9 +1079,7 @@ class TestRepoBranchOperations:
             assert result["has_more"] is True
 
     @pytest.mark.asyncio
-    async def test_list_branches_ephemeral_query_param(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_branches_ephemeral_query_param(self, git_storage_options: dict) -> None:
         """ephemeral=True must surface as ephemeral=true in the query string."""
         storage = GitStorage(git_storage_options)
 
@@ -1167,6 +1157,107 @@ class TestRepoBranchOperations:
             assert payload["target_branch"] == "feature/demo"
             assert payload["target_is_ephemeral"] is True
 
+    @pytest.mark.asyncio
+    async def test_preview_merge_gets_conflict_content(self, git_storage_options: dict) -> None:
+        """Test preview_merge sends read-scoped query params and parses conflicts."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        preview_response = MagicMock()
+        preview_response.status_code = 200
+        preview_response.is_success = True
+        preview_response.json.return_value = {
+            "status": "conflicted",
+            "result": "merge_commit",
+            "source_branch": "feature/preview",
+            "target_branch": "main",
+            "source_tip_sha": "source123",
+            "target_tip_sha": "target123",
+            "merge_base_sha": "base123",
+            "conflict_paths": ["docs/conflict.txt"],
+            "conflicts": [
+                {
+                    "path": "docs/conflict.txt",
+                    "result": {
+                        "oid": "result-oid",
+                        "content": "<<<<<<< ours",
+                        "truncated": False,
+                        "binary": False,
+                    },
+                    "base": {"oid": "base-oid", "truncated": False, "binary": False},
+                    "ours": {
+                        "oid": "ours-oid",
+                        "content": "ours",
+                        "truncated": False,
+                        "binary": False,
+                    },
+                    "theirs": {
+                        "oid": "theirs-oid",
+                        "content": "theirs",
+                        "truncated": False,
+                        "binary": False,
+                    },
+                }
+            ],
+            "filtered_conflicts": [{"path": "src/app.py", "reason": "max_conflict_files_exceeded"}],
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+            client_instance.get = AsyncMock(return_value=preview_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.preview_merge(
+                source_branch=" feature/preview ",
+                target_branch=" main ",
+                include_content=True,
+                ttl=900,
+            )
+
+            assert result == preview_response.json.return_value
+            preview_call = client_instance.get.await_args
+            parsed = urlparse(preview_call.args[0])
+            params = parse_qs(parsed.query)
+            assert parsed.path.endswith("/api/v1/repos/merge/preview")
+            assert params["source_branch"] == ["feature/preview"]
+            assert params["target_branch"] == ["main"]
+            assert params["include_content"] == ["true"]
+
+            headers = preview_call.kwargs["headers"]
+            token = headers["Authorization"].replace("Bearer ", "")
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["scopes"] == ["git:read"]
+            assert payload["exp"] - payload["iat"] == 900
+
+    @pytest.mark.asyncio
+    async def test_preview_merge_validation(self, git_storage_options: dict) -> None:
+        """Test preview_merge validates required branches locally."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+            client_instance.get = AsyncMock()
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ValueError, match="source_branch is required"):
+                await repo.preview_merge(source_branch=" ", target_branch="main")
+
+            with pytest.raises(ValueError, match="target_branch is required"):
+                await repo.preview_merge(source_branch="feature", target_branch=" ")
+
+            client_instance.get.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_merge_posts_body_and_parses_response(self, git_storage_options: dict) -> None:
@@ -1357,7 +1448,9 @@ class TestRepoBranchOperations:
             with pytest.raises(ValueError, match="strategy is required"):
                 await repo.merge(source_branch="feature", target_branch="main", strategy=" ")
 
-            with pytest.raises(ValueError, match="strategy must be one of merge, ff_only, ff_prefer"):
+            with pytest.raises(
+                ValueError, match="strategy must be one of merge, ff_only, ff_prefer"
+            ):
                 await repo.merge(source_branch="feature", target_branch="main", strategy="squash")
 
             with pytest.raises(ValueError, match="author name and email are required"):
@@ -1377,6 +1470,7 @@ class TestRepoBranchOperations:
                 )
 
             assert client_instance.post.await_count == 1
+
     @pytest.mark.asyncio
     async def test_create_branch_falls_back_to_deprecated_base_branch(
         self, git_storage_options: dict
@@ -1712,9 +1806,7 @@ class TestRepoCommitOperations:
             assert result["commits"][0]["message"] == "Initial commit"
 
     @pytest.mark.asyncio
-    async def test_list_commits_ephemeral_query_param(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_commits_ephemeral_query_param(self, git_storage_options: dict) -> None:
         """ephemeral=True must surface as ephemeral=true in the query string."""
         storage = GitStorage(git_storage_options)
 
@@ -1747,9 +1839,7 @@ class TestRepoCommitOperations:
             assert "branch=feature" in called_url
 
     @pytest.mark.asyncio
-    async def test_list_commits_path_query_param(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_commits_path_query_param(self, git_storage_options: dict) -> None:
         """path kwarg appears as `path=` query parameter."""
         storage = GitStorage(git_storage_options)
 
@@ -2024,9 +2114,7 @@ class TestRepoCommitOperations:
             assert first["previous_commit_sha"] == "zzz000"
             assert first["raw_author_time"] == "2024-01-15T14:32:18Z"
             assert isinstance(first["author_time"], datetime)
-            assert first["author_time"] == datetime(
-                2024, 1, 15, 14, 32, 18, tzinfo=timezone.utc
-            )
+            assert first["author_time"] == datetime(2024, 1, 15, 14, 32, 18, tzinfo=timezone.utc)
 
             second = result["lines"][1]
             assert second["original_path"] == "src/old.go"

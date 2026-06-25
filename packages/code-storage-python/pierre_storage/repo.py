@@ -52,6 +52,7 @@ from pierre_storage.types import (
     MergeStrategy,
     NoteReadResult,
     NoteWriteResult,
+    PreviewMergeResult,
     Refs,
     RefUpdate,
     RestoreCommitResult,
@@ -1075,6 +1076,77 @@ class RepoImpl:
                     "new_sha": data["target"]["new_sha"],
                 },
                 "promoted_commits": data["promoted_commits"],
+            }
+            merge_base_sha = data.get("merge_base_sha")
+            if merge_base_sha:
+                result["merge_base_sha"] = merge_base_sha
+            return result
+
+    async def preview_merge(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        include_content: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> PreviewMergeResult:
+        """Preview a merge without creating commits or updating refs."""
+        source_branch_clean = source_branch.strip()
+        target_branch_clean = target_branch.strip()
+
+        if not source_branch_clean:
+            raise ValueError("preview_merge source_branch is required")
+        if not target_branch_clean:
+            raise ValueError("preview_merge target_branch is required")
+
+        ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl_value})
+
+        params: Dict[str, str] = {
+            "source_branch": source_branch_clean,
+            "target_branch": target_branch_clean,
+        }
+        if include_content is not None:
+            params["include_content"] = "true" if include_content else "false"
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge/preview"
+        url += f"?{urlencode(params)}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=180.0,
+            )
+
+            if response.status_code != 200:
+                message = "Preview merge failed"
+                try:
+                    error_data = response.json()
+                    if isinstance(error_data, dict) and error_data.get("message"):
+                        message = str(error_data["message"])
+                    elif isinstance(error_data, dict) and error_data.get("error"):
+                        message = str(error_data["error"])
+                    else:
+                        message = f"{message} with HTTP {response.status_code}"
+                except Exception:
+                    message = f"{message} with HTTP {response.status_code}"
+                raise ApiError(message, status_code=response.status_code, response=response)
+
+            data = response.json()
+            result: PreviewMergeResult = {
+                "status": data["status"],
+                "result": data["result"],
+                "source_branch": data["source_branch"],
+                "target_branch": data["target_branch"],
+                "source_tip_sha": data["source_tip_sha"],
+                "target_tip_sha": data["target_tip_sha"],
+                "conflict_paths": data.get("conflict_paths", []),
+                "conflicts": data.get("conflicts", []),
+                "filtered_conflicts": data.get("filtered_conflicts", []),
             }
             merge_base_sha = data.get("merge_base_sha")
             if merge_base_sha:

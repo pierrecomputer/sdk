@@ -214,6 +214,39 @@ export const mergeResponseSchema = z.object({
   promoted_commits: z.number(),
 });
 
+export const previewMergeBlobSchema = z.object({
+  oid: z.string().optional(),
+  content: z.string().optional(),
+  truncated: z.boolean(),
+  binary: z.boolean(),
+});
+
+export const previewMergeConflictSchema = z.object({
+  path: z.string(),
+  result: previewMergeBlobSchema,
+  base: previewMergeBlobSchema,
+  ours: previewMergeBlobSchema,
+  theirs: previewMergeBlobSchema,
+});
+
+export const previewMergeFilteredConflictSchema = z.object({
+  path: z.string(),
+  reason: z.string(),
+});
+
+export const previewMergeResponseSchema = z.object({
+  status: z.enum(['clean', 'conflicted']),
+  result: z.enum(['merge_commit', 'fast_forward', 'no_op']),
+  source_branch: z.string(),
+  target_branch: z.string(),
+  source_tip_sha: z.string(),
+  target_tip_sha: z.string(),
+  merge_base_sha: z.string().optional(),
+  conflict_paths: z.array(z.string()).optional().default([]),
+  conflicts: z.array(previewMergeConflictSchema).optional().default([]),
+  filtered_conflicts: z.array(previewMergeFilteredConflictSchema).optional().default([]),
+});
+
 export const tagInfoSchema = z.object({
   cursor: z.string(),
   name: z.string(),
@@ -355,6 +388,16 @@ export type CreateBranchResponseRaw = z.infer<
   typeof createBranchResponseSchema
 >;
 export type MergeResponseRaw = z.infer<typeof mergeResponseSchema>;
+export type PreviewMergeBlobRaw = z.infer<typeof previewMergeBlobSchema>;
+export type PreviewMergeConflictRaw = z.infer<
+  typeof previewMergeConflictSchema
+>;
+export type PreviewMergeFilteredConflictRaw = z.infer<
+  typeof previewMergeFilteredConflictSchema
+>;
+export type PreviewMergeResponseRaw = z.infer<
+  typeof previewMergeResponseSchema
+>;
 export type RawTagInfo = z.infer<typeof tagInfoSchema>;
 export type ListTagsResponseRaw = z.infer<typeof listTagsResponseSchema>;
 export type CreateTagResponseRaw = z.infer<typeof createTagResponseSchema>;
