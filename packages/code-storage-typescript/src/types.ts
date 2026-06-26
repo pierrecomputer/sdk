@@ -16,6 +16,10 @@ import type {
   ListFilesWithMetadataResponseRaw,
   ListReposResponseRaw,
   MergeResponseRaw,
+  PreviewMergeBlobRaw as SchemaPreviewMergeBlob,
+  PreviewMergeConflictRaw as SchemaPreviewMergeConflict,
+  PreviewMergeFilteredConflictRaw as SchemaPreviewMergeFilteredConflict,
+  PreviewMergeResponseRaw,
   ListTagsResponseRaw,
   NoteReadResponseRaw,
   NoteWriteResponseRaw,
@@ -131,6 +135,7 @@ export interface Repo {
   grep(options: GrepOptions): Promise<GrepResult>;
   pullUpstream(options?: PullUpstreamOptions): Promise<void>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
+  previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
   createBranch(options: CreateBranchOptions): Promise<CreateBranchResult>;
   deleteBranch(options: DeleteBranchOptions): Promise<DeleteBranchResult>;
@@ -959,6 +964,45 @@ export interface MergeOptions
 export type MergeResponse = Omit<MergeResponseRaw, "result"> & {
   result: MergeResultLabel;
 };
+
+export type PreviewMergeStatus = "clean" | "conflicted";
+
+export type PreviewMergeResultLabel = "merge_commit" | "fast_forward" | "no_op";
+
+export interface PreviewMergeOptions extends GitStorageInvocationOptions {
+  sourceBranch: string;
+  targetBranch: string;
+  includeContent?: boolean;
+}
+
+export type PreviewMergeBlob = SchemaPreviewMergeBlob;
+
+export interface PreviewMergeConflict
+  extends Omit<SchemaPreviewMergeConflict, "result" | "base" | "ours" | "theirs"> {
+  result: PreviewMergeBlob;
+  base: PreviewMergeBlob;
+  ours: PreviewMergeBlob;
+  theirs: PreviewMergeBlob;
+}
+
+export type PreviewMergeFilteredConflict = SchemaPreviewMergeFilteredConflict;
+
+export type PreviewMergeResponse = Omit<PreviewMergeResponseRaw, "result"> & {
+  result: PreviewMergeResultLabel;
+};
+
+export interface PreviewMergeResult {
+  status: PreviewMergeStatus;
+  result: PreviewMergeResultLabel;
+  sourceBranch: string;
+  targetBranch: string;
+  sourceTipSha: string;
+  targetTipSha: string;
+  mergeBaseSha?: string;
+  conflictPaths: string[];
+  conflicts: PreviewMergeConflict[];
+  filteredConflicts: PreviewMergeFilteredConflict[];
+}
 
 export interface MergeSourceResult {
   branch: string;

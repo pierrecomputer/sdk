@@ -459,6 +459,23 @@ const (
 	MergeResultUnknown     MergeResultStatus = "unknown"
 )
 
+// PreviewMergeStatus describes whether a merge preview is clean or conflicted.
+type PreviewMergeStatus string
+
+const (
+	PreviewMergeStatusClean      PreviewMergeStatus = "clean"
+	PreviewMergeStatusConflicted PreviewMergeStatus = "conflicted"
+)
+
+// PreviewMergeResultStatus describes the result if the previewed merge were applied.
+type PreviewMergeResultStatus string
+
+const (
+	PreviewMergeResultMergeCommit PreviewMergeResultStatus = "merge_commit"
+	PreviewMergeResultFastForward PreviewMergeResultStatus = "fast_forward"
+	PreviewMergeResultNoOp        PreviewMergeResultStatus = "no_op"
+)
+
 // MergeRef describes a merge source ref.
 type MergeRef struct {
 	Branch    string
@@ -483,6 +500,51 @@ type MergeResult struct {
 	Target          MergeTargetRef
 	MergeBaseSHA    string
 	PromotedCommits int
+}
+
+// PreviewMergeOptions configures read-only branch merge previews.
+type PreviewMergeOptions struct {
+	InvocationOptions
+	SourceBranch   string
+	TargetBranch   string
+	IncludeContent *bool
+}
+
+// PreviewMergeBlob describes a conflict stage blob in a merge preview.
+type PreviewMergeBlob struct {
+	OID       string
+	Content   string
+	Truncated bool
+	Binary    bool
+}
+
+// PreviewMergeConflict describes inline conflict content for a path.
+type PreviewMergeConflict struct {
+	Path   string
+	Result PreviewMergeBlob
+	Base   PreviewMergeBlob
+	Ours   PreviewMergeBlob
+	Theirs PreviewMergeBlob
+}
+
+// PreviewMergeFilteredConflict describes omitted inline conflict content.
+type PreviewMergeFilteredConflict struct {
+	Path   string
+	Reason string
+}
+
+// PreviewMergeResult describes the read-only merge preview result.
+type PreviewMergeResult struct {
+	Status            PreviewMergeStatus
+	Result            PreviewMergeResultStatus
+	SourceBranch      string
+	TargetBranch      string
+	SourceTipSHA      string
+	TargetTipSHA      string
+	MergeBaseSHA      string
+	ConflictPaths     []string
+	Conflicts         []PreviewMergeConflict
+	FilteredConflicts []PreviewMergeFilteredConflict
 }
 
 // ListTagsOptions configures list tags.

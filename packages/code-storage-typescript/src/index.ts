@@ -15,7 +15,11 @@ import {
 import { FetchDiffCommitTransport, sendCommitFromDiff } from './diff-commit';
 import { RefUpdateError } from './errors';
 import { ApiError, ApiFetcher } from './fetch';
-import type { MergeResponseRaw, RestoreCommitAckRaw } from './schemas';
+import type {
+  MergeResponseRaw,
+  PreviewMergeResponseRaw,
+  RestoreCommitAckRaw,
+} from './schemas';
 import {
   branchDiffResponseSchema,
   commitDiffResponseSchema,
@@ -33,6 +37,7 @@ import {
   listFilesWithMetadataResponseSchema,
   listReposResponseSchema,
   mergeResponseSchema,
+  previewMergeResponseSchema,
   listTagsResponseSchema,
   noteReadResponseSchema,
   noteWriteResponseSchema,
@@ -114,6 +119,8 @@ import type {
   ListReposResponse,
   ListReposResult,
   MergeOptions,
+  PreviewMergeOptions,
+  PreviewMergeResult,
   MergeResult,
   ListTagsOptions,
   ListTagsResponse,
@@ -556,6 +563,23 @@ function transformMergeResult(raw: MergeResponseRaw): MergeResult {
     },
     mergeBaseSha: raw.merge_base_sha ?? undefined,
     promotedCommits: raw.promoted_commits,
+  };
+}
+
+function transformPreviewMergeResult(
+  raw: PreviewMergeResponseRaw
+): PreviewMergeResult {
+  return {
+    status: raw.status,
+    result: raw.result,
+    sourceBranch: raw.source_branch,
+    targetBranch: raw.target_branch,
+    sourceTipSha: raw.source_tip_sha,
+    targetTipSha: raw.target_tip_sha,
+    mergeBaseSha: raw.merge_base_sha ?? undefined,
+    conflictPaths: raw.conflict_paths,
+    conflicts: raw.conflicts,
+    filteredConflicts: raw.filtered_conflicts,
   };
 }
 
@@ -1658,6 +1682,41 @@ class RepoImpl implements Repo {
     );
     const raw = deleteBranchResponseSchema.parse(await response.json());
     return transformDeleteBranchResult(raw);
+  }
+
+  async previewMerge(
+    options: PreviewMergeOptions
+  ): Promise<PreviewMergeResult> {
+    const sourceBranch = options?.sourceBranch?.trim();
+    if (!sourceBranch) {
+      throw new Error('previewMerge sourceBranch is required');
+    }
+
+    const targetBranch = options?.targetBranch?.trim();
+    if (!targetBranch) {
+      throw new Error('previewMerge targetBranch is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const params: Record<string, string> = {
+      source_branch: sourceBranch,
+      target_branch: targetBranch,
+    };
+    if (typeof options.includeContent === 'boolean') {
+      params.include_content = String(options.includeContent);
+    }
+
+    const response = await this.api.get(
+      { path: 'repos/merge/preview', params },
+      jwt
+    );
+    const raw = previewMergeResponseSchema.parse(await response.json());
+    return transformPreviewMergeResult(raw);
   }
 
   async merge(options: MergeOptions): Promise<MergeResult> {

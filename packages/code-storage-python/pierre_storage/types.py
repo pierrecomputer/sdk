@@ -525,6 +525,8 @@ class CreateCommitOptions(TypedDict, total=False):
 
 MergeStrategy = Literal["merge", "ff_only", "ff_prefer"]
 MergeResultLabel = Literal["merge_commit", "fast_forward", "no_op", "squash", "unknown"]
+PreviewMergeStatus = Literal["clean", "conflicted"]
+PreviewMergeResultLabel = Literal["merge_commit", "fast_forward", "no_op"]
 
 
 class MergeBranchesOptions(TypedDict, total=False):
@@ -572,6 +574,47 @@ class MergeBranchesResult(TypedDict):
     target: MergeTargetResult
     merge_base_sha: NotRequired[str]
     promoted_commits: int
+
+
+class PreviewMergeBlob(TypedDict):
+    """Blob content returned for a merge preview conflict stage."""
+
+    oid: NotRequired[str]
+    content: NotRequired[str]
+    truncated: bool
+    binary: bool
+
+
+class PreviewMergeConflict(TypedDict):
+    """Inline conflict details for a single repository path."""
+
+    path: str
+    result: PreviewMergeBlob
+    base: PreviewMergeBlob
+    ours: PreviewMergeBlob
+    theirs: PreviewMergeBlob
+
+
+class PreviewMergeFilteredConflict(TypedDict):
+    """Conflict omitted from inline preview content."""
+
+    path: str
+    reason: str
+
+
+class PreviewMergeResult(TypedDict):
+    """Read-only result from previewing a branch merge."""
+
+    status: PreviewMergeStatus
+    result: PreviewMergeResultLabel
+    source_branch: str
+    target_branch: str
+    source_tip_sha: str
+    target_tip_sha: str
+    merge_base_sha: NotRequired[str]
+    conflict_paths: List[str]
+    conflicts: List[PreviewMergeConflict]
+    filtered_conflicts: List[PreviewMergeFilteredConflict]
 
 
 # Removed: CommitFileOptions - now uses **kwargs with explicit mode parameter
@@ -833,6 +876,17 @@ class Repo(Protocol):
         ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch."""
+        ...
+
+    async def preview_merge(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        include_content: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> PreviewMergeResult:
+        """Preview whether a source branch can merge into a target branch."""
         ...
 
     async def list_tags(

@@ -1197,6 +1197,81 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 	}, nil
 }
 
+// PreviewMerge previews a branch merge without creating commits or updating refs.
+func (r *Repo) PreviewMerge(ctx context.Context, options PreviewMergeOptions) (PreviewMergeResult, error) {
+	sourceBranch := strings.TrimSpace(options.SourceBranch)
+	if sourceBranch == "" {
+		return PreviewMergeResult{}, errors.New("previewMerge sourceBranch is required")
+	}
+	targetBranch := strings.TrimSpace(options.TargetBranch)
+	if targetBranch == "" {
+		return PreviewMergeResult{}, errors.New("previewMerge targetBranch is required")
+	}
+
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return PreviewMergeResult{}, err
+	}
+
+	params := url.Values{}
+	params.Set("source_branch", sourceBranch)
+	params.Set("target_branch", targetBranch)
+	if options.IncludeContent != nil {
+		params.Set("include_content", strconv.FormatBool(*options.IncludeContent))
+	}
+
+	resp, err := r.client.api.get(ctx, "repos/merge/preview", params, jwtToken, nil)
+	if err != nil {
+		return PreviewMergeResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload previewMergeResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return PreviewMergeResult{}, err
+	}
+
+	result := PreviewMergeResult{
+		Status:            PreviewMergeStatus(payload.Status),
+		Result:            PreviewMergeResultStatus(payload.Result),
+		SourceBranch:      payload.SourceBranch,
+		TargetBranch:      payload.TargetBranch,
+		SourceTipSHA:      payload.SourceTipSHA,
+		TargetTipSHA:      payload.TargetTipSHA,
+		MergeBaseSHA:      payload.MergeBaseSHA,
+		ConflictPaths:     payload.ConflictPaths,
+		FilteredConflicts: make([]PreviewMergeFilteredConflict, 0, len(payload.FilteredConflicts)),
+		Conflicts:         make([]PreviewMergeConflict, 0, len(payload.Conflicts)),
+	}
+	for _, conflict := range payload.Conflicts {
+		result.Conflicts = append(result.Conflicts, PreviewMergeConflict{
+			Path:   conflict.Path,
+			Result: previewMergeBlobResult(conflict.Result),
+			Base:   previewMergeBlobResult(conflict.Base),
+			Ours:   previewMergeBlobResult(conflict.Ours),
+			Theirs: previewMergeBlobResult(conflict.Theirs),
+		})
+	}
+	for _, conflict := range payload.FilteredConflicts {
+		result.FilteredConflicts = append(result.FilteredConflicts, PreviewMergeFilteredConflict{
+			Path:   conflict.Path,
+			Reason: conflict.Reason,
+		})
+	}
+
+	return result, nil
+}
+
+func previewMergeBlobResult(raw previewMergeBlob) PreviewMergeBlob {
+	return PreviewMergeBlob{
+		OID:       raw.OID,
+		Content:   raw.Content,
+		Truncated: raw.Truncated,
+		Binary:    raw.Binary,
+	}
+}
+
 func mergeSignaturePayload(field string, signature *CommitSignature) (*authorInfo, error) {
 	name := strings.TrimSpace(signature.Name)
 	email := strings.TrimSpace(signature.Email)

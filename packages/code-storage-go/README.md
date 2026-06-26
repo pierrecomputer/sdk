@@ -167,6 +167,21 @@ if err != nil {
 fmt.Println(deletedEphemeral.Ephemeral)
 ```
 
+### Preview merge
+
+```go
+includeContent := true
+preview, err := repo.PreviewMerge(context.Background(), storage.PreviewMergeOptions{
+	SourceBranch:   "feature",
+	TargetBranch:   "main",
+	IncludeContent: &includeContent,
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(preview.Status, preview.Result, preview.ConflictPaths)
+```
+
 ### Merge branches
 
 ```go

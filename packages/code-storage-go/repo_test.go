@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -806,6 +807,97 @@ func TestCreateBranchTTL(t *testing.T) {
 	_, err = repo.CreateBranch(nil, CreateBranchOptions{BaseBranch: "main", TargetBranch: "feature/demo", InvocationOptions: InvocationOptions{TTL: 600 * time.Second}})
 	if err != nil {
 		t.Fatalf("create branch error: %v", err)
+	}
+}
+
+func TestPreviewMergeRequestAndResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/repos/merge/preview" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("source_branch"); got != "feature/preview" {
+			t.Fatalf("unexpected source_branch: %s", got)
+		}
+		if got := r.URL.Query().Get("target_branch"); got != "main" {
+			t.Fatalf("unexpected target_branch: %s", got)
+		}
+		if got := r.URL.Query().Get("include_content"); got != "true" {
+			t.Fatalf("unexpected include_content: %s", got)
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := parseJWTFromToken(t, token)
+		scopes, ok := claims["scopes"].([]interface{})
+		if !ok || len(scopes) != 1 || scopes[0] != "git:read" {
+			t.Fatalf("unexpected scopes: %v", claims["scopes"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"conflicted","result":"merge_commit","source_branch":"feature/preview","target_branch":"main","source_tip_sha":"source123","target_tip_sha":"target123","merge_base_sha":"base123","conflict_paths":["docs/conflict.txt"],"conflicts":[{"path":"docs/conflict.txt","result":{"oid":"result-oid","content":"<<<<<<< ours","truncated":false,"binary":false},"base":{"oid":"base-oid","truncated":false,"binary":false},"ours":{"oid":"ours-oid","content":"ours","truncated":false,"binary":false},"theirs":{"oid":"theirs-oid","content":"theirs","truncated":false,"binary":false}}],"filtered_conflicts":[{"path":"src/app.go","reason":"max_conflict_files_exceeded"}]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.PreviewMerge(nil, PreviewMergeOptions{
+		SourceBranch:   " feature/preview ",
+		TargetBranch:   " main ",
+		IncludeContent: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("preview merge error: %v", err)
+	}
+
+	expected := PreviewMergeResult{
+		Status:        PreviewMergeStatusConflicted,
+		Result:        PreviewMergeResultMergeCommit,
+		SourceBranch:  "feature/preview",
+		TargetBranch:  "main",
+		SourceTipSHA:  "source123",
+		TargetTipSHA:  "target123",
+		MergeBaseSHA:  "base123",
+		ConflictPaths: []string{"docs/conflict.txt"},
+		Conflicts: []PreviewMergeConflict{
+			{
+				Path: "docs/conflict.txt",
+				Result: PreviewMergeBlob{
+					OID:       "result-oid",
+					Content:   "<<<<<<< ours",
+					Truncated: false,
+					Binary:    false,
+				},
+				Base:   PreviewMergeBlob{OID: "base-oid", Truncated: false, Binary: false},
+				Ours:   PreviewMergeBlob{OID: "ours-oid", Content: "ours", Truncated: false, Binary: false},
+				Theirs: PreviewMergeBlob{OID: "theirs-oid", Content: "theirs", Truncated: false, Binary: false},
+			},
+		},
+		FilteredConflicts: []PreviewMergeFilteredConflict{
+			{Path: "src/app.go", Reason: "max_conflict_files_exceeded"},
+		},
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestPreviewMergeValidation(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: "https://api.example.com"})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err = repo.PreviewMerge(nil, PreviewMergeOptions{TargetBranch: "main"}); err == nil || err.Error() != "previewMerge sourceBranch is required" {
+		t.Fatalf("unexpected source error: %v", err)
+	}
+	if _, err = repo.PreviewMerge(nil, PreviewMergeOptions{SourceBranch: "feature"}); err == nil || err.Error() != "previewMerge targetBranch is required" {
+		t.Fatalf("unexpected target error: %v", err)
 	}
 }
 

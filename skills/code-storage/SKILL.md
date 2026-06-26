@@ -138,6 +138,7 @@ Username is always `t`. Password is the JWT.
 | Create branch                 | POST     | `/repos/branches/create`          | `git:write`     |
 | List branches                 | GET      | `/repos/branches`                 | `git:read`      |
 | Get branch diff               | GET      | `/repos/branches/diff`            | `git:read`      |
+| Preview merge                 | GET      | `/repos/merge/preview`            | `git:read`      |
 | Merge branches                | POST     | `/repos/merge`                    | `git:write`     |
 | Delete branch                 | DELETE   | `/repos/branches`                 | `git:write`     |
 | **COMMITS**                   |          |                                   |                 |
@@ -376,6 +377,22 @@ Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
+
+## GET /repos/merge/preview — Preview Merge
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/merge/preview?source_branch=feature/demo&target_branch=main&include_content=true" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Required params: `source_branch`, `target_branch`.
+Optional: `include_content=true` to include bounded conflict blob content.
+Scope: `git:read`.
+
+Clean previews return HTTP 200 with `status: "clean"` and `result` set to
+`merge_commit`, `fast_forward`, or `no_op`. Conflicted previews also return HTTP
+200 with `status: "conflicted"`, `conflict_paths`, optional `conflicts` content,
+and `filtered_conflicts` for omitted content such as `max_conflict_files_exceeded`.
 
 ## DELETE /repos/branches — Delete Branch
 
@@ -1042,3 +1059,4 @@ git push origin feature-branch
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
+| Merge preview         | `GET /repos/merge/preview?source_branch=...&target_branch=...&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |
