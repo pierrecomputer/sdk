@@ -332,6 +332,20 @@ await repo.append_note(
 # Delete a git note
 await repo.delete_note(sha="abc123...")
 
+# Notes default to refs/notes/commits. Pass `ref` to target another notes ref;
+# a bare name like "reviews" is placed under refs/notes/ (a fully-qualified
+# refs/notes/* ref also works). Custom refs must be enabled server-side.
+await repo.create_note(sha="abc123...", note="LGTM", ref="reviews")
+review_note = await repo.get_note(sha="abc123...", ref="reviews")
+
+# Discover custom notes namespaces with cursor pagination. Requires the custom
+# notes refs feature to be enabled server-side.
+notes_refs = await repo.list_notes_refs(prefix="reviews/", limit=20)
+for entry in notes_refs["refs"]:
+    print(entry["ref"], entry["sha"])
+if notes_refs["has_more"]:
+    await repo.list_notes_refs(prefix="reviews/", cursor=notes_refs["next_cursor"])
+
 # Get branch diff
 branch_diff = await repo.get_branch_diff(
     branch="feature-branch",
@@ -893,6 +907,7 @@ class Repo:
         self,
         *,
         sha: str,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult: ...
 
@@ -903,6 +918,7 @@ class Repo:
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
@@ -914,6 +930,7 @@ class Repo:
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
@@ -924,9 +941,19 @@ class Repo:
         sha: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
+
+    async def list_notes_refs(
+        self,
+        *,
+        prefix: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListNotesRefsResult: ...
 
     async def get_branch_diff(
         self,

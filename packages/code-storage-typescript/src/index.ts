@@ -39,6 +39,7 @@ import {
   mergeResponseSchema,
   previewMergeResponseSchema,
   listTagsResponseSchema,
+  listNotesRefsResponseSchema,
   noteReadResponseSchema,
   noteWriteResponseSchema,
   restoreCommitAckSchema,
@@ -125,9 +126,14 @@ import type {
   ListTagsOptions,
   ListTagsResponse,
   ListTagsResult,
+  ListNotesRefsOptions,
+  ListNotesRefsResponse,
+  ListNotesRefsResult,
+  NotesRefInfo,
   NoteWriteResult,
   PullUpstreamOptions,
   RawBranchInfo,
+  RawNotesRefInfo,
   RawCommitMetadata,
   RawCommitInfo,
   RawFileWithMetadata,
@@ -699,17 +705,45 @@ function transformNoteWriteResult(raw: {
   };
 }
 
+function transformNotesRefInfo(raw: RawNotesRefInfo): NotesRefInfo {
+  return {
+    cursor: raw.cursor,
+    ref: raw.ref,
+    sha: raw.sha,
+  };
+}
+
+function transformListNotesRefsResult(
+  raw: ListNotesRefsResponse
+): ListNotesRefsResult {
+  return {
+    refs: raw.refs.map(transformNotesRefInfo),
+    nextCursor: raw.next_cursor ?? undefined,
+    hasMore: raw.has_more,
+    prefix: raw.prefix,
+  };
+}
+
 function buildNoteWriteBody(
   sha: string,
   note: string,
   action: 'add' | 'append',
-  options: { expectedRefSha?: string; author?: { name: string; email: string } }
+  options: {
+    expectedRefSha?: string;
+    author?: { name: string; email: string };
+    ref?: string;
+  }
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     sha,
     action,
     note,
   };
+
+  const ref = options.ref?.trim();
+  if (ref) {
+    body.ref = ref;
+  }
 
   const expectedRefSha = options.expectedRefSha?.trim();
   if (expectedRefSha) {
@@ -1268,8 +1302,14 @@ class RepoImpl implements Repo {
       ttl,
     });
 
+    const params: Record<string, string> = { sha };
+    const ref = options?.ref?.trim();
+    if (ref) {
+      params.ref = ref;
+    }
+
     const response = await this.api.get(
-      { path: 'repos/notes', params: { sha } },
+      { path: 'repos/notes', params },
       jwt
     );
     const raw = noteReadResponseSchema.parse(await response.json());
@@ -1297,6 +1337,7 @@ class RepoImpl implements Repo {
     const body = buildNoteWriteBody(sha, note, 'add', {
       expectedRefSha: options.expectedRefSha,
       author: options.author,
+      ref: options.ref,
     });
 
     const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
@@ -1343,6 +1384,7 @@ class RepoImpl implements Repo {
     const body = buildNoteWriteBody(sha, note, 'append', {
       expectedRefSha: options.expectedRefSha,
       author: options.author,
+      ref: options.ref,
     });
 
     const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
@@ -1385,6 +1427,11 @@ class RepoImpl implements Repo {
       sha,
     };
 
+    const ref = options.ref?.trim();
+    if (ref) {
+      body.ref = ref;
+    }
+
     const expectedRefSha = options.expectedRefSha?.trim();
     if (expectedRefSha) {
       body.expected_ref_sha = expectedRefSha;
@@ -1425,6 +1472,56 @@ class RepoImpl implements Repo {
       );
     }
     return result;
+  }
+
+  /**
+   * List Git notes refs under a prefix, with cursor pagination. Use this to
+   * discover custom notes namespaces before reading individual notes.
+   *
+   * Requires the custom notes refs feature to be enabled server-side; when it
+   * is not, the request fails with a 400 (`ApiError`).
+   */
+  async listNotesRefs(
+    options?: ListNotesRefsOptions
+  ): Promise<ListNotesRefsResult> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+
+    const prefix = options?.prefix?.trim();
+    const cursor = options?.cursor;
+    const limit = options?.limit;
+
+    let params: Record<string, string> | undefined;
+    if (
+      (typeof prefix === 'string' && prefix !== '') ||
+      typeof cursor === 'string' ||
+      typeof limit === 'number'
+    ) {
+      params = {};
+      if (typeof prefix === 'string' && prefix !== '') {
+        params.prefix = prefix;
+      }
+      if (typeof cursor === 'string') {
+        params.cursor = cursor;
+      }
+      if (typeof limit === 'number') {
+        params.limit = limit.toString();
+      }
+    }
+
+    const response = await this.api.get(
+      { path: 'repos/notes/refs', params },
+      jwt
+    );
+
+    const raw = listNotesRefsResponseSchema.parse(await response.json());
+    return transformListNotesRefsResult({
+      ...raw,
+      next_cursor: raw.next_cursor ?? undefined,
+    });
   }
 
   async getBranchDiff(

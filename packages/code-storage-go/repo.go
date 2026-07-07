@@ -658,6 +658,9 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 
 	params := url.Values{}
 	params.Set("sha", sha)
+	if ref := strings.TrimSpace(options.Ref); ref != "" {
+		params.Set("ref", ref)
+	}
 
 	resp, err := r.client.api.get(ctx, "repos/notes", params, jwtToken, nil)
 	if err != nil {
@@ -675,12 +678,12 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 
 // CreateNote adds a git note.
 func (r *Repo) CreateNote(ctx context.Context, options CreateNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "add", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.RefPolicies)
+	return r.writeNote(ctx, options.InvocationOptions, "add", options.SHA, options.Note, options.ExpectedRefSHA, options.Ref, options.Author, options.RefPolicies)
 }
 
 // AppendNote appends to a git note.
 func (r *Repo) AppendNote(ctx context.Context, options AppendNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "append", options.SHA, options.Note, options.ExpectedRefSHA, options.Author, options.RefPolicies)
+	return r.writeNote(ctx, options.InvocationOptions, "append", options.SHA, options.Note, options.ExpectedRefSHA, options.Ref, options.Author, options.RefPolicies)
 }
 
 // DeleteNote deletes a git note.
@@ -699,6 +702,9 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 	body := &noteWriteRequest{SHA: sha}
 	if strings.TrimSpace(options.ExpectedRefSHA) != "" {
 		body.ExpectedRefSHA = options.ExpectedRefSHA
+	}
+	if ref := strings.TrimSpace(options.Ref); ref != "" {
+		body.Ref = ref
 	}
 	if options.Author != nil {
 		if strings.TrimSpace(options.Author.Name) == "" || strings.TrimSpace(options.Author.Email) == "" {
@@ -731,7 +737,7 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 	return result, nil
 }
 
-func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, sha string, note string, expectedRefSHA string, author *NoteAuthor, refPolicies RefPolicyList) (NoteWriteResult, error) {
+func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, sha string, note string, expectedRefSHA string, ref string, author *NoteAuthor, refPolicies RefPolicyList) (NoteWriteResult, error) {
 	sha = strings.TrimSpace(sha)
 	if sha == "" {
 		return NoteWriteResult{}, errors.New("note sha is required")
@@ -755,6 +761,9 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 	}
 	if strings.TrimSpace(expectedRefSHA) != "" {
 		body.ExpectedRefSHA = expectedRefSHA
+	}
+	if ref := strings.TrimSpace(ref); ref != "" {
+		body.Ref = ref
 	}
 	if author != nil {
 		if strings.TrimSpace(author.Name) == "" || strings.TrimSpace(author.Email) == "" {
@@ -787,6 +796,56 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 			result.Result.Status,
 			partialRefUpdate(result.TargetRef, result.BaseCommit, result.NewRefSHA),
 		)
+	}
+	return result, nil
+}
+
+// ListNotesRefs lists git notes refs under a prefix, with cursor pagination.
+// Use it to discover custom notes namespaces before reading individual notes.
+// It requires the custom notes refs feature to be enabled server-side; when it
+// is not, the request fails with an *APIError (HTTP 400).
+func (r *Repo) ListNotesRefs(ctx context.Context, options ListNotesRefsOptions) (ListNotesRefsResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return ListNotesRefsResult{}, err
+	}
+
+	params := url.Values{}
+	if prefix := strings.TrimSpace(options.Prefix); prefix != "" {
+		params.Set("prefix", prefix)
+	}
+	if options.Cursor != "" {
+		params.Set("cursor", options.Cursor)
+	}
+	if options.Limit > 0 {
+		params.Set("limit", itoa(options.Limit))
+	}
+	if len(params) == 0 {
+		params = nil
+	}
+
+	resp, err := r.client.api.get(ctx, "repos/notes/refs", params, jwtToken, nil)
+	if err != nil {
+		return ListNotesRefsResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload listNotesRefsResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return ListNotesRefsResult{}, err
+	}
+
+	result := ListNotesRefsResult{HasMore: payload.HasMore, Prefix: payload.Prefix}
+	if payload.NextCursor != "" {
+		result.NextCursor = payload.NextCursor
+	}
+	for _, ref := range payload.Refs {
+		result.Refs = append(result.Refs, NotesRefInfo{
+			Cursor: ref.Cursor,
+			Ref:    ref.Ref,
+			SHA:    ref.SHA,
+		})
 	}
 	return result, nil
 }

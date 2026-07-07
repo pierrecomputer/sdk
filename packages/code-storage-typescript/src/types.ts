@@ -21,9 +21,11 @@ import type {
   PreviewMergeFilteredConflictRaw as SchemaPreviewMergeFilteredConflict,
   PreviewMergeResponseRaw,
   ListTagsResponseRaw,
+  ListNotesRefsResponseRaw,
   NoteReadResponseRaw,
   NoteWriteResponseRaw,
   RawBranchInfo as SchemaRawBranchInfo,
+  RawNotesRefInfo as SchemaRawNotesRefInfo,
   RawCommitMetadata as SchemaRawCommitMetadata,
   RawCommitInfo as SchemaRawCommitInfo,
   RawFileWithMetadata as SchemaRawFileWithMetadata,
@@ -130,6 +132,7 @@ export interface Repo {
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
   deleteNote(options: DeleteNoteOptions): Promise<NoteWriteResult>;
+  listNotesRefs(options?: ListNotesRefsOptions): Promise<ListNotesRefsResult>;
   getBranchDiff(options: GetBranchDiffOptions): Promise<GetBranchDiffResult>;
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
   grep(options: GrepOptions): Promise<GrepResult>;
@@ -605,6 +608,13 @@ export interface BlameResult {
 // Git notes API types
 export interface GetNoteOptions extends GitStorageInvocationOptions {
   sha: string;
+  /**
+   * Notes ref to read from. A bare name like `reviews` is placed under
+   * `refs/notes/`; a fully-qualified `refs/notes/*` ref is also accepted.
+   * Defaults to `refs/notes/commits`. Custom refs require the feature to be
+   * enabled server-side.
+   */
+  ref?: string;
 }
 
 export type GetNoteResponse = NoteReadResponseRaw;
@@ -621,6 +631,13 @@ interface NoteWriteBaseOptions
   note: string;
   expectedRefSha?: string;
   author?: CommitSignature;
+  /**
+   * Notes ref to target. A bare name like `reviews` is placed under
+   * `refs/notes/`; a fully-qualified `refs/notes/*` ref is also accepted.
+   * Defaults to `refs/notes/commits`. Custom refs require the feature to be
+   * enabled server-side, and the JWT `refPolicies` must permit writing to it.
+   */
+  ref?: string;
 }
 
 export type CreateNoteOptions = NoteWriteBaseOptions;
@@ -632,6 +649,12 @@ export interface DeleteNoteOptions
   sha: string;
   expectedRefSha?: string;
   author?: CommitSignature;
+  /**
+   * Notes ref to target. A bare name like `reviews` is placed under
+   * `refs/notes/`; a fully-qualified `refs/notes/*` ref is also accepted.
+   * Defaults to `refs/notes/commits`.
+   */
+  ref?: string;
 }
 
 export interface NoteWriteResultPayload {
@@ -644,10 +667,44 @@ export type NoteWriteResponse = NoteWriteResponseRaw;
 
 export interface NoteWriteResult {
   sha: string;
+  /**
+   * The notes ref the operation targeted (the resolved value of the request
+   * `ref`, defaulting to `refs/notes/commits`).
+   */
   targetRef: string;
   baseCommit?: string;
   newRefSha: string;
   result: NoteWriteResultPayload;
+}
+
+// List notes refs API types
+export interface ListNotesRefsOptions extends GitStorageInvocationOptions {
+  /**
+   * Notes ref prefix to enumerate. A bare prefix like `reviews/` is placed
+   * under `refs/notes/`; a fully-qualified `refs/notes/*` prefix is also
+   * accepted. Defaults to `refs/notes/`.
+   */
+  prefix?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export type RawNotesRefInfo = SchemaRawNotesRefInfo;
+
+export interface NotesRefInfo {
+  cursor: string;
+  ref: string;
+  sha: string;
+}
+
+export type ListNotesRefsResponse = ListNotesRefsResponseRaw;
+
+export interface ListNotesRefsResult {
+  refs: NotesRefInfo[];
+  nextCursor?: string;
+  hasMore: boolean;
+  /** Normalized notes ref prefix used for the listing. */
+  prefix: string;
 }
 
 // Branch Diff API types

@@ -697,6 +697,11 @@ type NoteAuthor struct {
 type GetNoteOptions struct {
 	InvocationOptions
 	SHA string
+	// Ref is the notes ref to read from. A bare name like "reviews" is placed
+	// under refs/notes/; a fully-qualified refs/notes/* ref is also accepted.
+	// Defaults to refs/notes/commits. Custom refs require the feature to be
+	// enabled server-side.
+	Ref string
 }
 
 // GetNoteResult describes note read.
@@ -713,6 +718,11 @@ type CreateNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ref is the notes ref to target. A bare name like "reviews" is placed
+	// under refs/notes/; a fully-qualified refs/notes/* ref is also accepted.
+	// Defaults to refs/notes/commits. Custom refs require the feature to be
+	// enabled server-side, and RefPolicies must permit writing to it.
+	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
 }
@@ -724,6 +734,8 @@ type AppendNoteOptions struct {
 	Note           string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ref is the notes ref to target. See CreateNoteOptions.Ref.
+	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
 }
@@ -734,13 +746,17 @@ type DeleteNoteOptions struct {
 	SHA            string
 	ExpectedRefSHA string
 	Author         *NoteAuthor
+	// Ref is the notes ref to target. See CreateNoteOptions.Ref.
+	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
 }
 
 // NoteWriteResult describes note write response.
 type NoteWriteResult struct {
-	SHA        string
+	SHA string
+	// TargetRef is the notes ref the operation targeted (the resolved value of
+	// the request Ref, defaulting to refs/notes/commits).
 	TargetRef  string
 	BaseCommit string
 	NewRefSHA  string
@@ -752,6 +768,34 @@ type NoteResult struct {
 	Success bool
 	Status  string
 	Message string
+}
+
+// ListNotesRefsOptions configures listing notes refs.
+type ListNotesRefsOptions struct {
+	InvocationOptions
+	// Prefix is the notes ref prefix to enumerate. A bare prefix like "reviews/"
+	// is placed under refs/notes/; a fully-qualified refs/notes/* prefix is also
+	// accepted. Defaults to refs/notes/.
+	Prefix string
+	Cursor string
+	// Limit is the maximum number of notes refs to return. Defaults to 20.
+	Limit int
+}
+
+// NotesRefInfo describes a single notes ref entry.
+type NotesRefInfo struct {
+	Cursor string
+	Ref    string
+	SHA    string
+}
+
+// ListNotesRefsResult describes a notes refs listing.
+type ListNotesRefsResult struct {
+	Refs       []NotesRefInfo
+	NextCursor string
+	HasMore    bool
+	// Prefix is the normalized notes ref prefix used for the listing.
+	Prefix string
 }
 
 // DiffFileState normalizes diff status.

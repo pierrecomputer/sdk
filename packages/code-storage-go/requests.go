@@ -29,6 +29,7 @@ type noteWriteRequest struct {
 	Action         string      `json:"action,omitempty"`
 	Note           string      `json:"note,omitempty"`
 	ExpectedRefSHA string      `json:"expected_ref_sha,omitempty"`
+	Ref            string      `json:"ref,omitempty"`
 	Author         *authorInfo `json:"author,omitempty"`
 }
 

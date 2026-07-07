@@ -144,6 +144,19 @@ export const noteWriteResponseSchema = z.object({
   result: noteResultSchema,
 });
 
+export const notesRefInfoSchema = z.object({
+  cursor: z.string(),
+  ref: z.string(),
+  sha: z.string(),
+});
+
+export const listNotesRefsResponseSchema = z.object({
+  refs: z.array(notesRefInfoSchema),
+  next_cursor: z.string().nullable().optional(),
+  has_more: z.boolean(),
+  prefix: z.string(),
+});
+
 export const diffStatsSchema = z.object({
   files: z.number(),
   additions: z.number(),
@@ -381,6 +394,10 @@ export type RawRepoInfo = z.infer<typeof repoInfoSchema>;
 export type ListReposResponseRaw = z.infer<typeof listReposResponseSchema>;
 export type NoteReadResponseRaw = z.infer<typeof noteReadResponseSchema>;
 export type NoteWriteResponseRaw = z.infer<typeof noteWriteResponseSchema>;
+export type RawNotesRefInfo = z.infer<typeof notesRefInfoSchema>;
+export type ListNotesRefsResponseRaw = z.infer<
+  typeof listNotesRefsResponseSchema
+>;
 export type RawFileDiff = z.infer<typeof diffFileRawSchema>;
 export type RawFilteredFile = z.infer<typeof filteredFileRawSchema>;
 export type GetBranchDiffResponseRaw = z.infer<typeof branchDiffResponseSchema>;
