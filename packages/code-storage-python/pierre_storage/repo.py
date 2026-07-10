@@ -47,10 +47,12 @@ from pierre_storage.types import (
     ListCommitsResult,
     ListFilesResult,
     ListFilesWithMetadataResult,
+    ListNotesRefsResult,
     ListTagsResult,
     MergeBranchesResult,
     MergeStrategy,
     NoteReadResult,
+    NotesRefInfo,
     NoteWriteResult,
     PreviewMergeResult,
     Refs,
@@ -1574,9 +1576,19 @@ class RepoImpl:
         self,
         *,
         sha: str,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult:
-        """Read a git note."""
+        """Read a git note.
+
+        Args:
+            sha: Git object SHA whose note to read.
+            ref: Notes ref to read from. A bare name like ``reviews`` is placed
+                under ``refs/notes/``; a fully-qualified ``refs/notes/*`` ref is
+                also accepted. Defaults to ``refs/notes/commits``. Custom refs
+                require the feature to be enabled server-side.
+            ttl: Token TTL in seconds.
+        """
         sha_clean = sha.strip()
         if not sha_clean:
             raise ValueError("get_note sha is required")
@@ -1584,7 +1596,11 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes?{urlencode({'sha': sha_clean})}"
+        params = {"sha": sha_clean}
+        if ref and ref.strip():
+            params["ref"] = ref.strip()
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1610,10 +1626,18 @@ class RepoImpl:
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
-        """Create a git note."""
+        """Create a git note.
+
+        Set ``ref`` to target a notes ref other than ``refs/notes/commits``. A
+        bare name like ``reviews`` is placed under ``refs/notes/``; a
+        fully-qualified ``refs/notes/*`` ref is also accepted. Custom refs
+        require the feature to be enabled server-side, and the JWT
+        ``ref_policies`` must permit writing to the target ref.
+        """
         return await self._write_note(
             action_label="create_note",
             action="add",
@@ -1621,6 +1645,7 @@ class RepoImpl:
             note=note,
             expected_ref_sha=expected_ref_sha,
             author=author,
+            ref=ref,
             ttl=ttl,
             ref_policies=ref_policies,
         )
@@ -1632,10 +1657,14 @@ class RepoImpl:
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
-        """Append to a git note."""
+        """Append to a git note.
+
+        See :meth:`create_note` for how ``ref`` selects the notes ref.
+        """
         return await self._write_note(
             action_label="append_note",
             action="append",
@@ -1643,6 +1672,7 @@ class RepoImpl:
             note=note,
             expected_ref_sha=expected_ref_sha,
             author=author,
+            ref=ref,
             ttl=ttl,
             ref_policies=ref_policies,
         )
@@ -1653,10 +1683,15 @@ class RepoImpl:
         sha: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
-        """Delete a git note."""
+        """Delete a git note.
+
+        Set ``ref`` to target a notes ref other than ``refs/notes/commits``; a
+        bare name like ``reviews`` is placed under ``refs/notes/``.
+        """
         sha_clean = sha.strip()
         if not sha_clean:
             raise ValueError("delete_note sha is required")
@@ -1665,6 +1700,8 @@ class RepoImpl:
         jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         payload: Dict[str, Any] = {"sha": sha_clean}
+        if ref and ref.strip():
+            payload["ref"] = ref.strip()
         if expected_ref_sha and expected_ref_sha.strip():
             payload["expected_ref_sha"] = expected_ref_sha.strip()
         if author:
@@ -1690,6 +1727,77 @@ class RepoImpl:
             )
 
             return self._parse_note_write_response(response, "delete_note")
+
+    async def list_notes_refs(
+        self,
+        *,
+        prefix: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListNotesRefsResult:
+        """List git notes refs under a prefix, with cursor pagination.
+
+        Use this to discover custom notes namespaces before reading individual
+        notes.
+
+        Args:
+            prefix: Notes ref prefix to enumerate. A bare prefix like
+                ``reviews/`` is placed under ``refs/notes/``; a fully-qualified
+                ``refs/notes/*`` prefix is also accepted. Defaults to
+                ``refs/notes/``.
+            cursor: Pagination cursor from a previous response.
+            limit: Maximum number of notes refs to return (default 20).
+            ttl: Token TTL in seconds.
+
+        Returns:
+            Notes refs with pagination info.
+
+        Requires the custom notes refs feature to be enabled server-side; when
+        it is not, the server responds with HTTP 400.
+        """
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+
+        params: Dict[str, str] = {}
+        if prefix and prefix.strip():
+            params["prefix"] = prefix.strip()
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = str(limit)
+
+        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes/refs"
+        if params:
+            url += f"?{urlencode(params)}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            refs: List[NotesRefInfo] = [
+                {
+                    "cursor": r["cursor"],
+                    "ref": r["ref"],
+                    "sha": r["sha"],
+                }
+                for r in data["refs"]
+            ]
+
+            return {
+                "refs": refs,
+                "next_cursor": data.get("next_cursor"),
+                "has_more": data["has_more"],
+                "prefix": data["prefix"],
+            }
 
     async def get_branch_diff(
         self,
@@ -2271,6 +2379,7 @@ class RepoImpl:
         note: str,
         expected_ref_sha: Optional[str],
         author: Optional[CommitSignature],
+        ref: Optional[str] = None,
         ttl: Optional[int],
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
@@ -2290,6 +2399,8 @@ class RepoImpl:
             "action": action,
             "note": note_clean,
         }
+        if ref and ref.strip():
+            payload["ref"] = ref.strip()
         if expected_ref_sha and expected_ref_sha.strip():
             payload["expected_ref_sha"] = expected_ref_sha.strip()
         if author:

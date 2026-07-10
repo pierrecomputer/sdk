@@ -164,6 +164,7 @@ Username is always `t`. Password is the JWT.
 | Append to note                | POST     | `/repos/notes` (action:"append")  | `git:write`     |
 | Get note for commit           | GET      | `/repos/notes?sha=SHA`            | `git:read`      |
 | Delete note                   | DELETE   | `/repos/notes`                    | `git:write`     |
+| List notes refs               | GET      | `/repos/notes/refs`               | `git:read`      |
 | **GIT SYNC**                  |          |                                   |                 |
 | Pull from upstream            | POST     | `/repos/pull-upstream`            | `git:write`     |
 | Detach upstream               | DELETE   | `/repos/base`                     | `git:write`     |
@@ -723,11 +724,51 @@ curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA" \
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X DELETE \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
   -d '{"sha":"COMMIT_SHA","author":{"name":"CI","email":"ci@x.com"}}'
+
+# Create/read a note on a custom notes ref (default is refs/notes/commits).
+# The write `ref` field and the read `ref` query param accept a bare name like
+# "reviews" (placed under refs/notes/), the "notes/reviews" shorthand, or a
+# fully-qualified "refs/notes/reviews".
+curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sha":"COMMIT_SHA","action":"add","note":"LGTM","ref":"reviews"}'
+curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA&ref=reviews" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Optional fields on writes: `expected_ref_sha` (optimistic guard), `author` (`name`+`email`).
-Write response: `{ "sha", "target_ref": "refs/notes/commits", "base_commit?", "new_ref_sha", "result": { "success", "status", "message?" } }`
+Optional fields on writes: `expected_ref_sha` (optimistic guard), `author` (`name`+`email`),
+`ref` (target notes ref). `add` fails if a note already exists; use `append` to
+extend one, or delete then add to replace it.
+Write response: `{ "sha", "target_ref", "base_commit?", "new_ref_sha", "result": { "success", "status", "message?" } }`
+(`target_ref` echoes the resolved `ref`, defaulting to `refs/notes/commits`).
 Read response: `{ "sha", "note", "ref_sha" }`
+
+**Notes refs.** Every note lives under a `refs/notes/*` ref. Omit `ref` to use
+the default `refs/notes/commits`. A non-default `ref` requires custom notes refs
+to be enabled server-side (otherwise HTTP 400 `custom notes refs are not
+enabled`); when writing to a custom ref, the JWT's per-ref policies must permit
+it. Notes are not synced to a connected GitHub remote — custom refs stay
+internal.
+
+## List Notes Refs (GET /repos/notes/refs)
+
+Enumerate `refs/notes/*` refs under a prefix with cursor pagination — use it to
+discover custom notes namespaces before reading individual notes. Requires
+custom notes refs to be enabled server-side (otherwise HTTP 400). Scope:
+`git:read`.
+
+```bash
+# List notes refs under refs/notes/reviews/
+curl "$CODE_STORAGE_BASE_URL/repos/notes/refs?prefix=reviews/&limit=20" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Query params: `prefix` (notes ref prefix; a bare `reviews/` is placed under
+`refs/notes/`, a fully-qualified `refs/notes/*` prefix also works; defaults to
+`refs/notes/`), `cursor` (from a previous response), `limit` (default 20).
+Response: `{ "refs": [{ "cursor", "ref", "sha" }], "next_cursor?", "has_more", "prefix" }`
+where `prefix` is the normalized prefix used for the listing. Paginate by passing
+`next_cursor` back as `cursor` until `has_more` is `false`.
 
 ## POST /repos/pull-upstream — Sync from Upstream
 
@@ -1055,7 +1096,7 @@ git push origin feature-branch
 | Ephemeral namespace   | Set `ephemeral:true` on commits/files; URL: `REPO_ID+ephemeral.git`; no GitHub sync    |
 | Forking               | One-time copy from Code Storage repo. Independent after fork. Same org only.           |
 | Git Sync              | Upstream sync via GitHub App or generic HTTPS Git providers with stored credentials.   |
-| Notes                 | Attach metadata to commits without modifying commit SHA. Stored in `refs/notes/commits`|
+| Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/notes/refs`. |
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |

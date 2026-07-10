@@ -402,6 +402,23 @@ class NoteWriteResult(TypedDict):
     result: NoteWriteResultPayload
 
 
+class NotesRefInfo(TypedDict):
+    """A single notes ref entry."""
+
+    cursor: str
+    ref: str
+    sha: str
+
+
+class ListNotesRefsResult(TypedDict):
+    """Result from listing git notes refs."""
+
+    refs: List[NotesRefInfo]
+    next_cursor: Optional[str]
+    has_more: bool
+    prefix: str
+
+
 # Diff types
 class DiffStats(TypedDict):
     """Statistics about a diff."""
@@ -970,6 +987,7 @@ class Repo(Protocol):
         self,
         *,
         sha: str,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult:
         """Read a git note."""
@@ -982,6 +1000,7 @@ class Repo(Protocol):
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
@@ -995,6 +1014,7 @@ class Repo(Protocol):
         note: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
@@ -1007,10 +1027,22 @@ class Repo(Protocol):
         sha: str,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Delete a git note."""
+        ...
+
+    async def list_notes_refs(
+        self,
+        *,
+        prefix: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListNotesRefsResult:
+        """List git notes refs under a prefix."""
         ...
 
     async def get_branch_diff(

@@ -1817,6 +1817,132 @@ func TestGetNote(t *testing.T) {
 	}
 }
 
+func TestNoteRefTargeting(t *testing.T) {
+	var postBody, deleteBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/notes" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			if got := r.URL.Query().Get("ref"); got != "reviews" {
+				t.Fatalf("unexpected ref query: %q", got)
+			}
+			_, _ = w.Write([]byte(`{"sha":"abc123","note":"reviewed","ref_sha":"def456"}`))
+		case http.MethodPost:
+			postBody, _ = io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"sha":"abc123","target_ref":"refs/notes/reviews","new_ref_sha":"def456","result":{"success":true,"status":"ok"}}`))
+		case http.MethodDelete:
+			deleteBody, _ = io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"sha":"abc123","target_ref":"refs/notes/reviews","new_ref_sha":"def456","result":{"success":true,"status":"ok"}}`))
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	if _, err := repo.GetNote(nil, GetNoteOptions{SHA: "abc123", Ref: "reviews"}); err != nil {
+		t.Fatalf("get note error: %v", err)
+	}
+
+	if _, err := repo.CreateNote(nil, CreateNoteOptions{SHA: "abc123", Note: "LGTM", Ref: "reviews"}); err != nil {
+		t.Fatalf("create note error: %v", err)
+	}
+	var postPayload map[string]interface{}
+	_ = json.Unmarshal(postBody, &postPayload)
+	if postPayload["ref"] != "reviews" {
+		t.Fatalf("expected create note ref reviews, got %v", postPayload["ref"])
+	}
+
+	if _, err := repo.DeleteNote(nil, DeleteNoteOptions{SHA: "abc123", Ref: "refs/notes/reviews"}); err != nil {
+		t.Fatalf("delete note error: %v", err)
+	}
+	var deletePayload map[string]interface{}
+	_ = json.Unmarshal(deleteBody, &deletePayload)
+	if deletePayload["ref"] != "refs/notes/reviews" {
+		t.Fatalf("expected delete note ref refs/notes/reviews, got %v", deletePayload["ref"])
+	}
+}
+
+func TestListNotesRefs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/notes/refs" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("prefix") != "reviews/" {
+			t.Fatalf("unexpected prefix: %q", q.Get("prefix"))
+		}
+		if q.Get("limit") != "50" {
+			t.Fatalf("unexpected limit: %q", q.Get("limit"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"refs":[{"cursor":"refs/notes/reviews/session-a","ref":"refs/notes/reviews/session-a","sha":"a1b2c3"}],"next_cursor":"refs/notes/reviews/session-b","has_more":true,"prefix":"refs/notes/reviews/"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListNotesRefs(nil, ListNotesRefsOptions{Prefix: "reviews/", Limit: 50})
+	if err != nil {
+		t.Fatalf("list notes refs error: %v", err)
+	}
+	if len(result.Refs) != 1 || result.Refs[0].Ref != "refs/notes/reviews/session-a" {
+		t.Fatalf("unexpected refs: %+v", result.Refs)
+	}
+	if result.Refs[0].SHA != "a1b2c3" {
+		t.Fatalf("unexpected sha: %q", result.Refs[0].SHA)
+	}
+	if result.NextCursor != "refs/notes/reviews/session-b" || !result.HasMore {
+		t.Fatalf("unexpected pagination: %+v", result)
+	}
+	if result.Prefix != "refs/notes/reviews/" {
+		t.Fatalf("unexpected prefix: %q", result.Prefix)
+	}
+}
+
+func TestListNotesRefsNoOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/notes/refs" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.RawQuery != "" {
+			t.Fatalf("expected no query string, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"refs":[],"has_more":false,"prefix":"refs/notes/"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListNotesRefs(nil, ListNotesRefsOptions{})
+	if err != nil {
+		t.Fatalf("list notes refs error: %v", err)
+	}
+	if len(result.Refs) != 0 || result.HasMore {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if result.Prefix != "refs/notes/" {
+		t.Fatalf("unexpected prefix: %q", result.Prefix)
+	}
+}
+
 func TestFileStreamEphemeral(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/file" {

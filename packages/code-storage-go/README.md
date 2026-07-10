@@ -167,6 +167,50 @@ if err != nil {
 fmt.Println(deletedEphemeral.Ephemeral)
 ```
 
+### Manage notes
+
+```go
+// Create and read a note. Notes default to refs/notes/commits. Set Ref to
+// target another notes ref; a bare name like "reviews" is placed under
+// refs/notes/ (a fully-qualified refs/notes/* ref also works). Custom refs must
+// be enabled server-side.
+if _, err := repo.CreateNote(context.Background(), storage.CreateNoteOptions{
+	SHA:  "0123456789abcdef0123456789abcdef01234567",
+	Note: "LGTM",
+	Ref:  "reviews",
+}); err != nil {
+	log.Fatal(err)
+}
+
+note, err := repo.GetNote(context.Background(), storage.GetNoteOptions{
+	SHA: "0123456789abcdef0123456789abcdef01234567",
+	Ref: "reviews",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(note.Note)
+
+// Discover custom notes namespaces with cursor pagination. Requires the custom
+// notes refs feature to be enabled server-side.
+refs, err := repo.ListNotesRefs(context.Background(), storage.ListNotesRefsOptions{
+	Prefix: "reviews/",
+	Limit:  20,
+})
+if err != nil {
+	log.Fatal(err)
+}
+for _, entry := range refs.Refs {
+	fmt.Println(entry.Ref, entry.SHA)
+}
+if refs.HasMore {
+	_, _ = repo.ListNotesRefs(context.Background(), storage.ListNotesRefsOptions{
+		Prefix: "reviews/",
+		Cursor: refs.NextCursor,
+	})
+}
+```
+
 ### Preview merge
 
 ```go

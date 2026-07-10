@@ -141,6 +141,19 @@ type noteResult struct {
 	Message string `json:"message"`
 }
 
+type listNotesRefsResponse struct {
+	Refs       []notesRefInfoRaw `json:"refs"`
+	NextCursor string            `json:"next_cursor"`
+	HasMore    bool              `json:"has_more"`
+	Prefix     string            `json:"prefix"`
+}
+
+type notesRefInfoRaw struct {
+	Cursor string `json:"cursor"`
+	Ref    string `json:"ref"`
+	SHA    string `json:"sha"`
+}
+
 type diffStatsRaw struct {
 	Files     int `json:"files"`
 	Additions int `json:"additions"`

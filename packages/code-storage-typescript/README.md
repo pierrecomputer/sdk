@@ -308,6 +308,26 @@ await repo.appendNote({
 // Delete a git note
 await repo.deleteNote({ sha: 'abc123...' });
 
+// Notes default to refs/notes/commits. Pass `ref` to target another notes ref;
+// a bare name like `reviews` is placed under refs/notes/ (a fully-qualified
+// refs/notes/* ref also works). Custom refs must be enabled server-side.
+await repo.createNote({
+  sha: 'abc123...',
+  note: 'LGTM',
+  ref: 'reviews',
+});
+const reviewNote = await repo.getNote({ sha: 'abc123...', ref: 'reviews' });
+
+// Discover custom notes namespaces with cursor pagination. Requires the custom
+// notes refs feature to be enabled server-side.
+const notesRefs = await repo.listNotesRefs({ prefix: 'reviews/', limit: 20 });
+for (const entry of notesRefs.refs) {
+  console.log(entry.ref, entry.sha);
+}
+if (notesRefs.hasMore) {
+  await repo.listNotesRefs({ prefix: 'reviews/', cursor: notesRefs.nextCursor });
+}
+
 // Get branch diff
 const branchDiff = await repo.getBranchDiff({
   branch: 'feature-branch',
@@ -598,6 +618,7 @@ interface Repo {
   createNote(options: CreateNoteOptions): Promise<NoteWriteResult>;
   appendNote(options: AppendNoteOptions): Promise<NoteWriteResult>;
   deleteNote(options: DeleteNoteOptions): Promise<NoteWriteResult>;
+  listNotesRefs(options?: ListNotesRefsOptions): Promise<ListNotesRefsResult>;
   getBranchDiff(options: GetBranchDiffOptions): Promise<GetBranchDiffResult>;
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
@@ -725,6 +746,7 @@ interface ListFilesWithMetadataResult {
 
 interface GetNoteOptions {
   sha: string; // Commit SHA to look up notes for
+  ref?: string; // Notes ref (default refs/notes/commits; bare names go under refs/notes/)
   ttl?: number;
 }
 
@@ -739,6 +761,7 @@ interface CreateNoteOptions {
   note: string;
   expectedRefSha?: string;
   author?: { name: string; email: string };
+  ref?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
@@ -747,6 +770,7 @@ interface AppendNoteOptions {
   note: string;
   expectedRefSha?: string;
   author?: { name: string; email: string };
+  ref?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
@@ -754,12 +778,13 @@ interface DeleteNoteOptions {
   sha: string;
   expectedRefSha?: string;
   author?: { name: string; email: string };
+  ref?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
 interface NoteWriteResult {
   sha: string;
-  targetRef: string;
+  targetRef: string; // Resolved notes ref the write targeted
   baseCommit?: string;
   newRefSha: string;
   result: {
@@ -767,6 +792,26 @@ interface NoteWriteResult {
     status: string;
     message?: string;
   };
+}
+
+interface ListNotesRefsOptions {
+  prefix?: string; // Notes ref prefix (default refs/notes/; bare prefixes go under refs/notes/)
+  cursor?: string;
+  limit?: number; // Default 20
+  ttl?: number;
+}
+
+interface NotesRefInfo {
+  cursor: string;
+  ref: string;
+  sha: string;
+}
+
+interface ListNotesRefsResult {
+  refs: NotesRefInfo[];
+  nextCursor?: string;
+  hasMore: boolean;
+  prefix: string; // Normalized prefix used for the listing
 }
 
 interface ListBranchesOptions {

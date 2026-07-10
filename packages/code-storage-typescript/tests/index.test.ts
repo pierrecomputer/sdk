@@ -676,6 +676,152 @@ describe('GitStorage', () => {
     expect(deleteResult.targetRef).toBe('refs/notes/commits');
   });
 
+  it('targets a custom notes ref on read and write', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-notes-ref' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+      expect(requestUrl.searchParams.get('ref')).toBe('reviews');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          sha: 'abc123',
+          note: 'reviewed',
+          ref_sha: 'def456',
+        }),
+      } as any);
+    });
+
+    await repo.getNote({ sha: 'abc123', ref: 'reviews' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('POST');
+      const payload = JSON.parse(init?.body as string);
+      expect(payload).toEqual({
+        sha: 'abc123',
+        action: 'add',
+        note: 'note content',
+        ref: 'reviews',
+      });
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        statusText: 'Created',
+        headers: { get: () => 'application/json' } as any,
+        json: async () => ({
+          sha: 'abc123',
+          target_ref: 'refs/notes/reviews',
+          new_ref_sha: 'def456',
+          result: { success: true, status: 'ok' },
+        }),
+      } as any);
+    });
+
+    const createResult = await repo.createNote({
+      sha: 'abc123',
+      note: 'note content',
+      ref: 'reviews',
+    });
+    expect(createResult.targetRef).toBe('refs/notes/reviews');
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('DELETE');
+      const payload = JSON.parse(init?.body as string);
+      expect(payload).toEqual({ sha: 'abc123', ref: 'refs/notes/reviews' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => 'application/json' } as any,
+        json: async () => ({
+          sha: 'abc123',
+          target_ref: 'refs/notes/reviews',
+          new_ref_sha: 'def456',
+          result: { success: true, status: 'ok' },
+        }),
+      } as any);
+    });
+
+    await repo.deleteNote({ sha: 'abc123', ref: 'refs/notes/reviews' });
+  });
+
+  it('lists notes refs with prefix and pagination', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-notes-list' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('GET');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/notes/refs')).toBe(true);
+      expect(requestUrl.searchParams.get('prefix')).toBe('reviews/');
+      expect(requestUrl.searchParams.get('limit')).toBe('50');
+
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+      expect(payload.scopes).toEqual(['git:read']);
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          refs: [
+            {
+              cursor: 'refs/notes/reviews/session-a',
+              ref: 'refs/notes/reviews/session-a',
+              sha: 'a1b2c3',
+            },
+          ],
+          next_cursor: 'refs/notes/reviews/session-b',
+          has_more: true,
+          prefix: 'refs/notes/reviews/',
+        }),
+      } as any);
+    });
+
+    const result = await repo.listNotesRefs({ prefix: 'reviews/', limit: 50 });
+    expect(result).toEqual({
+      refs: [
+        {
+          cursor: 'refs/notes/reviews/session-a',
+          ref: 'refs/notes/reviews/session-a',
+          sha: 'a1b2c3',
+        },
+      ],
+      nextCursor: 'refs/notes/reviews/session-b',
+      hasMore: true,
+      prefix: 'refs/notes/reviews/',
+    });
+  });
+
+  it('lists notes refs with no options and no next cursor', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-notes-list-empty' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/notes/refs')).toBe(true);
+      // No query params when no options are supplied.
+      expect(requestUrl.search).toBe('');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ refs: [], has_more: false, prefix: 'refs/notes/' }),
+      } as any);
+    });
+
+    const result = await repo.listNotesRefs();
+    expect(result.refs).toEqual([]);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeUndefined();
+    expect(result.prefix).toBe('refs/notes/');
+  });
+
   it('passes ephemeral flag to getFileStream', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-ephemeral-file' });
