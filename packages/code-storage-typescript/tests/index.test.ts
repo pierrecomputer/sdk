@@ -193,6 +193,7 @@ describe('GitStorage', () => {
         json: async () => ({
           commit: {
             sha: 'abc123',
+            parent_shas: [],
             message: 'msg',
             author_name: 'A',
             author_email: 'a@example.com',
@@ -217,6 +218,7 @@ describe('GitStorage', () => {
       commits: [
         {
           sha: 'abc123',
+          parent_shas: ['def456', '789abc'],
           message: 'feat: add endpoint',
           author_name: 'Jane Doe',
           author_email: 'jane@example.com',
@@ -238,6 +240,7 @@ describe('GitStorage', () => {
     );
 
     const commits = await repo.listCommits();
+    expect(commits.commits[0].parentShas).toEqual(['def456', '789abc']);
     expect(commits.commits[0].rawDate).toBe('2024-01-15T14:32:18Z');
     expect(commits.commits[0].date).toBeInstanceOf(Date);
     expect(commits.commits[0].date.toISOString()).toBe(
@@ -333,6 +336,7 @@ describe('GitStorage', () => {
         json: async () => ({
           commit: {
             sha: 'abc123',
+            parent_shas: ['def456'],
             message: 'feat: add endpoint',
             author_name: 'Jane Doe',
             author_email: 'jane@example.com',
@@ -349,6 +353,7 @@ describe('GitStorage', () => {
 
     const result = await repo.getCommit({ sha: 'abc123' });
     expect(result.commit.sha).toBe('abc123');
+    expect(result.commit.parentShas).toEqual(['def456']);
     expect(result.commit.message).toBe('feat: add endpoint');
     expect(result.commit.authorName).toBe('Jane Doe');
     expect(result.commit.authorEmail).toBe('jane@example.com');
@@ -375,6 +380,7 @@ describe('GitStorage', () => {
         json: async () => ({
           commit: {
             sha: 'abc123',
+            parent_shas: [],
             message: 'chore: noop',
             author_name: 'Jane Doe',
             author_email: 'jane@example.com',
@@ -387,6 +393,7 @@ describe('GitStorage', () => {
     );
 
     const result = await repo.getCommit({ sha: 'abc123' });
+    expect(result.commit.parentShas).toEqual([]);
     expect(result.commit.signature).toBeUndefined();
     expect(result.commit.payload).toBeUndefined();
   });
@@ -412,6 +419,7 @@ describe('GitStorage', () => {
         json: async () => ({
           commit: {
             sha: 'abc123',
+            parent_shas: [],
             message: 'msg',
             author_name: 'A',
             author_email: 'a@example.com',

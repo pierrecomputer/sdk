@@ -222,6 +222,25 @@ if err != nil {
 fmt.Println(result.CommitSHA)
 ```
 
+### Inspect commit parents
+
+`ListCommits` and `GetCommit` expose parent SHAs in Git parent order. Root
+commits return an empty slice.
+
+```go
+commits, err := repo.ListCommits(context.Background(), storage.ListCommitsOptions{
+	Branch: "main",
+	Limit:  20,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, commit := range commits.Commits {
+	fmt.Println(commit.SHA, commit.ParentSHAs)
+}
+```
+
 TTL fields use `time.Duration` values (for example `time.Hour`).
 
 ### Hydrate a repo without an API request

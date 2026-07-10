@@ -525,6 +525,8 @@ export type RawCommitInfo = SchemaRawCommitInfo;
 
 export interface CommitInfo {
   sha: string;
+  /** Parent commit SHAs in Git parent order. Empty for root commits. */
+  parentShas: string[];
   message: string;
   authorName: string;
   authorEmail: string;

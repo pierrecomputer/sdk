@@ -610,7 +610,10 @@ type ListCommitsOptions struct {
 
 // CommitInfo describes a commit entry.
 type CommitInfo struct {
-	SHA            string
+	SHA string
+	// ParentSHAs contains parent commit SHAs in Git parent order. It is empty
+	// for root commits.
+	ParentSHAs     []string
 	Message        string
 	AuthorName     string
 	AuthorEmail    string

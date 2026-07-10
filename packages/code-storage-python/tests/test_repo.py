@@ -1767,6 +1767,7 @@ class TestRepoCommitOperations:
             "commits": [
                 {
                     "sha": "abc123",
+                    "parent_shas": [],
                     "message": "Initial commit",
                     "author_name": "Test User",
                     "author_email": "test@example.com",
@@ -1776,6 +1777,7 @@ class TestRepoCommitOperations:
                 },
                 {
                     "sha": "def456",
+                    "parent_shas": ["abc123"],
                     "message": "Second commit",
                     "author_name": "Test User",
                     "author_email": "test@example.com",
@@ -1803,7 +1805,9 @@ class TestRepoCommitOperations:
             assert "commits" in result
             assert len(result["commits"]) == 2
             assert result["commits"][0]["sha"] == "abc123"
+            assert result["commits"][0]["parent_shas"] == []
             assert result["commits"][0]["message"] == "Initial commit"
+            assert result["commits"][1]["parent_shas"] == ["abc123"]
 
     @pytest.mark.asyncio
     async def test_list_commits_ephemeral_query_param(self, git_storage_options: dict) -> None:
@@ -1889,6 +1893,7 @@ class TestRepoCommitOperations:
         commit_response.json.return_value = {
             "commit": {
                 "sha": "abc123",
+                "parent_shas": ["def456"],
                 "message": "feat: add endpoint",
                 "author_name": "Jane Doe",
                 "author_email": "jane@example.com",
@@ -1910,6 +1915,7 @@ class TestRepoCommitOperations:
 
             commit = result["commit"]
             assert commit["sha"] == "abc123"
+            assert commit["parent_shas"] == ["def456"]
             assert commit["message"] == "feat: add endpoint"
             assert commit["author_name"] == "Jane Doe"
             assert commit["author_email"] == "jane@example.com"
@@ -1952,6 +1958,7 @@ class TestRepoCommitOperations:
         commit_response.json.return_value = {
             "commit": {
                 "sha": "abc123",
+                "parent_shas": [],
                 "message": "chore: noop",
                 "author_name": "Jane Doe",
                 "author_email": "jane@example.com",
@@ -1970,6 +1977,7 @@ class TestRepoCommitOperations:
             result = await repo.get_commit(sha="abc123")
 
             commit = result["commit"]
+            assert commit["parent_shas"] == []
             assert "signature" not in commit
             assert "payload" not in commit
 
@@ -1990,6 +1998,7 @@ class TestRepoCommitOperations:
         commit_response.json.return_value = {
             "commit": {
                 "sha": "abc123",
+                "parent_shas": [],
                 "message": "msg",
                 "author_name": "A",
                 "author_email": "a@example.com",

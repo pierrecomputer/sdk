@@ -452,7 +452,8 @@ Params:
   only commits that touched that path are returned)
 - `cursor`, `limit` (default 20, max 100)
 
-Response: `{ "commits": [{ "sha", "message", "author_name", "author_email", "date" }], "next_cursor", "has_more" }`
+Response: `{ "commits": [{ "sha", "parent_shas", "message", "author_name", "author_email", "committer_name", "committer_email", "date" }], "next_cursor", "has_more" }`
+`parent_shas` preserves Git parent order and is an empty array for root commits.
 
 ## GET /repos/commit — Get Commit
 
@@ -463,7 +464,8 @@ curl "$CODE_STORAGE_BASE_URL/repos/commit?sha=COMMIT_SHA" \
 
 Params: `sha` (required — full SHA, short SHA, branch name, or any revision Git
 can resolve). Returns commit metadata only; use `/repos/diff` for the diff.
-Response: `{ "commit": { "sha", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "signature"?, "payload"? } }`
+Response: `{ "commit": { "sha", "parent_shas", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "signature"?, "payload"? } }`
+`parent_shas` preserves Git parent order and is an empty array for root commits.
 `signature` (armored OpenPGP/SSH block from the commit's gpgsig header) and
 `payload` (the exact signed bytes: the raw commit object with the gpgsig header
 removed) are present only for signed commits and omitted otherwise. Together

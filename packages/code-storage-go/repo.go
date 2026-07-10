@@ -514,6 +514,7 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	for _, commit := range payload.Commits {
 		result.Commits = append(result.Commits, CommitInfo{
 			SHA:            commit.SHA,
+			ParentSHAs:     commit.ParentSHAs,
 			Message:        commit.Message,
 			AuthorName:     commit.AuthorName,
 			AuthorEmail:    commit.AuthorEmail,
@@ -556,6 +557,7 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 
 	commit := CommitInfo{
 		SHA:            payload.Commit.SHA,
+		ParentSHAs:     payload.Commit.ParentSHAs,
 		Message:        payload.Commit.Message,
 		AuthorName:     payload.Commit.AuthorName,
 		AuthorEmail:    payload.Commit.AuthorEmail,
