@@ -22,7 +22,8 @@ const (
 // Options configure the Git storage client.
 type Options struct {
 	Name           string
-	Key            string
+	Key            string        // required unless Token is set
+	Token          string        // pre-minted JWT, used verbatim if set
 	APIBaseURL     string
 	StorageBaseURL string
 	APIVersion     int

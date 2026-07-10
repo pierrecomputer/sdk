@@ -27,16 +27,16 @@ class TestGitStorage:
 
     def test_missing_options(self) -> None:
         """Test error when options are missing."""
-        with pytest.raises(ValueError, match="GitStorage requires a name and key"):
+        with pytest.raises(ValueError, match="GitStorage requires a name"):
             GitStorage({})  # type: ignore
 
     def test_null_key(self, test_key: str) -> None:
-        """Test error when key is null."""
-        with pytest.raises(ValueError, match="GitStorage requires a name and key"):
+        """Test error when key is null and no token."""
+        with pytest.raises(ValueError, match="GitStorage requires either a key or a token"):
             GitStorage({"name": "test", "key": None})  # type: ignore
 
     def test_empty_key(self) -> None:
-        """Test error when key is empty."""
+        """Test error when key is empty and no token."""
         with pytest.raises(ValueError, match="GitStorage key must be a non-empty string"):
             GitStorage({"name": "test", "key": ""})
 
@@ -46,7 +46,7 @@ class TestGitStorage:
             GitStorage({"name": "", "key": test_key})
 
     def test_whitespace_key(self) -> None:
-        """Test error when key is whitespace."""
+        """Test error when key is whitespace and no token."""
         with pytest.raises(ValueError, match="GitStorage key must be a non-empty string"):
             GitStorage({"name": "test", "key": "   "})
 
@@ -64,6 +64,53 @@ class TestGitStorage:
         """Test error when name is not a string."""
         with pytest.raises(ValueError, match="GitStorage name must be a non-empty string"):
             GitStorage({"name": 123, "key": test_key})  # type: ignore
+
+    def test_create_with_token(self) -> None:
+        """Test creating GitStorage with token only."""
+        storage = GitStorage({"name": "test", "token": "my-pre-minted-jwt"})
+        assert storage is not None
+        assert isinstance(storage, GitStorage)
+
+    def test_empty_token(self) -> None:
+        """Test error when token is empty."""
+        with pytest.raises(ValueError, match="GitStorage token must be a non-empty string"):
+            GitStorage({"name": "test", "token": ""})
+
+    def test_whitespace_token(self) -> None:
+        """Test error when token is whitespace."""
+        with pytest.raises(ValueError, match="GitStorage token must be a non-empty string"):
+            GitStorage({"name": "test", "token": "   "})
+
+    def test_missing_key_and_token(self) -> None:
+        """Test error when neither key nor token is provided."""
+        with pytest.raises(ValueError, match="GitStorage requires either a key or a token"):
+            GitStorage({"name": "test"})
+
+    @pytest.mark.asyncio
+    async def test_token_sent_verbatim(self) -> None:
+        """Test that a pre-minted token is sent verbatim in the Authorization header."""
+        expected_token = "my-pre-minted-jwt-token-value"
+        storage = GitStorage({
+            "name": "test-customer",
+            "token": expected_token,
+            "api_base_url": "https://api.test.code.storage",
+            "storage_base_url": "test.code.storage",
+        })
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {"repo_id": "test-repo", "url": "https://test.git"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            await storage.create_repo(id="test-repo")
+
+            call_kwargs = mock_post.call_args[1]
+            headers = call_kwargs["headers"]
+            assert headers["Authorization"] == f"Bearer {expected_token}"
 
     @pytest.mark.asyncio
     async def test_create_repo(self, git_storage_options: dict) -> None:
