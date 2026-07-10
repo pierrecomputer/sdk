@@ -34,7 +34,8 @@ class GitStorageOptions(TypedDict, total=False):
     """Options for GitStorage client."""
 
     name: str  # required
-    key: str  # required
+    key: str  # required unless token is set
+    token: str  # pre-minted JWT, used verbatim if set
     api_base_url: Optional[str]
     storage_base_url: Optional[str]
     api_version: Optional[int]

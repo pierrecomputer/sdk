@@ -23,8 +23,11 @@ const (
 
 // NewClient creates a Git storage client.
 func NewClient(options Options) (*Client, error) {
-	if strings.TrimSpace(options.Name) == "" || strings.TrimSpace(options.Key) == "" {
-		return nil, errors.New("git storage requires a name and key")
+	if strings.TrimSpace(options.Name) == "" {
+		return nil, errors.New("git storage requires a name")
+	}
+	if strings.TrimSpace(options.Key) == "" && strings.TrimSpace(options.Token) == "" {
+		return nil, errors.New("git storage requires either a key or a token")
 	}
 
 	apiBaseURL := options.APIBaseURL
@@ -40,15 +43,20 @@ func NewClient(options Options) (*Client, error) {
 		version = DefaultAPIVersion
 	}
 
-	privateKey, err := parseECPrivateKey([]byte(options.Key))
-	if err != nil {
-		return nil, err
+	var privateKey *ecdsa.PrivateKey
+	if strings.TrimSpace(options.Key) != "" {
+		var err error
+		privateKey, err = parseECPrivateKey([]byte(options.Key))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := &Client{
 		options: Options{
 			Name:           options.Name,
 			Key:            options.Key,
+			Token:          options.Token,
 			APIBaseURL:     apiBaseURL,
 			StorageBaseURL: storageBaseURL,
 			APIVersion:     version,
@@ -447,6 +455,13 @@ func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCrede
 }
 
 func (c *Client) generateJWT(repoID string, options RemoteURLOptions) (string, error) {
+	if strings.TrimSpace(c.options.Token) != "" {
+		return c.options.Token, nil
+	}
+	if c.privateKey == nil {
+		return "", errors.New("git storage requires a key to generate a JWT")
+	}
+
 	permissions := options.Permissions
 	if len(permissions) == 0 {
 		permissions = []Permission{PermissionGitWrite, PermissionGitRead}

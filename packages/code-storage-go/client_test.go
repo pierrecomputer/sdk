@@ -11,16 +11,66 @@ import (
 
 func TestNewClientValidation(t *testing.T) {
 	_, err := NewClient(Options{})
-	if err == nil || !strings.Contains(err.Error(), "requires a name and key") {
-		t.Fatalf("expected validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "requires a name") {
+		t.Fatalf("expected validation error for missing name, got %v", err)
 	}
 	_, err = NewClient(Options{Name: "", Key: "test"})
 	if err == nil {
 		t.Fatalf("expected error for empty name")
 	}
 	_, err = NewClient(Options{Name: "test", Key: ""})
-	if err == nil {
-		t.Fatalf("expected error for empty key")
+	if err == nil || !strings.Contains(err.Error(), "requires either a key or a token") {
+		t.Fatalf("expected error for missing key and token, got %v", err)
+	}
+	_, err = NewClient(Options{Name: "test"})
+	if err == nil || !strings.Contains(err.Error(), "requires either a key or a token") {
+		t.Fatalf("expected error when neither key nor token provided, got %v", err)
+	}
+}
+
+func TestNewClientWithToken(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Token: "my-pre-minted-jwt"})
+	if err != nil {
+		t.Fatalf("expected no error for token-only client, got %v", err)
+	}
+	if client == nil {
+		t.Fatalf("expected non-nil client")
+	}
+}
+
+func TestNewClientWithTokenEmptyKey(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: "", Token: "my-pre-minted-jwt"})
+	if err != nil {
+		t.Fatalf("expected no error for token with empty key, got %v", err)
+	}
+	if client == nil {
+		t.Fatalf("expected non-nil client")
+	}
+}
+
+func TestTokenSentVerbatim(t *testing.T) {
+	expectedToken := "my-pre-minted-jwt-token-value"
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"repo_id":"repo","url":"https://repo.git"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Token: expectedToken, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	_, err = client.CreateRepo(nil, CreateRepoOptions{})
+	if err != nil {
+		t.Fatalf("create repo error: %v", err)
+	}
+
+	expected := "Bearer " + expectedToken
+	if receivedAuth != expected {
+		t.Fatalf("expected Authorization header %q, got %q", expected, receivedAuth)
 	}
 }
 

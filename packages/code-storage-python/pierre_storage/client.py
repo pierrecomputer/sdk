@@ -43,24 +43,39 @@ class GitStorage:
             ValueError: If required options are missing or invalid
         """
         # Validate required fields
-        if not options or "name" not in options or "key" not in options:
+        if not options or "name" not in options:
             raise ValueError(
-                "GitStorage requires a name and key. Please check your configuration and try again."
+                "GitStorage requires a name. Please check your configuration and try again."
             )
 
         name = options["name"]
-        key = options["key"]
 
-        if name is None or key is None:
+        if name is None:
             raise ValueError(
-                "GitStorage requires a name and key. Please check your configuration and try again."
+                "GitStorage requires a name. Please check your configuration and try again."
             )
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError("GitStorage name must be a non-empty string.")
 
-        if not isinstance(key, str) or not key.strip():
-            raise ValueError("GitStorage key must be a non-empty string.")
+        has_key = "key" in options and options.get("key") is not None
+        has_token = "token" in options and options.get("token") is not None
+
+        if not has_key and not has_token:
+            raise ValueError(
+                "GitStorage requires either a key or a token. "
+                "Please check your configuration and try again."
+            )
+
+        if has_key:
+            key = options["key"]
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError("GitStorage key must be a non-empty string.")
+
+        if has_token:
+            token = options["token"]
+            if not isinstance(token, str) or not token.strip():
+                raise ValueError("GitStorage token must be a non-empty string.")
 
         # Resolve configuration
         api_base_url = options.get("api_base_url") or self.get_default_api_base_url(name)
@@ -72,11 +87,16 @@ class GitStorage:
 
         self.options: GitStorageOptions = {
             "name": name,
-            "key": key,
             "api_base_url": api_base_url,
             "storage_base_url": storage_base_url,
             "api_version": api_version,
         }
+
+        if has_key:
+            self.options["key"] = options["key"]
+
+        if has_token:
+            self.options["token"] = options["token"]
 
         if default_ttl:
             self.options["default_ttl"] = default_ttl
@@ -613,8 +633,16 @@ class GitStorage:
             options: JWT generation options (internal use)
 
         Returns:
-            Signed JWT token
+            Signed JWT token or pre-minted token if set
         """
+        token = self.options.get("token")
+        if token:
+            return token
+
+        key = self.options.get("key")
+        if not key:
+            raise ValueError("GitStorage requires a key to generate a JWT.")
+
         permissions = ["git:write", "git:read"]
         ttl: int = 31536000  # 1 year default
         ops: Optional[List[str]] = None
@@ -637,7 +665,7 @@ class GitStorage:
                 ttl = default_ttl
 
         return generate_jwt(
-            self.options["key"],
+            key,
             self.options["name"],
             repo_id,
             permissions,
