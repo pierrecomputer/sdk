@@ -318,6 +318,7 @@ class CommitInfo(TypedDict):
     """
 
     sha: str
+    parent_shas: List[str]
     message: str
     author_name: str
     author_email: str

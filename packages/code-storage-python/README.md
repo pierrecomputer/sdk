@@ -283,10 +283,16 @@ commits = await repo.list_commits(
     cursor=None,  # for pagination
 )
 print(commits["commits"])
+for commit in commits["commits"]:
+    print(commit["sha"], commit["parent_shas"])  # Git parent order; [] for a root commit
 
 # Get a single commit's metadata (no diff)
 result = await repo.get_commit(sha="abc123...")
-print(result["commit"]["message"], result["commit"]["author_name"])
+print(
+    result["commit"]["message"],
+    result["commit"]["author_name"],
+    result["commit"]["parent_shas"],
+)
 # Signed commits also include the armored signature plus the exact signed
 # payload (raw commit object minus the gpgsig header) so you can verify it
 # yourself. Both keys are absent for unsigned commits.

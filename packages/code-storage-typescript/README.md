@@ -262,10 +262,11 @@ const commits = await repo.listCommits({
   cursor: undefined, // for pagination
 });
 console.log(commits.commits);
+console.log(commits.commits[0]?.parentShas); // Git parent order; [] for a root commit
 
 // Get a single commit's metadata (no diff)
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
-console.log(commit.message, commit.authorName);
+console.log(commit.message, commit.authorName, commit.parentShas);
 // Signed commits also expose the armored signature plus the exact signed
 // payload (raw commit object minus the gpgsig header) so you can verify it
 // yourself. Both are undefined for unsigned commits.
@@ -817,6 +818,8 @@ interface ListCommitsResult {
 
 interface CommitInfo {
   sha: string;
+  // Parent commit SHAs in Git parent order. Empty for root commits.
+  parentShas: string[];
   message: string;
   authorName: string;
   authorEmail: string;

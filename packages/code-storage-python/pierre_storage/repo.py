@@ -1400,6 +1400,7 @@ class RepoImpl:
                 commits.append(
                     {
                         "sha": c["sha"],
+                        "parent_shas": c["parent_shas"],
                         "message": c["message"],
                         "author_name": c["author_name"],
                         "author_email": c["author_email"],
@@ -1460,6 +1461,7 @@ class RepoImpl:
             date = datetime.fromisoformat(commit_raw["date"].replace("Z", "+00:00"))
             commit: CommitInfo = {
                 "sha": commit_raw["sha"],
+                "parent_shas": commit_raw["parent_shas"],
                 "message": commit_raw["message"],
                 "author_name": commit_raw["author_name"],
                 "author_email": commit_raw["author_email"],

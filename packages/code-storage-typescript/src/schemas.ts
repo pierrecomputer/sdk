@@ -58,6 +58,7 @@ export const listBranchesResponseSchema = z.object({
 
 export const commitInfoRawSchema = z.object({
   sha: z.string(),
+  parent_shas: z.array(z.string()),
   message: z.string(),
   author_name: z.string(),
   author_email: z.string(),

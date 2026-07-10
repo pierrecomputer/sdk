@@ -353,6 +353,7 @@ function transformCommitInfo(raw: RawCommitInfo): CommitInfo {
   const parsedDate = new Date(raw.date);
   return {
     sha: raw.sha,
+    parentShas: raw.parent_shas,
     message: raw.message,
     authorName: raw.author_name,
     authorEmail: raw.author_email,

@@ -1937,7 +1937,7 @@ func TestListCommitsDateParsing(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"commits":[{"sha":"abc123","message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}],"has_more":false}`))
+		_, _ = w.Write([]byte(`{"commits":[{"sha":"abc123","parent_shas":["def456","789abc"],"message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}],"has_more":false}`))
 	}))
 	defer server.Close()
 
@@ -1955,6 +1955,9 @@ func TestListCommitsDateParsing(t *testing.T) {
 		t.Fatalf("expected one commit")
 	}
 	commit := result.Commits[0]
+	if !reflect.DeepEqual([]string{"def456", "789abc"}, commit.ParentSHAs) {
+		t.Fatalf("unexpected parent SHAs: %#v", commit.ParentSHAs)
+	}
 	if commit.RawDate != "2024-01-15T14:32:18Z" {
 		t.Fatalf("unexpected raw date")
 	}
@@ -2054,7 +2057,7 @@ func TestGetCommit(t *testing.T) {
 			t.Fatalf("unexpected sha query: %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z","signature":"-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n","payload":"tree deadbeef\nauthor Jane Doe <jane@example.com> 1700000000 +0000\n"}}`))
+		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","parent_shas":["def456"],"message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z","signature":"-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n","payload":"tree deadbeef\nauthor Jane Doe <jane@example.com> 1700000000 +0000\n"}}`))
 	}))
 	defer server.Close()
 
@@ -2070,6 +2073,9 @@ func TestGetCommit(t *testing.T) {
 	}
 	if result.Commit.SHA != "abc123" {
 		t.Fatalf("unexpected sha: %q", result.Commit.SHA)
+	}
+	if !reflect.DeepEqual([]string{"def456"}, result.Commit.ParentSHAs) {
+		t.Fatalf("unexpected parent SHAs: %#v", result.Commit.ParentSHAs)
 	}
 	if result.Commit.Message != "feat: add endpoint" {
 		t.Fatalf("unexpected message: %q", result.Commit.Message)
@@ -2091,7 +2097,7 @@ func TestGetCommit(t *testing.T) {
 func TestGetCommitUnsigned(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","message":"chore: noop","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}}`))
+		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","parent_shas":[],"message":"chore: noop","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z"}}`))
 	}))
 	defer server.Close()
 
@@ -2107,6 +2113,9 @@ func TestGetCommitUnsigned(t *testing.T) {
 	}
 	if result.Commit.Signature != "" || result.Commit.Payload != "" {
 		t.Fatalf("expected empty signature/payload for unsigned commit, got %+v", result.Commit)
+	}
+	if result.Commit.ParentSHAs == nil || len(result.Commit.ParentSHAs) != 0 {
+		t.Fatalf("expected non-nil empty parent SHAs for root commit, got %#v", result.Commit.ParentSHAs)
 	}
 }
 
