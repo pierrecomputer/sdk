@@ -592,7 +592,8 @@ class GitStorage:
         url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
-            response = await client.delete(
+            response = await client.request(
+                "DELETE",
                 url,
                 headers={
                     "Authorization": f"Bearer {jwt}",
