@@ -784,21 +784,22 @@ class TestGitStorage:
         mock_response.is_success = True
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_delete = AsyncMock(return_value=mock_response)
-            mock_client.return_value.__aenter__.return_value.delete = mock_delete
+            mock_request = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.request = mock_request
 
             result = await storage.delete_git_credential(id="cred-123")
 
             assert result is None
 
             # Verify the DELETE request was made to the correct URL
-            mock_delete.assert_called_once()
-            call_args = mock_delete.call_args[0]
-            api_url = call_args[0]
+            mock_request.assert_awaited_once()
+            call_args = mock_request.call_args[0]
+            assert call_args[0] == "DELETE"
+            api_url = call_args[1]
             assert api_url == "https://api.test.code.storage/api/v1/repos/git-credentials"
 
             # Verify the body
-            call_kwargs = mock_delete.call_args[1]
+            call_kwargs = mock_request.call_args[1]
             body = call_kwargs["json"]
             assert body["id"] == "cred-123"
 
@@ -812,7 +813,7 @@ class TestGitStorage:
         mock_response.is_success = False
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.delete = AsyncMock(
+            mock_client.return_value.__aenter__.return_value.request = AsyncMock(
                 return_value=mock_response
             )
 
