@@ -2939,7 +2939,7 @@ describe('GitStorage', () => {
   });
 
   describe('Repo getCommitDiff', () => {
-    it('forwards faithfulPatch to the API params', async () => {
+    it('forwards applicablePatch to the API params', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({ id: 'repo-commit-diff' });
 
@@ -2947,7 +2947,7 @@ describe('GitStorage', () => {
         const requestUrl = new URL(url as string);
         expect(requestUrl.searchParams.get('sha')).toBe('head');
         expect(requestUrl.searchParams.get('baseSha')).toBe('base');
-        expect(requestUrl.searchParams.get('faithfulPatch')).toBe('true');
+        expect(requestUrl.searchParams.get('applicablePatch')).toBe('true');
 
         return Promise.resolve({
           ok: true,
@@ -2965,7 +2965,7 @@ describe('GitStorage', () => {
       await repo.getCommitDiff({
         sha: 'head',
         baseSha: 'base',
-        faithfulPatch: true,
+        applicablePatch: true,
       });
     });
   });

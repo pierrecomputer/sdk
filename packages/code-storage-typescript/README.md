@@ -340,7 +340,7 @@ console.log(branchDiff.files);
 const commitDiff = await repo.getCommitDiff({
   sha: 'abc123...',
   baseSha: 'def456...', // optional base commit
-  faithfulPatch: true, // include whitespace changes for use with git apply
+  applicablePatch: true, // generate raw diffs for use with git apply
 });
 console.log(commitDiff.stats);
 console.log(commitDiff.files);
@@ -936,7 +936,7 @@ interface GetBranchDiffOptions {
 interface GetCommitDiffOptions {
   sha: string;
   baseSha?: string;
-  faithfulPatch?: boolean; // default false; include whitespace changes for an applicable patch
+  applicablePatch?: boolean; // default false; generate raw diffs for use with git apply
   paths?: string[];
   ttl?: number;
 }

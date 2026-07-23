@@ -1893,7 +1893,7 @@ class RepoImpl:
         *,
         sha: str,
         base_sha: Optional[str] = None,
-        faithful_patch: Optional[bool] = None,
+        applicable_patch: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitDiffResult:
@@ -1902,8 +1902,8 @@ class RepoImpl:
         Args:
             sha: Commit SHA
             base_sha: Optional base commit SHA to compare against
-            faithful_patch: Include whitespace changes so raw diffs can be applied to the base
-                tree. Defaults to False.
+            applicable_patch: Generate raw diffs that can be applied to the base tree. Defaults to
+                False.
             paths: Optional paths to filter the diff to specific files
             ttl: Token TTL in seconds
 
@@ -1916,8 +1916,8 @@ class RepoImpl:
         params: list[tuple[str, str]] = [("sha", sha)]
         if base_sha:
             params.append(("baseSha", base_sha))
-        if faithful_patch is not None:
-            params.append(("faithfulPatch", str(faithful_patch).lower()))
+        if applicable_patch is not None:
+            params.append(("applicablePatch", str(applicable_patch).lower()))
         if paths:
             for p in paths:
                 params.append(("path", p))

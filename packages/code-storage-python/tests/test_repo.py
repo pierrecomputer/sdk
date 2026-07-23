@@ -3056,7 +3056,7 @@ class TestRepoDiffOperations:
 
             repo = await storage.create_repo(id="test-repo")
             result = await repo.get_commit_diff(
-                sha="abc123", base_sha="def456", faithful_patch=True
+                sha="abc123", base_sha="def456", applicable_patch=True
             )
 
             assert result is not None
@@ -3070,7 +3070,7 @@ class TestRepoDiffOperations:
             params = parse_qs(parsed.query)
             assert params["sha"] == ["abc123"]
             assert params["baseSha"] == ["def456"]
-            assert params["faithfulPatch"] == ["true"]
+            assert params["applicablePatch"] == ["true"]
 
 
 class TestRepoUpstreamOperations:

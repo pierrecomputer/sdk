@@ -22,8 +22,8 @@ const (
 // Options configure the Git storage client.
 type Options struct {
 	Name           string
-	Key            string        // required unless Token is set
-	Token          string        // pre-minted JWT, used verbatim if set
+	Key            string // required unless Token is set
+	Token          string // pre-minted JWT, used verbatim if set
 	APIBaseURL     string
 	StorageBaseURL string
 	APIVersion     int
@@ -866,10 +866,10 @@ type GetBranchDiffResult struct {
 // GetCommitDiffOptions configures commit diff.
 type GetCommitDiffOptions struct {
 	InvocationOptions
-	SHA           string
-	BaseSHA       string
-	FaithfulPatch bool // Include whitespace changes so raw diffs can be applied to the base tree.
-	Paths         []string
+	SHA             string
+	BaseSHA         string
+	ApplicablePatch bool // Generate raw diffs that can be applied to the base tree.
+	Paths           []string
 }
 
 // GetCommitDiffResult describes commit diff.
