@@ -1575,6 +1575,9 @@ class RepoImpl implements Repo {
     if (options.baseSha) {
       params.baseSha = options.baseSha;
     }
+    if (typeof options.faithfulPatch === 'boolean') {
+      params.faithfulPatch = String(options.faithfulPatch);
+    }
     if (options.paths && options.paths.length > 0) {
       params.path = options.paths;
     }

@@ -1064,6 +1064,7 @@ class Repo(Protocol):
         *,
         sha: str,
         base_sha: Optional[str] = None,
+        faithful_patch: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitDiffResult:

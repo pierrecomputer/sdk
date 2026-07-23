@@ -731,6 +731,8 @@ export interface GetBranchDiffResult {
 export interface GetCommitDiffOptions extends GitStorageInvocationOptions {
   sha: string;
   baseSha?: string;
+  /** Include whitespace changes so raw diffs can be applied to the exact base tree. Defaults to false. */
+  faithfulPatch?: boolean;
   /** Optional paths to filter the diff to specific files */
   paths?: string[];
 }

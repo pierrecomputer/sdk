@@ -3055,7 +3055,9 @@ class TestRepoDiffOperations:
             mock_client.return_value.__aenter__.return_value.get = mock_get
 
             repo = await storage.create_repo(id="test-repo")
-            result = await repo.get_commit_diff(sha="abc123", base_sha="def456")
+            result = await repo.get_commit_diff(
+                sha="abc123", base_sha="def456", faithful_patch=True
+            )
 
             assert result is not None
             assert result["stats"]["additions"] == 5
@@ -3068,6 +3070,7 @@ class TestRepoDiffOperations:
             params = parse_qs(parsed.query)
             assert params["sha"] == ["abc123"]
             assert params["baseSha"] == ["def456"]
+            assert params["faithfulPatch"] == ["true"]
 
 
 class TestRepoUpstreamOperations:

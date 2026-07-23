@@ -285,6 +285,23 @@ for _, commit := range commits.Commits {
 }
 ```
 
+### Get an applicable commit diff
+
+```go
+diff, err := repo.GetCommitDiff(context.Background(), storage.GetCommitDiffOptions{
+	SHA:           "head-commit-sha",
+	BaseSHA:       "base-commit-sha",
+	FaithfulPatch: true,
+})
+if err != nil {
+	log.Fatal(err)
+}
+```
+
+`FaithfulPatch` includes whitespace changes. When no files are filtered and every changed file has
+non-empty `Raw`, concatenate each `diff.Files[i].Raw` in response order to produce a patch for the
+exact base tree.
+
 TTL fields use `time.Duration` values (for example `time.Hour`).
 
 ### Hydrate a repo without an API request
