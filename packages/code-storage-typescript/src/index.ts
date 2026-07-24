@@ -1575,8 +1575,8 @@ class RepoImpl implements Repo {
     if (options.baseSha) {
       params.baseSha = options.baseSha;
     }
-    if (typeof options.applicablePatch === 'boolean') {
-      params.applicablePatch = String(options.applicablePatch);
+    if (typeof options.gitApplyCompatible === 'boolean') {
+      params.gitApplyCompatible = String(options.gitApplyCompatible);
     }
     if (options.paths && options.paths.length > 0) {
       params.path = options.paths;

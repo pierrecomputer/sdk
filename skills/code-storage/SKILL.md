@@ -476,13 +476,13 @@ Errors: `400` missing/blank `sha`, `404` commit not found.
 ## GET /repos/diff — Get Commit Diff
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/diff?sha=COMMIT_SHA&baseSha=OPTIONAL_BASE&applicablePatch=true&path=src/foo.go" \
+curl "$CODE_STORAGE_BASE_URL/repos/diff?sha=COMMIT_SHA&baseSha=OPTIONAL_BASE&gitApplyCompatible=true&path=src/foo.go" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `sha` (required), `baseSha`, `applicablePatch` (boolean), `path` (repeatable).
+Params: `sha` (required), `baseSha`, `gitApplyCompatible` (boolean), `path` (repeatable).
 The default suppresses changes in the amount of whitespace for review readability. Set
-`applicablePatch=true` when the raw output will be passed to `git apply`; it includes whitespace
+`gitApplyCompatible=true` when the raw output will be passed to `git apply`; it includes whitespace
 changes consistently in file discovery, raw diffs, and stats. When `filtered_files` is empty and
 every changed file has non-empty `raw`, concatenating `files[].raw` in response order produces a
 patch for the exact base tree.

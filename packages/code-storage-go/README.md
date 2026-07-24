@@ -291,14 +291,14 @@ for _, commit := range commits.Commits {
 diff, err := repo.GetCommitDiff(context.Background(), storage.GetCommitDiffOptions{
 	SHA:           "head-commit-sha",
 	BaseSHA:       "base-commit-sha",
-	ApplicablePatch: true,
+	GitApplyCompatible: true,
 })
 if err != nil {
 	log.Fatal(err)
 }
 ```
 
-`ApplicablePatch` generates raw diffs for use with `git apply`. When no files are filtered and every
+`GitApplyCompatible` generates raw diffs for use with `git apply`. When no files are filtered and every
 changed file has non-empty `Raw`, concatenate each `diff.Files[i].Raw` in response order to produce
 a patch for the exact base tree.
 

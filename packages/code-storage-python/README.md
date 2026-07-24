@@ -360,7 +360,7 @@ print(branch_diff["files"])
 commit_diff = await repo.get_commit_diff(
     sha="abc123...",
     base_sha="def456...",  # optional base commit
-    applicable_patch=True,  # generate raw diffs for use with git apply
+    git_apply_compatible=True,  # generate raw diffs for use with git apply
 )
 print(commit_diff["stats"])
 print(commit_diff["files"])
@@ -973,7 +973,7 @@ class Repo:
         *,
         sha: str,
         base_sha: Optional[str] = None,
-        applicable_patch: Optional[bool] = None,
+        git_apply_compatible: Optional[bool] = None,
         paths: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitDiffResult: ...

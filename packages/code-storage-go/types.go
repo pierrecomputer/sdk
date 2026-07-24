@@ -866,10 +866,10 @@ type GetBranchDiffResult struct {
 // GetCommitDiffOptions configures commit diff.
 type GetCommitDiffOptions struct {
 	InvocationOptions
-	SHA             string
-	BaseSHA         string
-	ApplicablePatch bool // Generate raw diffs that can be applied to the base tree.
-	Paths           []string
+	SHA                string
+	BaseSHA            string
+	GitApplyCompatible bool // Generate raw diffs that can be applied to the base tree.
+	Paths              []string
 }
 
 // GetCommitDiffResult describes commit diff.
