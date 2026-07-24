@@ -339,6 +339,8 @@ console.log(branchDiff.files);
 // Get commit diff
 const commitDiff = await repo.getCommitDiff({
   sha: 'abc123...',
+  baseSha: 'def456...', // optional base commit
+  gitApplyCompatible: true, // generate raw diffs for use with git apply
 });
 console.log(commitDiff.stats);
 console.log(commitDiff.files);
@@ -934,6 +936,7 @@ interface GetBranchDiffOptions {
 interface GetCommitDiffOptions {
   sha: string;
   baseSha?: string;
+  gitApplyCompatible?: boolean; // default false; generate raw diffs for use with git apply
   paths?: string[];
   ttl?: number;
 }

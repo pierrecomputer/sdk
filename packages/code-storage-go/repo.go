@@ -910,6 +910,9 @@ func (r *Repo) GetCommitDiff(ctx context.Context, options GetCommitDiffOptions) 
 	if strings.TrimSpace(options.BaseSHA) != "" {
 		params.Set("baseSha", options.BaseSHA)
 	}
+	if options.GitApplyCompatible {
+		params.Set("gitApplyCompatible", "true")
+	}
 	for _, path := range options.Paths {
 		if strings.TrimSpace(path) != "" {
 			params.Add("path", path)

@@ -1183,7 +1183,7 @@ func TestCommitDiffQuery(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		q := r.URL.Query()
-		if q.Get("sha") != "abc" || q.Get("baseSha") != "base" {
+		if q.Get("sha") != "abc" || q.Get("baseSha") != "base" || q.Get("gitApplyCompatible") != "true" {
 			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -1197,7 +1197,7 @@ func TestCommitDiffQuery(t *testing.T) {
 	}
 	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
 
-	result, err := repo.GetCommitDiff(nil, GetCommitDiffOptions{SHA: "abc", BaseSHA: "base"})
+	result, err := repo.GetCommitDiff(nil, GetCommitDiffOptions{SHA: "abc", BaseSHA: "base", GitApplyCompatible: true})
 	if err != nil {
 		t.Fatalf("commit diff error: %v", err)
 	}

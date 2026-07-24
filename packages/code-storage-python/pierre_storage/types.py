@@ -1064,6 +1064,7 @@ class Repo(Protocol):
         *,
         sha: str,
         base_sha: Optional[str] = None,
+        git_apply_compatible: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitDiffResult:

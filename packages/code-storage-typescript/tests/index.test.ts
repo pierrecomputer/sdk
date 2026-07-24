@@ -2938,6 +2938,38 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('Repo getCommitDiff', () => {
+    it('forwards gitApplyCompatible to the API params', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-commit-diff' });
+
+      mockFetch.mockImplementationOnce((url) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.searchParams.get('sha')).toBe('head');
+        expect(requestUrl.searchParams.get('baseSha')).toBe('base');
+        expect(requestUrl.searchParams.get('gitApplyCompatible')).toBe('true');
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            sha: 'head',
+            stats: { files: 0, additions: 0, deletions: 0, changes: 0 },
+            files: [],
+            filtered_files: [],
+          }),
+        } as any);
+      });
+
+      await repo.getCommitDiff({
+        sha: 'head',
+        baseSha: 'base',
+        gitApplyCompatible: true,
+      });
+    });
+  });
+
   describe('Repo restoreCommit', () => {
     it('should post metadata to the restore endpoint and return the response', async () => {
       const store = new GitStorage({ name: 'v0', key });
