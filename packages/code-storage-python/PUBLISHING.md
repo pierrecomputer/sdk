@@ -254,24 +254,9 @@ twine upload --repository testpypi dist/*
 twine upload dist/*
 ```
 
-## Publishing Updates
+## Publish an Update
 
-When you release a new version:
-
-### 1. Update Version Number
-
-Edit `pyproject.toml`:
-
-```toml
-[project]
-version = "0.1.3"  # Increment version
-```
-
-### 2. Update CHANGELOG (if you have one)
-
-Document what changed.
-
-### 3. Build and Upload
+### Build and Upload
 
 ```bash
 # Clean old builds
@@ -290,19 +275,13 @@ twine check dist/*
 twine upload --repository testpypi dist/*
 
 # Test installation
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pierre-storage==0.1.3
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pierre-storage
 
 # If good, upload to PyPI
 twine upload dist/*
 ```
 
 ## Troubleshooting
-
-### Error: "File already exists"
-
-You can't re-upload the same version. You must increment the version number.
-
-**Solution**: Update version in `pyproject.toml`, rebuild, and upload.
 
 ### Error: "Invalid username or password"
 

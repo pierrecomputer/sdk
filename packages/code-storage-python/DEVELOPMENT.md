@@ -285,19 +285,6 @@ uv lock --upgrade-package httpx
 uv run pip-audit
 ```
 
-### Version bumping
-
-Update version in `pyproject.toml`:
-
-```toml
-[project]
-version = "0.2.0"
-```
-
-### Changelog
-
-Document changes in CHANGELOG.md following Keep a Changelog format.
-
 ## Resources
 
 - [Pierre API Documentation](https://docs.pierre.io/api)
