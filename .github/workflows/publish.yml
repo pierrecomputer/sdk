@@ -15,8 +15,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check-versions:
+    name: Check package versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version check compares .version against HEAD^.
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: ./.github/actions/check-package-versions
+
   publish-typescript:
     name: Publish TypeScript SDK to npm
+    needs: check-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,6 +83,7 @@ jobs:
 
   publish-python:
     name: Publish Python SDK to PyPI
+    needs: check-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -132,6 +149,7 @@ jobs:
 
   publish-go:
     name: Publish Go SDK tag
+    needs: check-versions
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -140,12 +158,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Determine release tag
         id: tag
         run: |
-          VERSION=$(sed -nE 's/^[[:space:]]*PackageVersion[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' packages/code-storage-go/version.go | head -n 1)
+          set -euo pipefail
+          VERSION=$(python3 scripts/sync_versions.py --print)
           if [ -z "${VERSION}" ]; then
-            echo "Failed to extract PackageVersion from packages/code-storage-go/version.go" >&2
+            echo "Failed to read .version" >&2
             exit 1
           fi
           TAG="packages/code-storage-go/v${VERSION}"

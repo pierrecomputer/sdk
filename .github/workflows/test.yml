@@ -11,6 +11,9 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The version check compares .version against HEAD^.
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -27,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - uses: ./.github/actions/check-package-versions
 
       - run: pnpm install
         working-directory: packages/code-storage-typescript

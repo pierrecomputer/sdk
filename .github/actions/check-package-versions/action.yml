@@ -1,0 +1,29 @@
+name: Check package versions
+description: >
+  Test the version sync tool. Reject package version drift and a canonical
+  version that goes backward. Needs a prior checkout and python3 on PATH.
+
+runs:
+  using: composite
+  steps:
+    - name: Test version sync tool
+      shell: bash
+      run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
+    - name: Check package versions
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # A shallow checkout hides the previous commit. Get one more commit, so
+        # a caller does not need a specific fetch-depth for the check below.
+        if ! git rev-parse --verify --quiet HEAD^ >/dev/null; then
+          git fetch --deepen=1 --quiet || true
+        fi
+
+        BASELINE=$(git show HEAD^:.version 2>/dev/null || true)
+        if [ -z "${BASELINE}" ]; then
+          echo "No previous .version; skipping the forward-only check."
+        fi
+
+        python3 scripts/sync_versions.py --check --not-below "${BASELINE}"

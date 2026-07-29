@@ -345,17 +345,6 @@ if err != nil {
 fmt.Println(repo.ID)
 ```
 
-## Releasing a new version
-
-Because this Go module lives in a monorepo, git tags must be prefixed with the module's subdirectory path:
-
-```bash
-git tag packages/code-storage-go/v0.8.0
-git push origin packages/code-storage-go/v0.8.0
-```
-
-Make sure the version in `version.go` (`PackageVersion`) matches the tag before tagging.
-
 ## Features
 
 - Create, list, find, and delete repositories.
