@@ -209,6 +209,8 @@ func parseFileMetadataHeaders(resp *http.Response) FileMetadata {
 }
 
 // ArchiveStream returns the raw response for streaming repository archives.
+// Options.Format selects the container: ArchiveFormatTarGz (the default) or
+// ArchiveFormatZip.
 func (r *Repo) ArchiveStream(ctx context.Context, options ArchiveOptions) (*http.Response, error) {
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
 	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
@@ -229,12 +231,15 @@ func (r *Repo) ArchiveStream(ctx context.Context, options ArchiveOptions) (*http
 	if options.MaxBlobSize != nil {
 		req.MaxBlobSize = options.MaxBlobSize
 	}
+	if format := ArchiveFormat(strings.TrimSpace(string(options.Format))); format != "" {
+		req.Format = format
+	}
 	if prefix := strings.TrimSpace(options.ArchivePrefix); prefix != "" {
 		req.Archive = &archiveOptions{Prefix: prefix}
 	}
 
 	var body interface{}
-	if req.Ref != "" || len(req.IncludeGlobs) > 0 || len(req.ExcludeGlobs) > 0 || req.MaxBlobSize != nil || req.Archive != nil {
+	if req.Ref != "" || len(req.IncludeGlobs) > 0 || len(req.ExcludeGlobs) > 0 || req.MaxBlobSize != nil || req.Format != "" || req.Archive != nil {
 		body = req
 	}
 

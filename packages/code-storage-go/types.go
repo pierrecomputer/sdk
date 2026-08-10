@@ -265,13 +265,23 @@ type FileMetadata struct {
 	ContentType     string
 }
 
+// ArchiveFormat identifies the archive container returned by ArchiveStream.
+type ArchiveFormat string
+
+const (
+	ArchiveFormatTarGz ArchiveFormat = "tar.gz"
+	ArchiveFormatZip   ArchiveFormat = "zip"
+)
+
 // ArchiveOptions configures repository archive download.
 type ArchiveOptions struct {
 	InvocationOptions
-	Ref           string
-	IncludeGlobs  []string
-	ExcludeGlobs  []string
-	MaxBlobSize   *int64
+	Ref          string
+	IncludeGlobs []string
+	ExcludeGlobs []string
+	MaxBlobSize  *int64
+	// Format selects the archive container. Empty defaults to ArchiveFormatTarGz.
+	Format        ArchiveFormat
 	ArchivePrefix string
 }
 

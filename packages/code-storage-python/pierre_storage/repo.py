@@ -17,6 +17,7 @@ from pierre_storage.commit import (
 )
 from pierre_storage.errors import ApiError, RefUpdateError, infer_ref_update_reason
 from pierre_storage.types import (
+    ArchiveFormat,
     BlameLine,
     BlameResult,
     BranchInfo,
@@ -505,6 +506,7 @@ class RepoImpl:
         include_globs: Optional[List[str]] = None,
         exclude_globs: Optional[List[str]] = None,
         max_blob_size: Optional[int] = None,
+        format: Optional[ArchiveFormat] = None,
         archive_prefix: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> StreamingResponse:
@@ -515,7 +517,8 @@ class RepoImpl:
             include_globs: Optional include globs for archived files
             exclude_globs: Optional exclude globs for archived files
             max_blob_size: Optional max blob size in bytes
-            archive_prefix: Optional archive prefix for tar entries
+            format: Optional archive container, ``"tar.gz"`` (default) or ``"zip"``
+            archive_prefix: Optional archive prefix for archive entries
             ttl: Token TTL in seconds
 
         Returns:
@@ -533,6 +536,8 @@ class RepoImpl:
             body["exclude_globs"] = exclude_globs
         if max_blob_size is not None:
             body["max_blob_size"] = max_blob_size
+        if format and format.strip():
+            body["format"] = format.strip()
         if archive_prefix and archive_prefix.strip():
             body["archive"] = {"prefix": archive_prefix.strip()}
 

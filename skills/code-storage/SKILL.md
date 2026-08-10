@@ -154,7 +154,7 @@ Username is always `t`. Password is the JWT.
 | Get file content (stream)     | GET/HEAD | `/repos/file`                     | `git:read`      |
 | Blame file at ref             | GET      | `/repos/blame`                    | `git:read`      |
 | Search content (grep)         | POST     | `/repos/grep`                     | `git:read`      |
-| Download archive (tar.gz)     | POST     | `/repos/archive`                  | `git:read`      |
+| Download archive (tar.gz/zip) | POST     | `/repos/archive`                  | `git:read`      |
 | **TAGS**                      |          |                                   |                 |
 | Create tag                    | POST     | `/repos/tags`                     | `git:write`     |
 | List tags                     | GET      | `/repos/tags`                     | `git:read`      |
@@ -681,7 +681,22 @@ curl "$CODE_STORAGE_BASE_URL/repos/archive" -X POST \
   -o repo.tar.gz
 ```
 
-Response: streaming `tar.gz`. Headers: `Content-Type: application/gzip`.
+Response: streaming `tar.gz`. Headers: `Content-Type: application/gzip`, suggested
+filename `<name>-<ref>.tar.gz`.
+
+Optional `"format"` selects the container: `"tar.gz"` (the default) or `"zip"`.
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/archive" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ref":"main","format":"zip"}' \
+  -o repo.zip
+```
+
+With `"format":"zip"` the response is `Content-Type: application/zip` and the
+suggested filename is `<name>-<ref>.zip`. Omit `format` for the unchanged
+`tar.gz` behaviour.
 
 ## Tags Endpoints (POST/GET/DELETE /repos/tags)
 

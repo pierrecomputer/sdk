@@ -267,6 +267,90 @@ class TestRepoFileOperations:
             stream_client.aclose.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_get_archive_stream_zip_format(self, git_storage_options: dict) -> None:
+        """Ensure the zip format is sent and the zip response is returned."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        archive_response = MagicMock()
+        archive_response.status_code = 200
+        archive_response.is_success = True
+        archive_response.raise_for_status = MagicMock()
+        archive_response.aclose = AsyncMock()
+        archive_response.headers = {
+            "content-type": "application/zip",
+            "content-disposition": 'attachment; filename="test-repo-main.zip"',
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            create_client = MagicMock()
+            create_client.__aenter__.return_value.post = AsyncMock(return_value=create_response)
+            create_client.__aexit__.return_value = False
+
+            stream_client = MagicMock()
+            stream_context = MagicMock()
+            stream_context.__aenter__ = AsyncMock(return_value=archive_response)
+            stream_context.__aexit__ = AsyncMock(return_value=False)
+            stream_client.stream = MagicMock(return_value=stream_context)
+            stream_client.aclose = AsyncMock()
+
+            mock_client_cls.side_effect = [create_client, stream_client]
+
+            repo = await storage.create_repo(id="test-repo")
+            response = await repo.get_archive_stream(ref="main", format="zip")
+
+            payload = stream_client.stream.call_args.kwargs["json"]
+            assert payload == {"ref": "main", "format": "zip"}
+            assert response.headers["content-type"] == "application/zip"
+
+            await response.aclose()
+
+    @pytest.mark.asyncio
+    async def test_get_archive_stream_omits_format_when_unset(
+        self, git_storage_options: dict
+    ) -> None:
+        """Ensure no format key is sent when the caller does not request one."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        archive_response = MagicMock()
+        archive_response.status_code = 200
+        archive_response.is_success = True
+        archive_response.raise_for_status = MagicMock()
+        archive_response.aclose = AsyncMock()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            create_client = MagicMock()
+            create_client.__aenter__.return_value.post = AsyncMock(return_value=create_response)
+            create_client.__aexit__.return_value = False
+
+            stream_client = MagicMock()
+            stream_context = MagicMock()
+            stream_context.__aenter__ = AsyncMock(return_value=archive_response)
+            stream_context.__aexit__ = AsyncMock(return_value=False)
+            stream_client.stream = MagicMock(return_value=stream_context)
+            stream_client.aclose = AsyncMock()
+
+            mock_client_cls.side_effect = [create_client, stream_client]
+
+            repo = await storage.create_repo(id="test-repo")
+            response = await repo.get_archive_stream(ref="main")
+
+            payload = stream_client.stream.call_args.kwargs["json"]
+            assert payload == {"ref": "main"}
+            assert "format" not in payload
+
+            await response.aclose()
+
+    @pytest.mark.asyncio
     async def test_list_files(self, git_storage_options: dict) -> None:
         """Test listing files in repository."""
         storage = GitStorage(git_storage_options)

@@ -161,6 +161,8 @@ class ListReposResult(TypedDict):
 # Removed: ListFilesOptions - now uses **kwargs
 
 
+ArchiveFormat = Literal["tar.gz", "zip"]
+
 TreeEntryType = Literal["blob", "tree", "symlink", "submodule"]
 
 
@@ -804,6 +806,7 @@ class Repo(Protocol):
         include_globs: Optional[list[str]] = None,
         exclude_globs: Optional[list[str]] = None,
         max_blob_size: Optional[int] = None,
+        format: Optional[ArchiveFormat] = None,
         archive_prefix: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> Any:  # httpx.Response

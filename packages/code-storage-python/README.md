@@ -176,7 +176,7 @@ metadata = await repo.head_file(
 )
 print(metadata["status_code"], metadata.get("etag"), metadata.get("content_range"))
 
-# Download repository archive (streaming tar.gz)
+# Download repository archive (streaming tar.gz by default)
 archive_response = await repo.get_archive_stream(
     ref="main",
     include_globs=["README.md"],
@@ -186,6 +186,14 @@ archive_response = await repo.get_archive_stream(
 )
 archive_bytes = await archive_response.aread()
 print(len(archive_bytes))
+
+# Download the same archive as a zip instead
+# (Content-Type: application/zip, suggested filename <name>-<ref>.zip)
+zip_response = await repo.get_archive_stream(
+    ref="main",
+    format="zip",  # omit for the default "tar.gz"
+)
+print(zip_response.headers["content-type"])
 
 # List all files in the repository
 files = await repo.list_files(
@@ -758,6 +766,7 @@ class Repo:
         include_globs: Optional[List[str]] = None,
         exclude_globs: Optional[List[str]] = None,
         max_blob_size: Optional[int] = None,
+        format: Optional[Literal["tar.gz", "zip"]] = None,  # default: "tar.gz"
         archive_prefix: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> Response: ...

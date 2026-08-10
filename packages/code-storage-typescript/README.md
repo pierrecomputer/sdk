@@ -206,7 +206,7 @@ const meta = await repo.headFile({
 });
 console.log(meta.status, meta.etag, meta.contentRange);
 
-// Download repository archive (streaming tar.gz)
+// Download repository archive (streaming tar.gz by default)
 const archiveResp = await repo.getArchiveStream({
   ref: 'main',
   includeGlobs: ['README.md'],
@@ -216,6 +216,14 @@ const archiveResp = await repo.getArchiveStream({
 });
 const archiveBytes = new Uint8Array(await archiveResp.arrayBuffer());
 console.log(archiveBytes.length);
+
+// Download the same archive as a zip instead
+// (Content-Type: application/zip, suggested filename <name>-<ref>.zip)
+const zipResp = await repo.getArchiveStream({
+  ref: 'main',
+  format: 'zip', // omit for the default 'tar.gz'
+});
+console.log(zipResp.headers.get('content-type'));
 
 // List all files in the repository
 const files = await repo.listFiles({
@@ -671,16 +679,21 @@ interface FileMetadata {
   contentType?: string;
 }
 
+type ArchiveFormat = 'tar.gz' | 'zip';
+
 interface ArchiveOptions {
   ref?: string; // Branch, tag, or commit SHA (defaults to default branch)
   includeGlobs?: string[];
   excludeGlobs?: string[];
   maxBlobSize?: number; // Optional max file size in bytes
+  format?: ArchiveFormat; // Archive container (default: 'tar.gz')
   archivePrefix?: string;
   ttl?: number;
 }
 
-// getArchiveStream() returns a standard Fetch Response for streaming tar.gz bytes
+// getArchiveStream() returns a standard Fetch Response for streaming archive bytes:
+// 'tar.gz' responds with Content-Type application/gzip and filename <name>-<ref>.tar.gz,
+// 'zip' responds with Content-Type application/zip and filename <name>-<ref>.zip
 
 interface ListFilesOptions {
   ref?: string; // Branch, tag, or commit SHA

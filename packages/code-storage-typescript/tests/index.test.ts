@@ -891,6 +891,58 @@ describe('GitStorage', () => {
     expect(response.status).toBe(200);
   });
 
+  it('posts the zip archive format and returns the zip response', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-archive-zip' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      expect(init?.method).toBe('POST');
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname.endsWith('/repos/archive')).toBe(true);
+      const payload = JSON.parse(init?.body as string);
+      expect(payload).toEqual({ ref: 'main', format: 'zip' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === 'content-type' ? 'application/zip' : null,
+        } as any,
+        json: async () => ({}),
+        text: async () => '',
+      } as any);
+    });
+
+    const response = await repo.getArchiveStream({ ref: 'main', format: 'zip' });
+
+    expect(response.ok).toBe(true);
+    expect(response.headers.get('content-type')).toBe('application/zip');
+  });
+
+  it('omits the archive format when it is not set', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-archive-default' });
+
+    mockFetch.mockImplementationOnce((url, init) => {
+      const payload = JSON.parse(init?.body as string);
+      expect(payload).toEqual({ ref: 'main' });
+      expect('format' in payload).toBe(false);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null } as any,
+        json: async () => ({}),
+        text: async () => '',
+      } as any);
+    });
+
+    const response = await repo.getArchiveStream({ ref: 'main' });
+
+    expect(response.ok).toBe(true);
+  });
+
   it('passes ephemeral flag to listFiles', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-ephemeral-list' });

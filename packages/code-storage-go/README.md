@@ -80,6 +80,24 @@ if err != nil {
 defer resp.Body.Close()
 ```
 
+Archives stream as gzipped tar (`Content-Type: application/gzip`, suggested
+filename `<name>-<ref>.tar.gz`) unless you ask for a different container. Set
+`Format` to `storage.ArchiveFormatZip` for a zip archive
+(`Content-Type: application/zip`, suggested filename `<name>-<ref>.zip`):
+
+```go
+resp, err := repo.ArchiveStream(context.Background(), storage.ArchiveOptions{
+	Ref:    "main",
+	Format: storage.ArchiveFormatZip,
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer resp.Body.Close()
+```
+
+Leaving `Format` empty keeps the default `storage.ArchiveFormatTarGz` behaviour.
+
 ### List files with metadata
 
 ```go

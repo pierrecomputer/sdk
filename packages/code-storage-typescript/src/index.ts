@@ -1020,6 +1020,12 @@ class RepoImpl implements Repo {
     if (typeof options.maxBlobSize === 'number' && Number.isFinite(options.maxBlobSize)) {
       body.max_blob_size = options.maxBlobSize;
     }
+    if (typeof options.format === 'string') {
+      const format = options.format.trim();
+      if (format) {
+        body.format = format;
+      }
+    }
     if (typeof options.archivePrefix === 'string') {
       const prefix = options.archivePrefix.trim();
       if (prefix) {

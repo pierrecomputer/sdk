@@ -2057,6 +2057,83 @@ func TestArchiveStream(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
+func TestArchiveStreamZipFormat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/repos/archive" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["format"] != "zip" {
+			t.Fatalf("unexpected format: %v", payload["format"])
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="repo-main.zip"`)
+		_, _ = w.Write([]byte("PK"))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.ArchiveStream(nil, ArchiveOptions{Ref: "main", Format: ArchiveFormatZip})
+	if err != nil {
+		t.Fatalf("archive stream error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("Content-Type"); got != "application/zip" {
+		t.Fatalf("unexpected content type: %s", got)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if string(body) != "PK" {
+		t.Fatalf("unexpected body: %q", string(body))
+	}
+}
+
+func TestArchiveStreamOmitsFormatWhenUnset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if _, ok := payload["format"]; ok {
+			t.Fatalf("format should be absent, got body: %s", string(raw))
+		}
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	resp, err := repo.ArchiveStream(nil, ArchiveOptions{Ref: "main"})
+	if err != nil {
+		t.Fatalf("archive stream error: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
 func TestListCommitsDateParsing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/commits" {

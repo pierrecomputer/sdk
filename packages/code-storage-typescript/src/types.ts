@@ -329,11 +329,15 @@ export interface FileMetadata {
   contentType?: string;
 }
 
+export type ArchiveFormat = "tar.gz" | "zip";
+
 export interface ArchiveOptions extends GitStorageInvocationOptions {
   ref?: string;
   includeGlobs?: string[];
   excludeGlobs?: string[];
   maxBlobSize?: number;
+  /** Archive container to return. Defaults to `"tar.gz"`. */
+  format?: ArchiveFormat;
   archivePrefix?: string;
 }
 
