@@ -7,10 +7,12 @@ import type {
   DeleteBranchResponseRaw,
   DeleteTagResponseRaw,
   BlameResponseRaw,
+  DeploymentResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
   GetCommitResponseRaw,
   ListBranchesResponseRaw,
+  ListDeploymentsResponseRaw,
   ListCommitsResponseRaw,
   ListFilesResponseRaw,
   ListFilesWithMetadataResponseRaw,
@@ -35,6 +37,7 @@ import type {
   RawRepoInfo as SchemaRawRepoInfo,
   RawTagInfo as SchemaRawTagInfo,
   RawTreeEntry as SchemaRawTreeEntry,
+  UpdateRepoResponseRaw,
   TreeEntryTypeRaw as SchemaTreeEntryTypeRaw,
 } from './schemas';
 
@@ -96,7 +99,14 @@ export interface PolicyOptions {
 }
 
 export interface GetRemoteURLOptions extends PolicyOptions {
-  permissions?: ("git:write" | "git:read" | "repo:write" | "org:read")[];
+  permissions?: (
+    | "git:write"
+    | "git:read"
+    | "repo:write"
+    | "org:read"
+    | "deployment:read"
+    | "deployment:write"
+  )[];
   ttl?: number;
   /**
    * Repo-wide policy ops.
@@ -137,6 +147,13 @@ export interface Repo {
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
   grep(options: GrepOptions): Promise<GrepResult>;
   pullUpstream(options?: PullUpstreamOptions): Promise<void>;
+  createDeployment(
+    options?: CreateDeploymentOptions,
+  ): Promise<CreateDeploymentResult>;
+  listDeployments(
+    options?: ListDeploymentsOptions,
+  ): Promise<ListDeploymentsResult>;
+  getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
@@ -148,7 +165,7 @@ export interface Repo {
   ): Promise<CommitResult>;
 }
 
-export type ValidMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD';
+export type ValidMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
 type SimplePath = string;
 type ComplexPath = {
   path: string;
@@ -281,10 +298,90 @@ export interface ListReposResult {
   hasMore: boolean;
 }
 
+export interface DeploymentSettings {
+  deployOnPush?: boolean;
+  productionBranch?: string;
+  projectName?: string;
+  framework?: string | null;
+  rootDirectory?: string | null;
+  buildCommand?: string | null;
+  installCommand?: string | null;
+  outputDirectory?: string | null;
+  serverlessFunctionRegion?: string | null;
+  env?: Record<string, string | null>;
+}
+
 export interface CreateRepoOptions extends GitStorageInvocationOptions {
   id?: string;
   baseRepo?: BaseRepo;
   defaultBranch?: string;
+  deployment?: DeploymentSettings;
+}
+
+export interface UpdateRepoOptions extends GitStorageInvocationOptions {
+  id: string;
+  defaultBranch?: string;
+  deployment?: DeploymentSettings;
+}
+
+export type UpdateRepoResponse = UpdateRepoResponseRaw;
+
+export interface UpdateRepoResult {
+  repoId: string;
+  repoName: string;
+  defaultBranch: string;
+}
+
+export type DeploymentTarget = 'preview' | 'production';
+export type DeploymentStatus =
+  | 'queued'
+  | 'building'
+  | 'ready'
+  | 'error'
+  | 'canceled';
+
+export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
+  ref?: string;
+  target?: DeploymentTarget;
+  idempotencyKey?: string;
+}
+
+export type DeploymentResponse = DeploymentResponseRaw;
+
+export interface DeploymentResult {
+  id: string;
+  url?: string;
+  target: DeploymentTarget;
+  ref: string;
+  commitSha: string;
+  status: DeploymentStatus;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeploymentResult extends DeploymentResult {
+  location: string;
+  idempotencyKey: string;
+  idempotentReplayed: boolean;
+}
+
+export interface ListDeploymentsOptions extends GitStorageInvocationOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+export type ListDeploymentsResponse = ListDeploymentsResponseRaw;
+
+export interface ListDeploymentsResult {
+  deployments: DeploymentResult[];
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
+export interface GetDeploymentOptions extends GitStorageInvocationOptions {
+  deploymentId: string;
 }
 
 export interface DeleteRepoOptions extends GitStorageInvocationOptions {

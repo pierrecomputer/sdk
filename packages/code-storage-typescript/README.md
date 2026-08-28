@@ -111,6 +111,59 @@ const result = await foundRepo.grep({
 console.log(result.matches);
 ```
 
+### Repository Deployments
+
+Configure hosting when creating or updating a repository:
+
+```typescript
+const repo = await store.createRepo({
+  id: 'owner/site',
+  deployment: {
+    deployOnPush: true,
+    productionBranch: 'main',
+    framework: 'nextjs',
+    rootDirectory: 'apps/web',
+    serverlessFunctionRegion: 'fra1',
+    env: {
+      API_URL: 'https://example.com',
+    },
+  },
+});
+
+await store.updateRepo({
+  id: repo.id,
+  deployment: {
+    framework: null, // Reset to automatic detection.
+    serverlessFunctionRegion: null, // Reset to the platform default.
+    env: {
+      OLD_SECRET: null, // Delete this variable.
+    },
+  },
+});
+```
+
+Nullable build settings distinguish omission from reset. Region codes are at
+most four characters and apply from the next deployment.
+
+Create, list, and inspect durable deployments through the repository handle:
+
+```typescript
+const created = await repo.createDeployment({
+  ref: 'main',
+  target: 'production',
+  idempotencyKey: crypto.randomUUID(),
+});
+
+const page = await repo.listDeployments({ limit: 20 });
+const current = await repo.getDeployment({
+  deploymentId: created.id,
+});
+```
+
+Creation returns `queued`, `building`, `ready`, `error`, or `canceled` state.
+Reuse the same idempotency key when retrying a create request. The SDK mints
+the required repository and deployment scopes automatically.
+
 ### Getting Remote URLs
 
 The SDK generates secure URLs with JWT authentication for Git operations:
@@ -544,6 +597,7 @@ await repo
 class GitStorage {
   constructor(options: GitStorageOptions);
   async createRepo(options?: CreateRepoOptions): Promise<Repo>;
+  async updateRepo(options: UpdateRepoOptions): Promise<UpdateRepoResult>;
   async findOne(options: FindOneOptions): Promise<Repo | null>;
   repo(options: RepoOptions): Repo;
   getConfig(): GitStorageOptions;
@@ -578,6 +632,21 @@ interface CreateRepoOptions {
         };
       };
   defaultBranch?: string; // Optional default branch name (defaults to "main")
+  deployment?: DeploymentSettings;
+}
+
+interface DeploymentSettings {
+  deployOnPush?: boolean;
+  productionBranch?: string;
+  projectName?: string;
+  framework?: string | null;
+  rootDirectory?: string | null;
+  buildCommand?: string | null;
+  installCommand?: string | null;
+  outputDirectory?: string | null;
+  serverlessFunctionRegion?: string | null;
+  env?: Record<string, string | null>;
+
 }
 
 interface FindOneOptions {
@@ -623,12 +692,26 @@ interface Repo {
   listNotesRefs(options?: ListNotesRefsOptions): Promise<ListNotesRefsResult>;
   getBranchDiff(options: GetBranchDiffOptions): Promise<GetBranchDiffResult>;
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
+  createDeployment(
+    options?: CreateDeploymentOptions
+  ): Promise<CreateDeploymentResult>;
+  listDeployments(
+    options?: ListDeploymentsOptions
+  ): Promise<ListDeploymentsResult>;
+  getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
 }
 
 interface GetRemoteURLOptions {
-  permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
+  permissions?: (
+    | 'git:write'
+    | 'git:read'
+    | 'repo:write'
+    | 'org:read'
+    | 'deployment:read'
+    | 'deployment:write'
+  )[];
   ttl?: number; // Time to live in seconds (default: 31536000 = 1 year)
   refPolicies?: Array<{ pattern: string; ops?: string[] }>;
   /** @deprecated Use refPolicies instead. */

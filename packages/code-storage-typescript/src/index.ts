@@ -27,6 +27,7 @@ import {
   createTagResponseSchema,
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
+  deploymentResponseSchema,
   errorEnvelopeSchema,
   blameResponseSchema,
   getCommitResponseSchema,
@@ -36,6 +37,7 @@ import {
   listFilesResponseSchema,
   listFilesWithMetadataResponseSchema,
   listReposResponseSchema,
+  listDeploymentsResponseSchema,
   mergeResponseSchema,
   previewMergeResponseSchema,
   listTagsResponseSchema,
@@ -44,6 +46,7 @@ import {
   noteWriteResponseSchema,
   restoreCommitAckSchema,
   restoreCommitResponseSchema,
+  updateRepoResponseSchema,
 } from './schemas';
 import type {
   AppendNoteOptions,
@@ -58,6 +61,8 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateDeploymentOptions,
+  CreateDeploymentResult,
   CreateTagOptions,
   CreateTagResponse,
   CreateTagResult,
@@ -74,6 +79,9 @@ import type {
   DeleteNoteOptions,
   DeleteRepoOptions,
   DeleteRepoResult,
+  DeploymentResponse,
+  DeploymentResult,
+  DeploymentSettings,
   DiffFileState,
   FileMetadata,
   FileWithMetadata,
@@ -95,6 +103,7 @@ import type {
   GetCommitResult,
   GetFileOptions,
   HeadFileOptions,
+  GetDeploymentOptions,
   GetNoteOptions,
   GetNoteResult,
   GetRemoteURLOptions,
@@ -108,6 +117,9 @@ import type {
   ListBranchesOptions,
   ListBranchesResponse,
   ListBranchesResult,
+  ListDeploymentsOptions,
+  ListDeploymentsResponse,
+  ListDeploymentsResult,
   ListCommitsOptions,
   ListCommitsResponse,
   ListCommitsResult,
@@ -149,6 +161,9 @@ import type {
   TagInfo,
   TreeEntry,
   UpdateGitCredentialOptions,
+  UpdateRepoOptions,
+  UpdateRepoResponse,
+  UpdateRepoResult,
   ValidAPIVersion,
 } from './types';
 
@@ -646,6 +661,94 @@ function transformListReposResult(raw: ListReposResponse): ListReposResult {
           }
         : undefined,
     })),
+    nextCursor: raw.next_cursor ?? undefined,
+    hasMore: raw.has_more,
+  };
+}
+
+function buildDeploymentSettingsBody(
+  settings: DeploymentSettings
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (settings.deployOnPush !== undefined) {
+    body.deploy_on_push = settings.deployOnPush;
+  }
+  if (settings.productionBranch !== undefined) {
+    body.production_branch = settings.productionBranch;
+  }
+  if (settings.projectName !== undefined) {
+    body.project_name = settings.projectName;
+  }
+  if (settings.framework !== undefined) {
+    body.framework = settings.framework;
+  }
+  if (settings.rootDirectory !== undefined) {
+    body.root_directory = settings.rootDirectory;
+  }
+  if (settings.buildCommand !== undefined) {
+    body.build_command = settings.buildCommand;
+  }
+  if (settings.installCommand !== undefined) {
+    body.install_command = settings.installCommand;
+  }
+  if (settings.outputDirectory !== undefined) {
+    body.output_directory = settings.outputDirectory;
+  }
+  if (settings.serverlessFunctionRegion !== undefined) {
+    if (
+      typeof settings.serverlessFunctionRegion === 'string' &&
+      Array.from(settings.serverlessFunctionRegion).length > 4
+    ) {
+      throw new Error(
+        'deployment.serverlessFunctionRegion must not exceed 4 characters'
+      );
+    }
+    body.serverless_function_region = settings.serverlessFunctionRegion;
+  }
+  if (settings.env !== undefined) {
+    if (Object.keys(settings.env).length === 0) {
+      throw new Error('deployment.env must include at least one variable');
+    }
+    body.env = { ...settings.env };
+  }
+  if (Object.keys(body).length === 0) {
+    throw new Error('deployment must include at least one setting');
+  }
+  return body;
+}
+
+function transformUpdateRepoResult(
+  raw: UpdateRepoResponse
+): UpdateRepoResult {
+  return {
+    repoId: raw.repo_id,
+    repoName: raw.repo_name,
+    defaultBranch: raw.default_branch,
+  };
+}
+
+function transformDeploymentResult(
+  raw: DeploymentResponse
+): DeploymentResult {
+  return {
+    id: raw.id,
+    url: raw.url,
+    target: raw.target,
+    ref: raw.ref,
+    commitSha: raw.commit_sha,
+    status: raw.status,
+    errorCode: raw.error_code,
+    errorMessage: raw.error_message,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+function transformListDeploymentsResult(
+  raw: ListDeploymentsResponse
+): ListDeploymentsResult {
+  return {
+    deployments: raw.deployments.map(transformDeploymentResult),
     nextCursor: raw.next_cursor ?? undefined,
     hasMore: raw.has_more,
   };
@@ -1710,6 +1813,111 @@ class RepoImpl implements Repo {
     return;
   }
 
+  async createDeployment(
+    options: CreateDeploymentOptions = {}
+  ): Promise<CreateDeploymentResult> {
+    const target = options.target;
+    if (target !== undefined && target !== 'preview' && target !== 'production') {
+      throw new Error('createDeployment target must be preview or production');
+    }
+
+    const body: Record<string, unknown> = {};
+    const ref = options.ref?.trim();
+    if (ref) {
+      body.ref = ref;
+    }
+    if (target !== undefined) {
+      body.target = target;
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:write'],
+      ttl,
+    });
+    const response = await this.api.post(
+      {
+        path: `repos/${encodeURIComponent(this.id)}/deployments`,
+        body,
+      },
+      jwt,
+      {
+        apiRoot: true,
+        extraHeaders: options.idempotencyKey
+          ? { 'Idempotency-Key': options.idempotencyKey }
+          : undefined,
+      }
+    );
+    const deployment = transformDeploymentResult(
+      deploymentResponseSchema.parse(await response.json())
+    );
+    return {
+      ...deployment,
+      location: response.headers.get('location') ?? '',
+      idempotencyKey:
+        response.headers.get('idempotency-key') ??
+        options.idempotencyKey ??
+        '',
+      idempotentReplayed:
+        response.headers.get('idempotent-replayed') === 'true' ||
+        response.status === 200,
+    };
+  }
+
+  async listDeployments(
+    options: ListDeploymentsOptions = {}
+  ): Promise<ListDeploymentsResult> {
+    const params: Record<string, string> = {};
+    if (options.cursor !== undefined) {
+      params.cursor = options.cursor;
+    }
+    if (options.limit !== undefined) {
+      params.limit = String(options.limit);
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:read'],
+      ttl,
+    });
+    const response = await this.api.get(
+      {
+        path: `repos/${encodeURIComponent(this.id)}/deployments`,
+        params,
+      },
+      jwt,
+      { apiRoot: true }
+    );
+    return transformListDeploymentsResult(
+      listDeploymentsResponseSchema.parse(await response.json())
+    );
+  }
+
+  async getDeployment(
+    options: GetDeploymentOptions
+  ): Promise<DeploymentResult> {
+    const deploymentId = options?.deploymentId?.trim();
+    if (!deploymentId) {
+      throw new Error('getDeployment deploymentId is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:read'],
+      ttl,
+    });
+    const response = await this.api.get(
+      `repos/${encodeURIComponent(this.id)}/deployments/${encodeURIComponent(
+        deploymentId
+      )}`,
+      jwt,
+      { apiRoot: true }
+    );
+    return transformDeploymentResult(
+      deploymentResponseSchema.parse(await response.json())
+    );
+  }
+
   async createBranch(
     options: CreateBranchOptions
   ): Promise<CreateBranchResult> {
@@ -2175,10 +2383,16 @@ export class GitStorage {
   async createRepo(options?: CreateRepoOptions): Promise<Repo> {
     const repoId = options?.id || crypto.randomUUID();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(repoId, {
-      permissions: ['repo:write'],
-      ttl,
-    });
+    const deployment = options?.deployment
+      ? buildDeploymentSettingsBody(options.deployment)
+      : undefined;
+    const permissions: NonNullable<GetRemoteURLOptions['permissions']> = [
+      'repo:write',
+    ];
+    if (options?.deployment?.env !== undefined) {
+      permissions.push('deployment:write');
+    }
+    const jwt = await this.generateJWT(repoId, { permissions, ttl });
 
     const baseRepo = options?.baseRepo;
     const isFork = baseRepo ? 'id' in baseRepo : false;
@@ -2224,7 +2438,7 @@ export class GitStorage {
     }
 
     const createRepoPath =
-      baseRepoOptions || resolvedDefaultBranch
+      baseRepoOptions || resolvedDefaultBranch || deployment
         ? {
             path: 'repos',
             body: {
@@ -2232,14 +2446,17 @@ export class GitStorage {
               ...(resolvedDefaultBranch && {
                 default_branch: resolvedDefaultBranch,
               }),
+              ...(deployment && { deployment }),
             },
           }
         : 'repos';
 
-    // Allow 409 so we can map it to a clearer error message
-    const resp = await this.api.post(createRepoPath, jwt, {
-      allowedStatus: [409],
-    });
+    // Preserve the established conflict message for calls without deployment settings.
+    const resp = await this.api.post(
+      createRepoPath,
+      jwt,
+      deployment ? undefined : { allowedStatus: [409] }
+    );
     if (resp.status === 409) {
       throw new Error('Repository already exists');
     }
@@ -2249,6 +2466,43 @@ export class GitStorage {
       defaultBranch: resolvedDefaultBranch ?? 'main',
       createdAt: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Update repository metadata or deployment settings.
+   */
+  async updateRepo(options: UpdateRepoOptions): Promise<UpdateRepoResult> {
+    const repoId = options?.id?.trim();
+    if (!repoId) {
+      throw new Error('updateRepo id is required');
+    }
+
+    const body: Record<string, unknown> = {};
+    const defaultBranch = options.defaultBranch?.trim();
+    if (defaultBranch) {
+      body.default_branch = defaultBranch;
+    }
+    if (options.deployment) {
+      body.deployment = buildDeploymentSettingsBody(options.deployment);
+    }
+    if (Object.keys(body).length === 0) {
+      throw new Error(
+        'updateRepo requires defaultBranch or deployment settings'
+      );
+    }
+
+    const permissions: NonNullable<GetRemoteURLOptions['permissions']> = [
+      'repo:write',
+    ];
+    if (options.deployment?.env !== undefined) {
+      permissions.push('deployment:write');
+    }
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(repoId, { permissions, ttl });
+    const response = await this.api.patch({ path: 'repo', body }, jwt);
+    return transformUpdateRepoResult(
+      updateRepoResponseSchema.parse(await response.json())
+    );
   }
 
   /**

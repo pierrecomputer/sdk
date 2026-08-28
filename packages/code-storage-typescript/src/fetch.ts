@@ -6,6 +6,8 @@ interface RequestOptions {
   allowedStatus?: number[];
   /** Extra request headers merged on top of the SDK defaults. */
   extraHeaders?: Record<string, string>;
+  /** Resolve paths from `/api` instead of `/api/v{version}`. */
+  apiRoot?: boolean;
 }
 
 export class ApiError extends Error {
@@ -43,9 +45,10 @@ export class ApiFetcher {
     return `${this.API_BASE_URL}/api/v${this.version}`;
   }
 
-  private getRequestUrl(path: ValidPath) {
+  private getRequestUrl(path: ValidPath, apiRoot: boolean) {
+    const baseUrl = apiRoot ? `${this.API_BASE_URL}/api` : this.getBaseUrl();
     if (typeof path === 'string') {
-      return `${this.getBaseUrl()}/${path}`;
+      return `${baseUrl}/${path}`;
     } else if (path.params) {
       const searchParams = new URLSearchParams();
       for (const [key, value] of Object.entries(path.params)) {
@@ -58,9 +61,9 @@ export class ApiFetcher {
         }
       }
       const paramStr = searchParams.toString();
-      return `${this.getBaseUrl()}/${path.path}${paramStr ? `?${paramStr}` : ''}`;
+      return `${baseUrl}/${path.path}${paramStr ? `?${paramStr}` : ''}`;
     } else {
-      return `${this.getBaseUrl()}/${path.path}`;
+      return `${baseUrl}/${path.path}`;
     }
   }
 
@@ -70,7 +73,7 @@ export class ApiFetcher {
     jwt: string,
     options?: RequestOptions
   ) {
-    const requestUrl = this.getRequestUrl(path);
+    const requestUrl = this.getRequestUrl(path, options?.apiRoot === true);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${jwt}`,
@@ -170,6 +173,10 @@ export class ApiFetcher {
 
   async put(path: ValidPath, jwt: string, options?: RequestOptions) {
     return this.fetch(path, 'PUT', jwt, options);
+  }
+
+  async patch(path: ValidPath, jwt: string, options?: RequestOptions) {
+    return this.fetch(path, 'PATCH', jwt, options);
   }
 
   async delete(path: ValidPath, jwt: string, options?: RequestOptions) {
