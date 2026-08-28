@@ -45,6 +45,60 @@ func main() {
 }
 ```
 
+### Repository deployments
+
+Configure hosting while creating or updating a repository:
+
+```go
+deployOnPush := true
+apiURL := "https://example.com"
+repo, err := client.CreateRepo(ctx, storage.CreateRepoOptions{
+	ID: "owner/site",
+	Deployment: &storage.DeploymentSettings{
+		DeployOnPush:             &deployOnPush,
+		Framework:                storage.SetDeploymentString("nextjs"),
+		RootDirectory:            storage.SetDeploymentString("apps/web"),
+		ServerlessFunctionRegion: storage.SetDeploymentString("fra1"),
+		Env: map[string]*string{
+			"API_URL": &apiURL,
+		},
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+_, err = client.UpdateRepo(ctx, storage.UpdateRepoOptions{
+	ID: repo.ID,
+	Deployment: &storage.DeploymentSettings{
+		Framework:                storage.ResetDeploymentString(),
+		ServerlessFunctionRegion: storage.ResetDeploymentString(),
+	},
+})
+```
+
+Unset fields are omitted. `ResetDeploymentString` sends an explicit null.
+Region codes are at most four characters and apply from the next deployment.
+
+```go
+created, err := repo.CreateDeployment(ctx, storage.CreateDeploymentOptions{
+	Ref:            "main",
+	Target:         storage.DeploymentTargetProduction,
+	IdempotencyKey: "release-2026-08-27",
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+page, err := repo.ListDeployments(ctx, storage.ListDeploymentsOptions{Limit: 20})
+current, err := repo.GetDeployment(ctx, storage.GetDeploymentOptions{
+	DeploymentID: created.ID,
+})
+```
+
+Reuse the same idempotency key when retrying creation. The SDK mints the
+required repository and deployment scopes automatically.
+
 ### Inspect file metadata
 
 ```go
@@ -348,6 +402,7 @@ fmt.Println(repo.ID)
 ## Features
 
 - Create, list, find, and delete repositories.
+- Configure repository hosting and create, list, or inspect durable deployments.
 - Generate authenticated git remote URLs, including import and ephemeral variants.
 - Read files, read file metadata, download archives, list branches/commits, and run grep queries.
 - Create commits via streaming commit-pack or diff-commit endpoints.

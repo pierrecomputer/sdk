@@ -2373,3 +2373,163 @@ func TestBlameRequiresPath(t *testing.T) {
 		t.Fatalf("expected error for empty path")
 	}
 }
+
+func TestCreateDeployment(t *testing.T) {
+	var receivedBody createDeploymentRequest
+	var scopes []interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/deployments" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		if strings.Contains(r.URL.EscapedPath(), "/api/v1/") {
+			t.Fatalf("deployment request used versioned path %q", r.URL.EscapedPath())
+		}
+		if err := json.NewDecoder(r.Body).Decode(&receivedBody); err != nil {
+			t.Fatal(err)
+		}
+		if r.Header.Get("Idempotency-Key") != "request-1" {
+			t.Fatalf("idempotency key = %q", r.Header.Get("Idempotency-Key"))
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		scopes, _ = claims["scopes"].([]interface{})
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Location", "/api/repos/owner%2Frepo/deployments/deployment-1")
+		w.Header().Set("Idempotency-Key", "request-1")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"deployment-1","url":"https://preview.example.test","target":"preview","ref":"feature","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"queued","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.CreateDeployment(t.Context(), CreateDeploymentOptions{
+		Ref:            "feature",
+		Target:         DeploymentTargetPreview,
+		IdempotencyKey: "request-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBody := createDeploymentRequest{Ref: "feature", Target: DeploymentTargetPreview}
+	if !reflect.DeepEqual(receivedBody, wantBody) {
+		t.Fatalf("request body = %#v, want %#v", receivedBody, wantBody)
+	}
+	if !reflect.DeepEqual(scopes, []interface{}{"deployment:write"}) {
+		t.Fatalf("scopes = %#v, want deployment:write", scopes)
+	}
+	wantResult := CreateDeploymentResult{
+		DeploymentResult: DeploymentResult{
+			ID:        "deployment-1",
+			URL:       "https://preview.example.test",
+			Target:    DeploymentTargetPreview,
+			Ref:       "feature",
+			CommitSHA: "0123456789abcdef0123456789abcdef01234567",
+			Status:    DeploymentStatusQueued,
+			CreatedAt: "2026-08-27T10:00:00Z",
+			UpdatedAt: "2026-08-27T10:00:01Z",
+		},
+		Location:       "/api/repos/owner%2Frepo/deployments/deployment-1",
+		IdempotencyKey: "request-1",
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Fatalf("result = %#v, want %#v", result, wantResult)
+	}
+}
+
+func TestListDeployments(t *testing.T) {
+	var scopes []interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/deployments" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		if r.URL.Query().Get("cursor") != "page-2" || r.URL.Query().Get("limit") != "10" {
+			t.Fatalf("query = %q", r.URL.RawQuery)
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		scopes, _ = claims["scopes"].([]interface{})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"deployments":[{"id":"deployment-1","target":"production","ref":"main","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"error","error_code":"build_failed","error_message":"Build failed","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}],"next_cursor":"page-3","has_more":true}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.ListDeployments(t.Context(), ListDeploymentsOptions{
+		Cursor: "page-2",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ListDeploymentsResult{
+		Deployments: []DeploymentResult{{
+			ID:           "deployment-1",
+			Target:       DeploymentTargetProduction,
+			Ref:          "main",
+			CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+			Status:       DeploymentStatusError,
+			ErrorCode:    "build_failed",
+			ErrorMessage: "Build failed",
+			CreatedAt:    "2026-08-27T10:00:00Z",
+			UpdatedAt:    "2026-08-27T10:00:01Z",
+		}},
+		NextCursor: "page-3",
+		HasMore:    true,
+	}
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("result = %#v, want %#v", result, want)
+	}
+	if !reflect.DeepEqual(scopes, []interface{}{"deployment:read"}) {
+		t.Fatalf("scopes = %#v, want deployment:read", scopes)
+	}
+}
+
+func TestGetDeployment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet ||
+			r.URL.EscapedPath() != "/api/repos/owner%2Frepo/deployments/deployment%2F1" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"deployment-1","url":"https://app.example.test","target":"production","ref":"main","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"ready","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.GetDeployment(t.Context(), GetDeploymentOptions{DeploymentID: "deployment/1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := DeploymentResult{
+		ID:        "deployment-1",
+		URL:       "https://app.example.test",
+		Target:    DeploymentTargetProduction,
+		Ref:       "main",
+		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
+		Status:    DeploymentStatusReady,
+		CreatedAt: "2026-08-27T10:00:00Z",
+		UpdatedAt: "2026-08-27T10:00:01Z",
+	}
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("result = %#v, want %#v", result, want)
+	}
+}

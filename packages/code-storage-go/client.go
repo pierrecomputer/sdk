@@ -91,8 +91,16 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 		repoID = uuid.NewString()
 	}
 
+	deployment, err := buildDeploymentSettingsRequest(options.Deployment)
+	if err != nil {
+		return nil, err
+	}
+	permissions := []Permission{PermissionRepoWrite}
+	if options.Deployment != nil && options.Deployment.Env != nil {
+		permissions = append(permissions, PermissionDeploymentWrite)
+	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: permissions, TTL: ttl})
 	if err != nil {
 		return nil, err
 	}
@@ -169,14 +177,19 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 	}
 
 	var body interface{}
-	if baseRepo != nil || resolvedDefaultBranch != "" {
+	if baseRepo != nil || resolvedDefaultBranch != "" || deployment != nil {
 		body = &createRepoRequest{
 			BaseRepo:      baseRepo,
 			DefaultBranch: resolvedDefaultBranch,
+			Deployment:    deployment,
 		}
 	}
 
-	resp, err := c.api.post(ctx, "repos", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
+	requestOpts := &requestOptions{allowedStatus: map[int]bool{409: true}}
+	if deployment != nil {
+		requestOpts = nil
+	}
+	resp, err := c.api.post(ctx, "repos", nil, body, jwtToken, requestOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +206,50 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 		DefaultBranch: resolvedDefaultBranch,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+// UpdateRepo updates repository metadata or deployment settings.
+func (c *Client) UpdateRepo(ctx context.Context, options UpdateRepoOptions) (UpdateRepoResult, error) {
+	repoID := strings.TrimSpace(options.ID)
+	if repoID == "" {
+		return UpdateRepoResult{}, errors.New("update repo id is required")
+	}
+	deployment, err := buildDeploymentSettingsRequest(options.Deployment)
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	defaultBranch := strings.TrimSpace(options.DefaultBranch)
+	if defaultBranch == "" && deployment == nil {
+		return UpdateRepoResult{}, errors.New("update repo requires default branch or deployment settings")
+	}
+
+	permissions := []Permission{PermissionRepoWrite}
+	if options.Deployment != nil && options.Deployment.Env != nil {
+		permissions = append(permissions, PermissionDeploymentWrite)
+	}
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: permissions, TTL: ttl})
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	resp, err := c.api.patch(ctx, "repo", nil, &updateRepoRequest{
+		DefaultBranch: defaultBranch,
+		Deployment:    deployment,
+	}, jwtToken, nil)
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload updateRepoResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return UpdateRepoResult{}, err
+	}
+	return UpdateRepoResult{
+		RepoID:        payload.RepoID,
+		RepoName:      payload.RepoName,
+		DefaultBranch: payload.DefaultBranch,
+	}, nil
 }
 
 // ListRepos lists repositories for the org.
