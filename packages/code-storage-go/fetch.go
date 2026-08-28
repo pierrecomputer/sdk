@@ -27,17 +27,22 @@ func (f *apiFetcher) basePath() string {
 	return f.baseURL + "/api/v" + itoa(f.version)
 }
 
-func (f *apiFetcher) buildURL(path string, params url.Values) string {
-	if params == nil || len(params) == 0 {
-		return f.basePath() + "/" + path
+func (f *apiFetcher) buildURL(path string, params url.Values, apiRoot bool) string {
+	basePath := f.basePath()
+	if apiRoot {
+		basePath = f.baseURL + "/api"
 	}
-	return f.basePath() + "/" + path + "?" + params.Encode()
+	if params == nil || len(params) == 0 {
+		return basePath + "/" + path
+	}
+	return basePath + "/" + path + "?" + params.Encode()
 }
 
 type requestOptions struct {
 	allowedStatus map[int]bool
 	// extraHeaders merges request headers on top of SDK defaults; empty values are skipped.
 	extraHeaders map[string]string
+	apiRoot      bool
 }
 
 func (f *apiFetcher) request(ctx context.Context, method string, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {
@@ -45,7 +50,7 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 		ctx = context.Background()
 	}
 
-	urlStr := f.buildURL(path, params)
+	urlStr := f.buildURL(path, params, opts != nil && opts.apiRoot)
 	var bodyReader io.Reader
 	if body != nil {
 		payload, err := json.Marshal(body)
@@ -135,6 +140,10 @@ func (f *apiFetcher) post(ctx context.Context, path string, params url.Values, b
 
 func (f *apiFetcher) put(ctx context.Context, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {
 	return f.request(ctx, http.MethodPut, path, params, body, jwt, opts)
+}
+
+func (f *apiFetcher) patch(ctx context.Context, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {
+	return f.request(ctx, http.MethodPatch, path, params, body, jwt, opts)
 }
 
 func (f *apiFetcher) delete(ctx context.Context, path string, params url.Values, body interface{}, jwt string, opts *requestOptions) (*http.Response, error) {

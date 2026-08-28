@@ -13,10 +13,12 @@ const DefaultAPIVersion = 1
 type Permission string
 
 const (
-	PermissionGitRead   Permission = "git:read"
-	PermissionGitWrite  Permission = "git:write"
-	PermissionRepoWrite Permission = "repo:write"
-	PermissionOrgRead   Permission = "org:read"
+	PermissionGitRead         Permission = "git:read"
+	PermissionGitWrite        Permission = "git:write"
+	PermissionRepoWrite       Permission = "repo:write"
+	PermissionOrgRead         Permission = "org:read"
+	PermissionDeploymentRead  Permission = "deployment:read"
+	PermissionDeploymentWrite Permission = "deployment:write"
 )
 
 // Options configure the Git storage client.
@@ -180,12 +182,127 @@ type ListReposResult struct {
 	HasMore    bool
 }
 
+// DeploymentStringSetting preserves omitted, string, and null patch values.
+type DeploymentStringSetting struct {
+	value *string
+	set   bool
+}
+
+// SetDeploymentString sets a string-valued deployment setting.
+func SetDeploymentString(value string) DeploymentStringSetting {
+	return DeploymentStringSetting{value: &value, set: true}
+}
+
+// ResetDeploymentString resets a string-valued deployment setting to its platform default.
+func ResetDeploymentString() DeploymentStringSetting {
+	return DeploymentStringSetting{set: true}
+}
+
+// DeploymentSettings configures repository deployments.
+type DeploymentSettings struct {
+	DeployOnPush             *bool
+	ProductionBranch         *string
+	ProjectName              *string
+	Framework                DeploymentStringSetting
+	RootDirectory            DeploymentStringSetting
+	BuildCommand             DeploymentStringSetting
+	InstallCommand           DeploymentStringSetting
+	OutputDirectory          DeploymentStringSetting
+	ServerlessFunctionRegion DeploymentStringSetting
+	Env                      map[string]*string
+}
+
+// UpdateRepoOptions controls repository metadata and deployment settings updates.
+type UpdateRepoOptions struct {
+	InvocationOptions
+	ID            string
+	DefaultBranch string
+	Deployment    *DeploymentSettings
+}
+
+// UpdateRepoResult describes updated repository metadata.
+type UpdateRepoResult struct {
+	RepoID        string
+	RepoName      string
+	DefaultBranch string
+}
+
+// DeploymentTarget identifies the intended deployment target.
+type DeploymentTarget string
+
+const (
+	DeploymentTargetPreview    DeploymentTarget = "preview"
+	DeploymentTargetProduction DeploymentTarget = "production"
+)
+
+// DeploymentStatus is the durable deployment state.
+type DeploymentStatus string
+
+const (
+	DeploymentStatusQueued   DeploymentStatus = "queued"
+	DeploymentStatusBuilding DeploymentStatus = "building"
+	DeploymentStatusReady    DeploymentStatus = "ready"
+	DeploymentStatusError    DeploymentStatus = "error"
+	DeploymentStatusCanceled DeploymentStatus = "canceled"
+)
+
+// DeploymentResult describes a durable repository deployment.
+type DeploymentResult struct {
+	ID           string
+	URL          string
+	Target       DeploymentTarget
+	Ref          string
+	CommitSHA    string
+	Status       DeploymentStatus
+	ErrorCode    string
+	ErrorMessage string
+	CreatedAt    string
+	UpdatedAt    string
+}
+
+// CreateDeploymentOptions controls deployment creation.
+type CreateDeploymentOptions struct {
+	InvocationOptions
+	Ref            string
+	Target         DeploymentTarget
+	IdempotencyKey string
+}
+
+// CreateDeploymentResult includes deployment creation response metadata.
+type CreateDeploymentResult struct {
+	DeploymentResult
+	Location           string
+	IdempotencyKey     string
+	IdempotentReplayed bool
+}
+
+// ListDeploymentsOptions controls deployment pagination.
+type ListDeploymentsOptions struct {
+	InvocationOptions
+	Cursor string
+	Limit  int
+}
+
+// ListDeploymentsResult returns a page of deployments.
+type ListDeploymentsResult struct {
+	Deployments []DeploymentResult
+	NextCursor  string
+	HasMore     bool
+}
+
+// GetDeploymentOptions identifies one deployment.
+type GetDeploymentOptions struct {
+	InvocationOptions
+	DeploymentID string
+}
+
 // CreateRepoOptions controls repo creation.
 type CreateRepoOptions struct {
 	InvocationOptions
 	ID            string
 	BaseRepo      BaseRepo
 	DefaultBranch string
+	Deployment    *DeploymentSettings
 }
 
 // DeleteRepoOptions controls repo deletion.
