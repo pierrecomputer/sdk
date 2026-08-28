@@ -14,6 +14,7 @@ from pierre_storage.types import (
     BaseRepo,
     CreateGitCredentialResult,
     DeleteRepoResult,
+    DeploymentSettings,
     ForkBaseRepo,
     GenericGitBaseRepo,
     GitCredential,
@@ -22,12 +23,25 @@ from pierre_storage.types import (
     ListReposResult,
     Repo,
     RepoInfo,
+    UpdateRepoResult,
 )
 from pierre_storage.version import get_user_agent
 
 DEFAULT_API_BASE_URL = "https://api.{{org}}.code.storage"
 DEFAULT_STORAGE_BASE_URL = "{{org}}.code.storage"
 DEFAULT_API_VERSION = 1
+
+
+def _deployment_settings_payload(settings: DeploymentSettings) -> Dict[str, Any]:
+    """Validate and copy deployment settings without rewriting environment keys."""
+    if not settings:
+        raise ValueError("deployment must include at least one setting")
+    region = settings.get("serverless_function_region")
+    if isinstance(region, str) and len(region) > 4:
+        raise ValueError("deployment.serverless_function_region must not exceed 4 characters")
+    if "env" in settings and not settings["env"]:
+        raise ValueError("deployment.env must include at least one variable")
+    return dict(settings)
 
 
 class GitStorage:
@@ -131,6 +145,7 @@ class GitStorage:
         id: Optional[str] = None,
         default_branch: Optional[str] = None,
         base_repo: Optional[BaseRepo] = None,
+        deployment: Optional[DeploymentSettings] = None,
         ttl: Optional[int] = None,
     ) -> Repo:
         """Create a new repository.
@@ -138,9 +153,8 @@ class GitStorage:
         Args:
             id: Repository ID (auto-generated if not provided)
             default_branch: Default branch name (default: "main" for non-forks)
-            base_repo: Optional base repository for GitHub sync or fork
-                       GitHub: owner, name, default_branch, auth.auth_type="public"
-                       Fork: id, ref, sha
+            base_repo: Optional external upstream or internal fork configuration
+            deployment: Optional repository deployment settings
             ttl: Token TTL in seconds
 
         Returns:
@@ -151,13 +165,21 @@ class GitStorage:
         """
         repo_id = id or str(uuid.uuid4())
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        deployment_payload = (
+            _deployment_settings_payload(deployment) if deployment is not None else None
+        )
+        permissions = ["repo:write"]
+        if deployment is not None and "env" in deployment:
+            permissions.append("deployment:write")
         jwt = self._generate_jwt(
             repo_id,
-            {"permissions": ["repo:write"], "ttl": ttl},
+            {"permissions": permissions, "ttl": ttl},
         )
 
         url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
         body: Dict[str, Any] = {}
+        if deployment_payload is not None:
+            body["deployment"] = deployment_payload
 
         # Match backend priority: base_repo.default_branch > default_branch > 'main'
         explicit_default_branch = default_branch is not None
@@ -216,12 +238,21 @@ class GitStorage:
                 timeout=30.0,
             )
 
-            if response.status_code == 409:
+            if response.status_code == 409 and deployment is None:
                 raise ApiError("Repository already exists", status_code=409)
 
             if not response.is_success:
+                message = (
+                    f"Failed to create repository: {response.status_code} {response.reason_phrase}"
+                )
+                try:
+                    error_data = response.json()
+                    if isinstance(error_data, dict) and isinstance(error_data.get("error"), str):
+                        message = error_data["error"]
+                except ValueError:
+                    pass
                 raise ApiError(
-                    f"Failed to create repository: {response.status_code} {response.reason_phrase}",
+                    message,
                     status_code=response.status_code,
                     response=response,
                 )
@@ -231,6 +262,68 @@ class GitStorage:
             default_branch=resolved_default_branch or "main",
             created_at=datetime.now(timezone.utc).isoformat(),
         )
+
+    async def update_repo(
+        self,
+        *,
+        id: str,
+        default_branch: Optional[str] = None,
+        deployment: Optional[DeploymentSettings] = None,
+        ttl: Optional[int] = None,
+    ) -> UpdateRepoResult:
+        """Update repository metadata or deployment settings."""
+        repo_id = id.strip()
+        if not repo_id:
+            raise ValueError("update_repo id is required")
+
+        body: Dict[str, Any] = {}
+        if default_branch is not None and default_branch.strip():
+            body["default_branch"] = default_branch.strip()
+        if deployment is not None:
+            body["deployment"] = _deployment_settings_payload(deployment)
+        if not body:
+            raise ValueError("update_repo requires default_branch or deployment settings")
+
+        permissions = ["repo:write"]
+        if deployment is not None and "env" in deployment:
+            permissions.append("deployment:write")
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self._generate_jwt(repo_id, {"permissions": permissions, "ttl": ttl})
+        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repo"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Content-Type": "application/json",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json=body,
+                timeout=30.0,
+            )
+            if not response.is_success:
+                message = (
+                    f"Failed to update repository: {response.status_code} {response.reason_phrase}"
+                )
+                try:
+                    error_data = response.json()
+                    if isinstance(error_data, dict) and isinstance(error_data.get("error"), str):
+                        message = error_data["error"]
+                except ValueError:
+                    pass
+                raise ApiError(
+                    message,
+                    status_code=response.status_code,
+                    response=response,
+                )
+            data = response.json()
+
+        return {
+            "repo_id": str(data["repo_id"]),
+            "repo_name": str(data["repo_name"]),
+            "default_branch": str(data["default_branch"]),
+        }
 
     async def list_repos(
         self,
