@@ -97,6 +97,50 @@ result = await repo.grep(
 print(result["matches"])
 ```
 
+### Repository Deployments
+
+Configure hosting when creating or updating a repository:
+
+```python
+repo = await storage.create_repo(
+    id="owner/site",
+    deployment={
+        "deploy_on_push": True,
+        "production_branch": "main",
+        "framework": "nextjs",
+        "root_directory": "apps/web",
+        "serverless_function_region": "fra1",
+        "env": {"API_URL": "https://example.com"},
+    },
+)
+
+await storage.update_repo(
+    id=repo.id,
+    deployment={
+        "framework": None,
+        "serverless_function_region": None,
+        "env": {"OLD_SECRET": None},
+    },
+)
+```
+
+Omit nullable build settings to leave them unchanged; pass `None` to reset
+them. Region codes are at most four characters and apply from the next
+deployment.
+
+```python
+created = await repo.create_deployment(
+    ref="main",
+    target="production",
+    idempotency_key="release-2026-08-27",
+)
+page = await repo.list_deployments(limit=20)
+current = await repo.get_deployment(deployment_id=created["id"])
+```
+
+Reuse the same idempotency key when retrying creation. The SDK mints the
+required repository and deployment scopes automatically.
+
 ### Getting Remote URLs
 
 The SDK generates secure URLs with JWT authentication for Git operations:
@@ -682,8 +726,17 @@ class GitStorage:
         id: Optional[str] = None,
         default_branch: Optional[str] = None,  # defaults to "main"
         base_repo: Optional[BaseRepo] = None,
+        deployment: Optional[DeploymentSettings] = None,
         ttl: Optional[int] = None,
     ) -> Repo: ...
+    async def update_repo(
+        self,
+        *,
+        id: str,
+        default_branch: Optional[str] = None,
+        deployment: Optional[DeploymentSettings] = None,
+        ttl: Optional[int] = None,
+    ) -> UpdateRepoResult: ...
     async def find_one(self, *, id: str) -> Optional[Repo]: ...
     def repo(
         self,
@@ -985,6 +1038,30 @@ class Repo:
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> None: ...
+    async def create_deployment(
+        self,
+        *,
+        ref: Optional[str] = None,
+        target: Optional[DeploymentTarget] = None,
+        idempotency_key: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateDeploymentResult: ...
+
+    async def list_deployments(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListDeploymentsResult: ...
+
+    async def get_deployment(
+        self,
+        *,
+        deployment_id: str,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult: ...
+
 
     async def restore_commit(
         self,
@@ -1051,6 +1128,11 @@ from pierre_storage.types import (
     ListBranchesResult,
     ListTagsResult,
     ListCommitsResult,
+    DeploymentSettings,
+    DeploymentResult,
+    CreateDeploymentResult,
+    ListDeploymentsResult,
+    UpdateRepoResult,
     BlameResult,
     GetBranchDiffResult,
     GetCommitDiffResult,
