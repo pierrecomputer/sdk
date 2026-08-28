@@ -23,12 +23,14 @@ Official SDKs (in this repository):
 |-------------------------|----------------------------------------------------------------|--------------------------------------------------|
 | `ORG_NAME`              | Your organization identifier (subdomain slug)                  | `acme`                                           |
 | `PIERRE_PRIVATE_KEY`    | PEM-encoded EC (ES256) or RSA (RS256) private key              | `-----BEGIN PRIVATE KEY-----\n...`               |
+| `CODE_STORAGE_API_ORIGIN` | Derived origin for canonical HTTP routes                        | `https://api.acme.code.storage`                  |
 | `CODE_STORAGE_BASE_URL` | Derived base URL for HTTP API                                  | `https://api.acme.code.storage/api/v1`           |
 | `CODE_STORAGE_TOKEN`    | JWT minted for current operation (per-repo or org-wide)        | `eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...`       |
 
 Export for curl sessions:
 ```bash
 export ORG_NAME="your-org"
+export CODE_STORAGE_API_ORIGIN="https://api.${ORG_NAME}.code.storage"
 export CODE_STORAGE_BASE_URL="https://api.${ORG_NAME}.code.storage/api/v1"
 export CODE_STORAGE_TOKEN="YOUR_JWT_TOKEN"
 ```
@@ -117,6 +119,8 @@ repo.RemoteURL(ctx, storage.RemoteURLOptions{
 | `git:write`  | push, write API (includes read) | POST/DELETE commit/branch/note endpoints       |
 | `repo:write` | create/delete repositories      | POST /repos, DELETE /repos/delete              |
 | `org:read`   | list all repos in org           | GET /repos (list)                              |
+| `deployment:read` | list/get durable deployments | GET deployment lifecycle endpoints              |
+| `deployment:write` | create deployments; change environment variables | POST deployment endpoint; `deployment.env` |
 
 ### Git Remote URL Format
 
@@ -133,6 +137,7 @@ Username is always `t`. Password is the JWT.
 | Create repository             | POST     | `/repos`                          | `repo:write`    |
 | List all repositories         | GET      | `/repos`                          | `org:read`      |
 | Get repository metadata       | GET      | `/repo`                           | (repo in JWT)   |
+| Update repository/settings  | PATCH    | `/repo`                           | `repo:write` (+ `deployment:write` for `env`) |
 | Delete repository             | DELETE   | `/repos/delete`                   | `repo:write`    |
 | **BRANCHES**                  |          |                                   |                 |
 | Create branch                 | POST     | `/repos/branches/create`          | `git:write`     |
@@ -172,8 +177,14 @@ Username is always `t`. Password is the JWT.
 | Create Git credential         | POST     | `/repos/git-credentials`          | `repo:write`    |
 | Update Git credential         | PUT      | `/repos/git-credentials`          | `repo:write`    |
 | Delete Git credential         | DELETE   | `/repos/git-credentials`          | `repo:write`    |
+| **DEPLOYMENTS**             |          |                                   |                 |
+| Create deployment           | POST     | `/api/repos/{repo_name}/deployments` | `deployment:write` |
+| List deployments            | GET      | `/api/repos/{repo_name}/deployments` | `deployment:read` |
+| Get deployment              | GET      | `/api/repos/{repo_name}/deployments/{deployment_id}` | `deployment:read` |
 
-All endpoints: `BASE_URL = https://api.{org}.code.storage/api/v1`
+Versioned endpoints use `BASE_URL = https://api.{org}.code.storage/api/v1`.
+Deployment lifecycle endpoints use `API_ORIGIN = https://api.{org}.code.storage`
+and include the canonical `/api/repos/...` path shown above.
 All requests: `Authorization: Bearer $CODE_STORAGE_TOKEN`
 
 # ENDPOINT REFERENCE
@@ -245,6 +256,81 @@ organization name (the same value used as the JWT `iss`).
 
 Response `201`: `{ "repo_id": "...", "message": "..." }`
 Errors: `401` bad JWT/scope, `409` repo already exists or upstream already configured, `412` GitHub App config required for authenticated GitHub sync
+
+## Repository Deployment Settings
+
+`POST /repos` and `PATCH /repo` accept a `deployment` object:
+
+```json
+{
+  "deployment": {
+    "deploy_on_push": true,
+    "production_branch": "main",
+    "project_name": "website",
+    "framework": "nextjs",
+    "root_directory": "apps/web",
+    "build_command": null,
+    "install_command": "pnpm install",
+    "output_directory": ".next",
+    "serverless_function_region": "fra1",
+    "env": {
+      "API_URL": "https://example.com",
+      "OLD_SECRET": null
+    }
+  }
+}
+```
+
+- Omit a setting to leave it unchanged.
+- `null` resets framework/build/root/install/output/region settings.
+- Region codes are at most four characters and apply from the next deployment.
+- An environment string sets an encrypted value; `null` deletes that variable.
+- Create/update requires `repo:write`; include `deployment:write` when `env` is present.
+
+Update settings:
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repo" -X PATCH \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"deployment":{"serverless_function_region":null}}'
+```
+
+Response `200` includes `repo_id`, `repo_name`, and `default_branch`.
+
+## Deployment Lifecycle
+
+`repo_name` is one percent-encoded path segment. These endpoints are canonical
+and must not be prefixed with `/api/v1`.
+
+```bash
+# Create
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/deployments" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: release-2026-08-27" \
+  -d '{"ref":"main","target":"production"}'
+
+# List
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/deployments?limit=20" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+
+# Get
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/deployments/DEPLOYMENT_ID" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Create returns `201` for a new deployment and `200` for an idempotent replay.
+The response headers include `Idempotency-Key`, `Location`, and
+`Idempotent-Replayed` for a replay. Reuse the same key when retrying.
+
+Deployment fields: `id`, optional `url`, `target`, `ref`, `commit_sha`,
+`status`, optional `error_code`/`error_message`, `created_at`, and `updated_at`.
+Statuses: `queued`, `building`, `ready`, `error`, `canceled`.
+
+List query parameters: `cursor`, `limit` (default 20, maximum 100). The response
+contains `deployments`, optional `next_cursor`, and `has_more`.
+
 
 ## POST/PUT/DELETE /repos/git-credentials — Manage Generic Git Sync Credentials
 
