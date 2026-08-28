@@ -285,9 +285,11 @@ class GitStorage:
             data = response.json()
             repos: list[RepoInfo] = []
             for repo in data.get("repos", []):
+                repo_name = repo["repo_name"] if "repo_name" in repo else repo.get("url", "")
                 entry: RepoInfo = {
                     "repo_id": repo.get("repo_id", ""),
-                    "url": repo.get("url", ""),
+                    "repo_name": repo_name,
+                    "url": repo_name,
                     "default_branch": repo.get("default_branch", "main"),
                     "created_at": repo.get("created_at", ""),
                 }

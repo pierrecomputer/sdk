@@ -227,6 +227,7 @@ describe('createCommit builder', () => {
       packBytes: 42,
       blobCount: 1,
       refUpdate: {
+        targetBranch: 'main',
         branch: 'main',
         oldSha: '0000000000000000000000000000000000000000',
         newSha: 'abc123',
@@ -254,7 +255,7 @@ describe('createCommit builder', () => {
         .map((line) => JSON.parse(line));
       const metadata = frames[0].metadata;
       expect(metadata.target_branch).toBe('feature/one');
-      expect(metadata.expected_head_sha).toBe('abc123');
+      expect(metadata.expected_target_sha).toBe('abc123');
       expect(metadata.base_branch).toBe('main');
       return {
         ok: true,
@@ -384,8 +385,8 @@ describe('createCommit builder', () => {
       const metadata = frames[0].metadata;
       expect(metadata.target_branch).toBe('feature/demo');
       expect(metadata.base_branch).toBe('feature/base');
-      expect(metadata.ephemeral).toBe(true);
-      expect(metadata.ephemeral_base).toBe(true);
+      expect(metadata.target_is_ephemeral).toBe(true);
+      expect(metadata.base_is_ephemeral).toBe(true);
       return {
         ok: true,
         status: 200,

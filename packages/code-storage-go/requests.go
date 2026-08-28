@@ -25,12 +25,12 @@ type authPayload struct {
 
 // noteWriteRequest is the JSON body for note write operations.
 type noteWriteRequest struct {
-	SHA            string      `json:"sha"`
-	Action         string      `json:"action,omitempty"`
-	Note           string      `json:"note,omitempty"`
-	ExpectedRefSHA string      `json:"expected_ref_sha,omitempty"`
-	Ref            string      `json:"ref,omitempty"`
-	Author         *authorInfo `json:"author,omitempty"`
+	ObjectRef           string      `json:"object_ref"`
+	Action              string      `json:"action,omitempty"`
+	Note                string      `json:"note,omitempty"`
+	ExpectedNotesRefSHA string      `json:"expected_notes_ref_sha,omitempty"`
+	NotesRef            string      `json:"notes_ref,omitempty"`
+	Author              *authorInfo `json:"author,omitempty"`
 }
 
 type authorInfo struct {
@@ -105,7 +105,7 @@ type createBranchRequest struct {
 
 // mergeRequest is the JSON body for Merge.
 type mergeRequest struct {
-	SourceBranch            string      `json:"source_branch"`
+	SourceRef               string      `json:"source_ref"`
 	SourceIsEphemeral       bool        `json:"source_is_ephemeral,omitempty"`
 	TargetBranch            string      `json:"target_branch"`
 	TargetIsEphemeral       bool        `json:"target_is_ephemeral,omitempty"`
@@ -119,8 +119,8 @@ type mergeRequest struct {
 }
 
 type createTagRequest struct {
-	Name   string `json:"name"`
-	Target string `json:"target"`
+	Name string `json:"name"`
+	Ref  string `json:"ref"`
 }
 
 type deleteTagRequest struct {
@@ -128,21 +128,21 @@ type deleteTagRequest struct {
 }
 
 type deleteBranchRequest struct {
-	Name      string `json:"name"`
-	Ephemeral *bool  `json:"ephemeral,omitempty"`
+	TargetBranch string `json:"target_branch"`
+	Ephemeral    *bool  `json:"ephemeral,omitempty"`
 }
 
 // commitMetadataPayload is the JSON body for commit metadata.
 type commitMetadataPayload struct {
-	TargetBranch    string             `json:"target_branch"`
-	CommitMessage   string             `json:"commit_message"`
-	Author          authorInfo         `json:"author"`
-	Committer       *authorInfo        `json:"committer,omitempty"`
-	ExpectedHeadSHA string             `json:"expected_head_sha,omitempty"`
-	BaseBranch      string             `json:"base_branch,omitempty"`
-	Ephemeral       bool               `json:"ephemeral,omitempty"`
-	EphemeralBase   bool               `json:"ephemeral_base,omitempty"`
-	Files           []fileEntryPayload `json:"files,omitempty"`
+	TargetBranch      string             `json:"target_branch"`
+	CommitMessage     string             `json:"commit_message"`
+	Author            authorInfo         `json:"author"`
+	Committer         *authorInfo        `json:"committer,omitempty"`
+	ExpectedTargetSHA string             `json:"expected_target_sha,omitempty"`
+	BaseBranch        string             `json:"base_branch,omitempty"`
+	TargetIsEphemeral *bool              `json:"target_is_ephemeral,omitempty"`
+	BaseIsEphemeral   *bool              `json:"base_is_ephemeral,omitempty"`
+	Files             []fileEntryPayload `json:"files,omitempty"`
 }
 
 type fileEntryPayload struct {
@@ -158,12 +158,12 @@ type metadataEnvelope struct {
 
 // restoreCommitMetadata is the JSON body for RestoreCommit.
 type restoreCommitMetadata struct {
-	TargetBranch    string      `json:"target_branch"`
-	TargetCommitSHA string      `json:"target_commit_sha"`
-	CommitMessage   string      `json:"commit_message,omitempty"`
-	ExpectedHeadSHA string      `json:"expected_head_sha,omitempty"`
-	Author          authorInfo  `json:"author"`
-	Committer       *authorInfo `json:"committer,omitempty"`
+	TargetBranch      string      `json:"target_branch"`
+	BaseRef           string      `json:"base_ref"`
+	CommitMessage     string      `json:"commit_message,omitempty"`
+	ExpectedTargetSHA string      `json:"expected_target_sha,omitempty"`
+	Author            authorInfo  `json:"author"`
+	Committer         *authorInfo `json:"committer,omitempty"`
 }
 
 // blobChunkEnvelope wraps a blob chunk for ndjson streaming.

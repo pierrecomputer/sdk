@@ -186,8 +186,8 @@ func TestCommitPackIncludesBaseBranch(t *testing.T) {
 	if metadata["target_branch"] != "feature/one" {
 		t.Fatalf("unexpected target_branch")
 	}
-	if metadata["expected_head_sha"] != "abc123" {
-		t.Fatalf("unexpected expected_head_sha")
+	if metadata["expected_target_sha"] != "abc123" {
+		t.Fatalf("unexpected expected_target_sha")
 	}
 	if metadata["base_branch"] != "main" {
 		t.Fatalf("unexpected base_branch")
@@ -231,8 +231,8 @@ func TestCommitPackIncludesBaseBranchWithoutExpectedHead(t *testing.T) {
 	if metadata["base_branch"] != "main" {
 		t.Fatalf("unexpected base_branch")
 	}
-	if _, ok := metadata["expected_head_sha"]; ok {
-		t.Fatalf("did not expect expected_head_sha")
+	if _, ok := metadata["expected_target_sha"]; ok {
+		t.Fatalf("did not expect expected_target_sha")
 	}
 }
 
@@ -272,7 +272,7 @@ func TestCommitPackIncludesEphemeralFlags(t *testing.T) {
 		t.Fatalf("decode metadata: %v", err)
 	}
 	metadata := metadataEnvelope["metadata"].(map[string]interface{})
-	if metadata["ephemeral"] != true || metadata["ephemeral_base"] != true {
+	if metadata["target_is_ephemeral"] != true || metadata["base_is_ephemeral"] != true {
 		t.Fatalf("expected ephemeral flags")
 	}
 }

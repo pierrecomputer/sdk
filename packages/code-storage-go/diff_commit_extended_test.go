@@ -63,8 +63,8 @@ func TestCommitFromDiffStreamsMetadataAndChunks(t *testing.T) {
 	if metadata["target_branch"] != "main" {
 		t.Fatalf("unexpected target_branch: %#v", metadata["target_branch"])
 	}
-	if metadata["expected_head_sha"] != "abc123" {
-		t.Fatalf("unexpected expected_head_sha")
+	if metadata["expected_target_sha"] != "abc123" {
+		t.Fatalf("unexpected expected_target_sha")
 	}
 	if metadata["commit_message"] != "Apply patch" {
 		t.Fatalf("unexpected commit_message")
