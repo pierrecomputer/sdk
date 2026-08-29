@@ -251,7 +251,7 @@ After creating a generic Git Sync repository, store upstream credentials with `/
 to pin an exact source commit; `sha` overrides `ref`. `owner` is the
 organization name (the same value used as the JWT `iss`).
 
-Response `200` includes both identities: `{ "repo_id": "repo_7f2b3d9", "repo_name": "team/project", "message": "repository created" }`.
+Response `200` or `201` includes both identities: `{ "repo_id": "repo_7f2b3d9", "repo_name": "team/project", "message": "repository created" }`.
 `repo_id` is the stable internal repository ID. `repo_name` is the public name or path used in API
 paths, Git URLs, and the JWT `repo` claim.
 Errors: `401` bad JWT/scope, `409` repo already exists or upstream already configured, `412` GitHub App config required for authenticated GitHub sync
