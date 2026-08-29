@@ -223,10 +223,14 @@ if refs.HasMore {
 
 ```go
 includeContent := true
+sourceIsEphemeral := true
+targetIsEphemeral := false
 preview, err := repo.PreviewMerge(context.Background(), storage.PreviewMergeOptions{
-	SourceBranch:   "feature",
-	TargetBranch:   "main",
-	IncludeContent: &includeContent,
+	SourceBranch:      "feature",
+	SourceIsEphemeral: &sourceIsEphemeral,
+	TargetBranch:      "main",
+	TargetIsEphemeral: &targetIsEphemeral,
+	IncludeContent:    &includeContent,
 })
 if err != nil {
 	log.Fatal(err)

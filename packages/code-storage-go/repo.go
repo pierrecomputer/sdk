@@ -1292,6 +1292,12 @@ func (r *Repo) PreviewMerge(ctx context.Context, options PreviewMergeOptions) (P
 	params := url.Values{}
 	params.Set("source_branch", sourceBranch)
 	params.Set("target_branch", targetBranch)
+	if options.SourceIsEphemeral != nil {
+		params.Set("source_is_ephemeral", strconv.FormatBool(*options.SourceIsEphemeral))
+	}
+	if options.TargetIsEphemeral != nil {
+		params.Set("target_is_ephemeral", strconv.FormatBool(*options.TargetIsEphemeral))
+	}
 	if options.IncludeContent != nil {
 		params.Set("include_content", strconv.FormatBool(*options.IncludeContent))
 	}
