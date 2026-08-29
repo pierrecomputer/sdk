@@ -226,23 +226,22 @@ export interface ForkBaseRepo {
 
 export type BaseRepo = GitHubBaseRepo | ForkBaseRepo | GenericGitBaseRepo;
 
-interface CreateGitCredentialOptionsBase {
+export interface CreateGitCredentialOptions {
+  /** @deprecated Use `repoName` with `CreateGitCredentialByNameOptions`. */
+  repoId: string;
   username?: string;
   password: string;
   ttl?: number;
 }
 
-export type CreateGitCredentialOptions =
-  | (CreateGitCredentialOptionsBase & {
-      repoName: string;
-      /** @deprecated Use `repoName` for the preferred route. */
-      repoId?: string;
-    })
-  | (CreateGitCredentialOptionsBase & {
-      repoName?: undefined;
-      /** @deprecated Use `repoName` for the preferred route. */
-      repoId: string;
-    });
+export interface CreateGitCredentialByNameOptions {
+  repoName: string;
+  /** @deprecated The preferred route ignores this internal repository ID. */
+  repoId?: string;
+  username?: string;
+  password: string;
+  ttl?: number;
+}
 
 export interface UpdateGitCredentialOptions {
   /**

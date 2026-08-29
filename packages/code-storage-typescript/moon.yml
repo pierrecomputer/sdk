@@ -16,7 +16,24 @@ fileGroups:
     - 'dist/**/*'
 
 tasks:
+  typecheck:
+    command:
+      - 'pnpm'
+      - 'exec'
+      - 'tsc'
+      - '--project'
+      - 'tsconfig.type-tests.json'
+    inputs:
+      - '@globs(configInputs)'
+      - '@globs(sourceInputs)'
+      - 'tests/type-compatibility.ts'
+    options:
+      runInCI: true
+      cache: true
+
   test:
+    deps:
+      - ~:typecheck
     command:
       - 'pnpm'
       - 'vitest'
