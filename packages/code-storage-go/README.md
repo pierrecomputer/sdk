@@ -274,6 +274,10 @@ if err != nil {
 fmt.Println(result.CommitSHA)
 ```
 
+`TargetRef` is also supported for a fully qualified branch ref such as
+`refs/heads/main`. It is not deprecated. `TargetBranch` wins when both fields
+are set.
+
 ### Inspect commit parents
 
 `ListCommits` and `GetCommit` expose parent SHAs in Git parent order. Root

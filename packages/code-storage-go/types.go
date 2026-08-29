@@ -1059,7 +1059,8 @@ type CommitBuilder struct {
 // CommitOptions configures commit operations.
 type CommitOptions struct {
 	InvocationOptions
-	TargetBranch      string
+	TargetBranch string
+	// TargetRef is a fully qualified refs/heads/* target. TargetBranch wins when both fields are set.
 	TargetRef         string
 	CommitMessage     string
 	ExpectedTargetSHA string
