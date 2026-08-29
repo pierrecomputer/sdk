@@ -277,6 +277,10 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME/git-credentials/CREDENTIAL_ID" -X 
 
 `username` is optional for token-only providers. A repository can have one stored Git credential.
 GitHub App sync does not use this endpoint.
+SDK callers must pass the repository identifier (`repoId` / `repo_id` / `RepoID`)
+to update or delete a credential so the SDK can build these repo-scoped routes;
+without it the SDKs fall back to the deprecated legacy
+`/api/v1/repos/git-credentials` request, which the current backend rejects.
 
 ## GET /repos — List Repositories
 
