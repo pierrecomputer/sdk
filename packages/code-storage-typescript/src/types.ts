@@ -907,17 +907,17 @@ export interface CreateCommitBranchOptions extends CreateCommitBaseOptions {
   targetRef?: never;
 }
 
-/**
- * @deprecated Use {@link CreateCommitBranchOptions} instead.
- */
-export interface LegacyCreateCommitOptions extends CreateCommitBaseOptions {
+export interface CreateCommitRefOptions extends CreateCommitBaseOptions {
   targetBranch?: never;
   targetRef: string;
 }
 
+/** Published compatibility name for {@link CreateCommitRefOptions}. */
+export interface LegacyCreateCommitOptions extends CreateCommitRefOptions {}
+
 export type CreateCommitOptions =
   | CreateCommitBranchOptions
-  | LegacyCreateCommitOptions;
+  | CreateCommitRefOptions;
 
 export interface CommitSignature {
   name: string;

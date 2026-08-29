@@ -18,7 +18,7 @@ import type {
   CommitSignature,
   CommitTextFileOptions,
   CreateCommitOptions,
-  LegacyCreateCommitOptions,
+  CreateCommitRefOptions,
 } from './types';
 import { getUserAgent } from './version';
 
@@ -400,8 +400,8 @@ function resolveTargetBranch(options: CreateCommitOptions): string {
   if (branchCandidate) {
     return normalizeBranchName(branchCandidate);
   }
-  if (hasLegacyTargetRef(options)) {
-    return normalizeLegacyTargetRef(options.targetRef);
+  if (hasTargetRef(options)) {
+    return normalizeTargetRef(options.targetRef);
   }
   throw new Error('createCommit targetBranch is required');
 }
@@ -424,7 +424,7 @@ function normalizeBranchName(value: string): string {
   return trimmed;
 }
 
-function normalizeLegacyTargetRef(ref: string): string {
+function normalizeTargetRef(ref: string): string {
   const trimmed = ref.trim();
   if (!trimmed) {
     throw new Error('createCommit targetRef is required');
@@ -439,10 +439,10 @@ function normalizeLegacyTargetRef(ref: string): string {
   return branch;
 }
 
-function hasLegacyTargetRef(
+function hasTargetRef(
   options: CreateCommitOptions
-): options is LegacyCreateCommitOptions {
-  return typeof (options as LegacyCreateCommitOptions).targetRef === 'string';
+): options is CreateCommitRefOptions {
+  return typeof (options as CreateCommitRefOptions).targetRef === 'string';
 }
 
 export function createCommitBuilder(deps: CommitBuilderDeps): CommitBuilder {
