@@ -421,12 +421,12 @@ func TestCommitPackMissingAuthor(t *testing.T) {
 	}
 }
 
-func TestCommitPackLegacyTargetRef(t *testing.T) {
+func TestCommitPackTargetRef(t *testing.T) {
 	var lines []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lines = readNDJSONLines(t, r.Body)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"commit":{"commit_sha":"legacy123","tree_sha":"legacy456","target_branch":"main","pack_bytes":0,"blob_count":0},"result":{"branch":"main","old_sha":"0000000000000000000000000000000000000000","new_sha":"legacy123","success":true,"status":"ok"}}`))
+		_, _ = w.Write([]byte(`{"commit":{"commit_sha":"targetref123","tree_sha":"targetref456","target_branch":"main","pack_bytes":0,"blob_count":0},"result":{"branch":"main","old_sha":"0000000000000000000000000000000000000000","new_sha":"targetref123","success":true,"status":"ok"}}`))
 	}))
 	defer server.Close()
 
@@ -438,8 +438,8 @@ func TestCommitPackLegacyTargetRef(t *testing.T) {
 
 	builder, err := repo.CreateCommit(CommitOptions{
 		TargetRef:     "refs/heads/main",
-		CommitMessage: "Legacy path",
-		Author:        CommitSignature{Name: "Legacy Author", Email: "legacy@example.com"},
+		CommitMessage: "Target ref path",
+		Author:        CommitSignature{Name: "Ref Author", Email: "ref@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("builder error: %v", err)

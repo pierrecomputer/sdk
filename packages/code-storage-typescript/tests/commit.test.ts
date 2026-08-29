@@ -590,7 +590,7 @@ describe('createCommit builder', () => {
     ).toThrow('createCommit author name and email are required');
   });
 
-  it('accepts legacy targetRef for backwards compatibility', async () => {
+  it('accepts a fully qualified targetRef', async () => {
     const store = new GitStorage({ name: 'v0', key });
 
     mockFetch.mockImplementationOnce(() =>
@@ -598,7 +598,7 @@ describe('createCommit builder', () => {
         ok: true,
         status: 200,
         json: async () => ({
-          repo_id: 'repo-legacy-target-ref',
+          repo_id: 'repo-target-ref',
           url: 'https://repo.git',
         }),
       })
@@ -606,8 +606,8 @@ describe('createCommit builder', () => {
 
     const commitAck = {
       commit: {
-        commit_sha: 'legacy123',
-        tree_sha: 'legacy456',
+        commit_sha: 'targetref123',
+        tree_sha: 'targetref456',
         target_branch: 'main',
         pack_bytes: 0,
         blob_count: 0,
@@ -615,7 +615,7 @@ describe('createCommit builder', () => {
       result: {
         branch: 'main',
         old_sha: '0000000000000000000000000000000000000000',
-        new_sha: 'legacy123',
+        new_sha: 'targetref123',
         success: true,
         status: 'ok',
       },
@@ -633,17 +633,17 @@ describe('createCommit builder', () => {
       };
     });
 
-    const repo = await store.createRepo({ id: 'repo-legacy-target-ref' });
+    const repo = await store.createRepo({ id: 'repo-target-ref' });
     const response = await repo
       .createCommit({
         targetRef: 'refs/heads/main',
-        commitMessage: 'Legacy path',
-        author: { name: 'Legacy Author', email: 'legacy@example.com' },
+        commitMessage: 'Target ref path',
+        author: { name: 'Ref Author', email: 'ref@example.com' },
       })
       .send();
 
     expect(response.targetBranch).toBe('main');
-    expect(response.commitSha).toBe('legacy123');
+    expect(response.commitSha).toBe('targetref123');
   });
 
   it('supports non-UTF encodings when Buffer is available', async () => {

@@ -32,5 +32,7 @@
 - Kept the old public fields as deprecated aliases. Python emits
   `DeprecationWarning`; TypeScript and Go mark the fields in API documentation.
   Preferred values win when callers or responses contain both forms.
+- Kept the TypeScript `targetRef` and Go `TargetRef` commit options supported
+  without a deprecation. They accept fully qualified `refs/heads/*` targets.
 - Kept parsers compatible with clusters that still return the old response
   fields. A later major release can remove the deprecated public aliases.
