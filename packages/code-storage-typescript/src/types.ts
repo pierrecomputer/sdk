@@ -235,6 +235,12 @@ export interface CreateGitCredentialOptions {
 
 export interface UpdateGitCredentialOptions {
   id: string;
+  /**
+   * Repository the credential belongs to. When set, the request uses the
+   * canonical repo-scoped route. The current backend resolves the repository
+   * from the token, so omitting this is not compatible with it.
+   */
+  repoId?: string;
   username?: string;
   password: string;
   ttl?: number;
@@ -242,6 +248,12 @@ export interface UpdateGitCredentialOptions {
 
 export interface DeleteGitCredentialOptions {
   id: string;
+  /**
+   * Repository the credential belongs to. When set, the request uses the
+   * canonical repo-scoped route. The current backend resolves the repository
+   * from the token, so omitting this is not compatible with it.
+   */
+  repoId?: string;
   ttl?: number;
 }
 

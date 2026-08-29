@@ -2431,26 +2431,29 @@ export class GitStorage {
     options: UpdateGitCredentialOptions
   ): Promise<GitCredential> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const repoId = options.repoId?.trim();
+    const jwt = await this.generateJWT(repoId || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
     const body: Record<string, unknown> = {
-      id: options.id,
       password: options.password,
     };
     if (options.username !== undefined) {
       body.username = options.username;
     }
 
-    // Stays on the legacy versioned route: the canonical route is repo-scoped
-    // and needs a repo name these options do not carry.
-    const resp = await this.api.put(
-      { path: 'v1/repos/git-credentials', body },
-      jwt,
-      { allowedStatus: [404] }
-    );
+    // With a repository id the canonical repo-scoped route applies. Without
+    // one, fall back to the legacy versioned route; the current backend
+    // resolves the repository from the token and rejects that fallback.
+    const path = repoId
+      ? {
+          path: `repos/${encodeURIComponent(repoId)}/git-credentials/${encodeURIComponent(options.id)}`,
+          body,
+        }
+      : { path: 'v1/repos/git-credentials', body: { ...body, id: options.id } };
+    const resp = await this.api.put(path, jwt, { allowedStatus: [404] });
     if (resp.status === 404) {
       throw new Error('Credential not found');
     }
@@ -2467,18 +2470,19 @@ export class GitStorage {
    */
   async deleteGitCredential(options: DeleteGitCredentialOptions): Promise<void> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const repoId = options.repoId?.trim();
+    const jwt = await this.generateJWT(repoId || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
-    // Stays on the legacy versioned route: the canonical route is repo-scoped
-    // and needs a repo name these options do not carry.
-    const resp = await this.api.delete(
-      { path: 'v1/repos/git-credentials', body: { id: options.id } },
-      jwt,
-      { allowedStatus: [404] }
-    );
+    // With a repository id the canonical repo-scoped route applies. Without
+    // one, fall back to the legacy versioned route; the current backend
+    // resolves the repository from the token and rejects that fallback.
+    const path = repoId
+      ? `repos/${encodeURIComponent(repoId)}/git-credentials/${encodeURIComponent(options.id)}`
+      : { path: 'v1/repos/git-credentials', body: { id: options.id } };
+    const resp = await this.api.delete(path, jwt, { allowedStatus: [404] });
     if (resp.status === 404) {
       throw new Error('Credential not found');
     }

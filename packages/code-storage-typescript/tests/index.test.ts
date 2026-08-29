@@ -4220,5 +4220,61 @@ describe('GitStorage', () => {
         'Credential not found'
       );
     });
+
+    it('updateGitCredential uses the canonical route when repoId is set', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/git-credentials/cred-abc'
+        );
+        expect(init?.method).toBe('PUT');
+        expect(JSON.parse(init?.body as string)).toEqual({
+          username: 'newuser',
+          password: 'newpassword',
+        });
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        expect(payload.scopes).toEqual(['repo:write']);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ id: 'cred-abc', created_at: '2025-01-01T00:00:00Z' }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        );
+      });
+
+      const result = await store.updateGitCredential({
+        id: 'cred-abc',
+        repoId: 'owner/repo',
+        username: 'newuser',
+        password: 'newpassword',
+      });
+      expect(result).toEqual({
+        id: 'cred-abc',
+        createdAt: '2025-01-01T00:00:00Z',
+      });
+    });
+
+    it('deleteGitCredential uses the canonical route when repoId is set', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/git-credentials/cred-abc'
+        );
+        expect(init?.method).toBe('DELETE');
+        expect(init?.body).toBeUndefined();
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        return Promise.resolve(new Response(null, { status: 204 }));
+      });
+
+      await store.deleteGitCredential({ id: 'cred-abc', repoId: 'owner/repo' });
+    });
   });
 });
