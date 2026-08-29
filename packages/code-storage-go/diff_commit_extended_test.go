@@ -42,7 +42,7 @@ func TestCommitFromDiffStreamsMetadataAndChunks(t *testing.T) {
 		t.Fatalf("commit from diff error: %v", err)
 	}
 
-	if requestPath != "/api/v1/repos/diff-commit" {
+	if requestPath != "/api/repos/repo/diff-commit" {
 		t.Fatalf("unexpected path: %s", requestPath)
 	}
 	if headerContentType != "application/x-ndjson" {

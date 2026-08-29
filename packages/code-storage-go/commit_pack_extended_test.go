@@ -53,7 +53,7 @@ func TestCommitPackStreamsMetadataAndChunks(t *testing.T) {
 		t.Fatalf("send error: %v", err)
 	}
 
-	if requestPath != "/api/v1/repos/commit-pack" {
+	if requestPath != "/api/repos/repo/commit-pack" {
 		t.Fatalf("unexpected path: %s", requestPath)
 	}
 	if headerContentType != "application/x-ndjson" {

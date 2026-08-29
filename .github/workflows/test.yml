@@ -40,4 +40,8 @@ jobs:
         with:
           auto-install: true
 
+      - run: python scripts/check_legacy_routes.py
+
+      - run: python -m unittest discover -s scripts/tests -v
+
       - run: moon :test

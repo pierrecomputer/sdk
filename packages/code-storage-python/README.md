@@ -20,6 +20,35 @@ New code should use `ref`, `base_ref`, `source_ref`, `object_ref`, `notes_ref`,
 writes expose `notes_ref`; and ref updates expose `target_branch`. Deprecated
 result aliases remain populated with the preferred value.
 
+Repository methods now use the preferred ``/api/repos/{repo_name}/*`` routes.
+Git credential methods accept ``repo_name`` for these routes:
+
+```python
+import os
+
+credential = await storage.create_git_credential(
+    repo_name="team/project",
+    username="git",
+    password=os.environ["GIT_ACCESS_TOKEN"],
+)
+
+await storage.update_git_credential(
+    repo_name="team/project",
+    id=credential["id"],
+    password=os.environ["ROTATED_GIT_ACCESS_TOKEN"],
+)
+
+await storage.delete_git_credential(
+    repo_name="team/project",
+    id=credential["id"],
+)
+```
+
+The create-only ``repo_id`` argument is deprecated and still means the
+internal repository ID. Update and delete calls without ``repo_name`` also
+keep their old request shape for compatibility. The deprecated ``api_version``
+option is still accepted but does not select request routes.
+
 ## Usage
 
 ### Basic Setup

@@ -51,7 +51,7 @@ func TestCommitPackRequest(t *testing.T) {
 		t.Fatalf("send error: %v", err)
 	}
 
-	if requestPath != "/api/v1/repos/commit-pack" {
+	if requestPath != "/api/repos/repo/commit-pack" {
 		t.Fatalf("unexpected path: %s", requestPath)
 	}
 	if headerAgent == "" || !strings.Contains(headerAgent, "code-storage-go-sdk/") {
@@ -98,7 +98,7 @@ func TestCommitFromDiffRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit from diff error: %v", err)
 	}
-	if requestPath != "/api/v1/repos/diff-commit" {
+	if requestPath != "/api/repos/repo/diff-commit" {
 		t.Fatalf("unexpected path: %s", requestPath)
 	}
 }

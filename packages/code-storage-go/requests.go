@@ -123,10 +123,6 @@ type createTagRequest struct {
 	Ref  string `json:"ref"`
 }
 
-type deleteTagRequest struct {
-	Name string `json:"name"`
-}
-
 type deleteBranchRequest struct {
 	TargetBranch string `json:"target_branch"`
 	Ephemeral    *bool  `json:"ephemeral,omitempty"`
@@ -189,7 +185,6 @@ type diffChunkPayload struct {
 
 // createGitCredentialRequest is the JSON body for CreateGitCredential.
 type createGitCredentialRequest struct {
-	RepoID   string `json:"repo_id"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password"`
 }
@@ -197,6 +192,12 @@ type createGitCredentialRequest struct {
 // updateGitCredentialRequest is the JSON body for UpdateGitCredential.
 type updateGitCredentialRequest struct {
 	ID       string `json:"id"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password"`
+}
+
+// updateGitCredentialPathRequest is the canonical update body.
+type updateGitCredentialPathRequest struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password"`
 }

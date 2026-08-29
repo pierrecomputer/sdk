@@ -286,9 +286,9 @@ export class CommitBuilderImpl implements CommitBuilder {
 export class FetchCommitTransport implements CommitTransport {
   private readonly url: string;
 
-  constructor(config: { baseUrl: string; version: number }) {
+  constructor(config: { baseUrl: string; repoId: string }) {
     const trimmedBase = config.baseUrl.replace(/\/+$/, '');
-    this.url = `${trimmedBase}/api/v${config.version}/repos/commit-pack`;
+    this.url = `${trimmedBase}/api/repos/${encodeURIComponent(config.repoId)}/commit-pack`;
   }
 
   async send(request: CommitTransportRequest): Promise<CommitPackAckRaw> {

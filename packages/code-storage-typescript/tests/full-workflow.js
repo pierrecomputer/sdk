@@ -398,7 +398,7 @@ async function main() {
     namespaceSlug
   );
 
-  const repoId = env.repoId ?? `sdk-full-workflow-${Date.now()}`;
+  const repoId = env.repoId ?? `sdk-full-workflow-${Date.now()}/nested`;
   const defaultBranch = env.defaultBranch;
   const timeout = env.timeoutMs ?? 180_000;
   const grepToken = `SDK_GREP_${repoId}`;
@@ -421,6 +421,26 @@ async function main() {
 
   const repo = await store.createRepo({ id: repoId, defaultBranch });
   console.log(`✓ Repository created (${repo.id})`);
+
+  const credential = await store.createGitCredential({
+    repoName: repoId,
+    username: 'git',
+    password: 'sdk-smoke-token',
+  });
+  console.log(`✓ Git credential created (${credential.id})`);
+
+  await store.updateGitCredential({
+    repoName: repoId,
+    id: credential.id,
+    password: 'sdk-smoke-token-rotated',
+  });
+  console.log(`✓ Git credential updated (${credential.id})`);
+
+  await store.deleteGitCredential({
+    repoName: repoId,
+    id: credential.id,
+  });
+  console.log(`✓ Git credential deleted (${credential.id})`);
 
   const signature = () => ({
     name: 'SDK Committer',
@@ -470,7 +490,7 @@ async function main() {
   await waitFor(
     async () => {
       const commits = await repo.listCommits({
-        branch: defaultBranch,
+        ref: defaultBranch,
         limit: 5,
       });
       return commits.commits.find((commit) => commit.sha === latestCommitSha);
@@ -620,7 +640,7 @@ async function main() {
   const addCommit = await repo
     .createCommit({
       targetBranch: defaultBranch,
-      expectedHeadSha: latestCommitSha,
+      expectedTargetSha: latestCommitSha,
       commitMessage: addMessage,
       author: packSig,
       committer: packSig,
@@ -641,7 +661,7 @@ async function main() {
   await waitFor(
     async () => {
       const commits = await repo.listCommits({
-        branch: defaultBranch,
+        ref: defaultBranch,
         limit: 5,
       });
       const match = commits.commits.find(
@@ -691,7 +711,7 @@ async function main() {
   const updateCommit = await repo
     .createCommit({
       targetBranch: defaultBranch,
-      expectedHeadSha: latestCommitSha,
+      expectedTargetSha: latestCommitSha,
       commitMessage: updateMessage,
       author: updateSig,
       committer: updateSig,
@@ -712,7 +732,7 @@ async function main() {
   const updateInfo = await waitFor(
     async () => {
       const commits = await repo.listCommits({
-        branch: defaultBranch,
+        ref: defaultBranch,
         limit: 5,
       });
       return commits.commits.find((commit) => commit.sha === latestCommitSha);
@@ -743,7 +763,7 @@ async function main() {
 
   const diff = await waitFor(
     async () => {
-      const response = await repo.getCommitDiff({ sha: latestCommitSha });
+      const response = await repo.getCommitDiff({ ref: latestCommitSha });
       return response.files.some((file) => file.path === 'api-generated.txt')
         ? response
         : null;
@@ -789,7 +809,7 @@ async function main() {
 
   const diffCommit = await repo.createCommitFromDiff({
     targetBranch: defaultBranch,
-    expectedHeadSha: latestCommitSha,
+    expectedTargetSha: latestCommitSha,
     commitMessage: diffMessage,
     author: diffSig,
     committer: diffSig,
@@ -801,7 +821,7 @@ async function main() {
   const diffCommitInfo = await waitFor(
     async () => {
       const commits = await repo.listCommits({
-        branch: defaultBranch,
+        ref: defaultBranch,
         limit: 5,
       });
       return commits.commits.find((commit) => commit.sha === latestCommitSha);
@@ -843,7 +863,7 @@ async function main() {
   const featureOptions = {
     targetBranch: featureBranch,
     baseBranch: defaultBranch,
-    expectedHeadSha: latestCommitSha,
+    expectedTargetSha: latestCommitSha,
     commitMessage: featureMessage,
     author: featureSig,
     committer: featureSig,
@@ -891,8 +911,8 @@ async function main() {
   const restoreMessage = `Restore to pre-deploy baseline`;
   const restoreResult = await repo.restoreCommit({
     targetBranch: defaultBranch,
-    expectedHeadSha: latestCommitSha,
-    targetCommitSha: baselineCommitSha,
+    expectedTargetSha: latestCommitSha,
+    baseRef: baselineCommitSha,
     commitMessage: restoreMessage,
     author: restoreSig,
     committer: restoreSig,
@@ -903,7 +923,7 @@ async function main() {
   const restoreInfo = await waitFor(
     async () => {
       const commits = await repo.listCommits({
-        branch: defaultBranch,
+        ref: defaultBranch,
         limit: 5,
       });
       return commits.commits.find((commit) => commit.sha === latestCommitSha);
@@ -957,6 +977,12 @@ async function main() {
     throw new Error('README does not contain repository identifier');
   }
   console.log(`✓ README accessible via getFileStream`);
+
+  const deleteResult = await store.deleteRepo({ id: repoId });
+  if (!deleteResult.repoId || !deleteResult.message) {
+    throw new Error('Repository deletion returned an incomplete result');
+  }
+  console.log(`✓ Repository deletion started (${deleteResult.repoId})`);
 
   console.log('\n✅ GitStorage SDK full workflow completed successfully.');
   console.log(`   Repository: ${repoId}`);
