@@ -31,14 +31,19 @@ class GitFileMode(str, Enum):
 
 # Configuration types
 class GitStorageOptions(TypedDict, total=False):
-    """Options for GitStorage client."""
+    """Options for GitStorage client.
+
+    ``api_version`` is deprecated: it is still accepted for backwards
+    compatibility but is ignored when building request URLs, which are
+    unversioned.
+    """
 
     name: str  # required
     key: str  # required unless token is set
     token: str  # pre-minted JWT, used verbatim if set
     api_base_url: Optional[str]
     storage_base_url: Optional[str]
-    api_version: Optional[int]
+    api_version: Optional[int]  # deprecated: accepted but ignored for URLs
     default_ttl: Optional[int]
 
 

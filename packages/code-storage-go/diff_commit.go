@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -97,8 +98,8 @@ func (d *diffCommitExecutor) send(ctx context.Context, repoID string) (CommitRes
 		}
 	}()
 
-	url := d.client.api.basePath() + "/repos/diff-commit"
-	resp, err := doStreamingRequest(ctx, d.client.api.httpClient, http.MethodPost, url, jwtToken, pipeReader)
+	requestURL := d.client.api.basePath() + "/repos/" + url.PathEscape(repoID) + "/diff-commit"
+	resp, err := doStreamingRequest(ctx, d.client.api.httpClient, http.MethodPost, requestURL, jwtToken, pipeReader)
 	if err != nil {
 		return CommitResult{}, err
 	}
