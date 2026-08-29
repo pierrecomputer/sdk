@@ -41,6 +41,11 @@ import type {
 export interface OverrideableGitStorageOptions {
   apiBaseUrl?: string;
   storageBaseUrl?: string;
+  /**
+   * @deprecated The API is served on unversioned `/api` paths; this option is
+   * still accepted for backwards compatibility but no longer affects request
+   * URLs.
+   */
   apiVersion?: ValidAPIVersion;
   defaultTTL?: number;
 }
