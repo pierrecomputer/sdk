@@ -1073,7 +1073,8 @@ type CommitBuilder struct {
 // CommitOptions configures commit operations.
 type CommitOptions struct {
 	InvocationOptions
-	TargetBranch      string
+	TargetBranch string
+	// Deprecated: use TargetBranch instead.
 	TargetRef         string
 	CommitMessage     string
 	ExpectedTargetSHA string
