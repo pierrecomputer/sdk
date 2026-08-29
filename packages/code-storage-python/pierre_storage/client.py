@@ -539,7 +539,7 @@ class GitStorage:
 
         # Deliberately kept on the legacy route: the canonical repo-scoped
         # route needs the repo name, which these options do not carry.
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.put(
@@ -592,7 +592,7 @@ class GitStorage:
 
         # Deliberately kept on the legacy route: the canonical repo-scoped
         # route needs the repo name, which these options do not carry.
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
