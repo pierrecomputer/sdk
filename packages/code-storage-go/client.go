@@ -393,21 +393,33 @@ func (c *Client) UpdateGitCredential(ctx context.Context, options UpdateGitCrede
 		return nil, errors.New("updateGitCredential password is required")
 	}
 
+	repoID := strings.TrimSpace(options.RepoID)
+	claim := repoID
+	if claim == "" {
+		claim = "org"
+	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	jwtToken, err := c.generateJWT(claim, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
 	if err != nil {
 		return nil, err
 	}
 
 	body := &updateGitCredentialRequest{
-		ID:       options.ID,
 		Password: options.Password,
 	}
 	if strings.TrimSpace(options.Username) != "" {
 		body.Username = options.Username
 	}
-	// Stays on the legacy v1 route: the canonical route needs the repo name, which these options lack.
-	resp, err := c.api.put(ctx, "v1/repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	// With a repository id the canonical repo-scoped route applies. Without
+	// one, fall back to the legacy versioned route; the current backend
+	// resolves the repository from the token and rejects that fallback.
+	path := "v1/repos/git-credentials"
+	if repoID != "" {
+		path = "repos/" + url.PathEscape(repoID) + "/git-credentials/" + url.PathEscape(options.ID)
+	} else {
+		body.ID = options.ID
+	}
+	resp, err := c.api.put(ctx, path, nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -433,15 +445,28 @@ func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCrede
 		return errors.New("deleteGitCredential id is required")
 	}
 
+	repoID := strings.TrimSpace(options.RepoID)
+	claim := repoID
+	if claim == "" {
+		claim = "org"
+	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	jwtToken, err := c.generateJWT(claim, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
 	if err != nil {
 		return err
 	}
 
-	body := &deleteGitCredentialRequest{ID: options.ID}
-	// Stays on the legacy v1 route: the canonical route needs the repo name, which these options lack.
-	resp, err := c.api.delete(ctx, "v1/repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	// With a repository id the canonical repo-scoped route applies. Without
+	// one, fall back to the legacy versioned route; the current backend
+	// resolves the repository from the token and rejects that fallback.
+	path := "v1/repos/git-credentials"
+	var body interface{}
+	if repoID != "" {
+		path = "repos/" + url.PathEscape(repoID) + "/git-credentials/" + url.PathEscape(options.ID)
+	} else {
+		body = &deleteGitCredentialRequest{ID: options.ID}
+	}
+	resp, err := c.api.delete(ctx, path, nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return err
 	}
