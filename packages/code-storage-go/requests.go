@@ -123,10 +123,6 @@ type createTagRequest struct {
 	Target string `json:"target"`
 }
 
-type deleteTagRequest struct {
-	Name string `json:"name"`
-}
-
 type deleteBranchRequest struct {
 	Name      string `json:"name"`
 	Ephemeral *bool  `json:"ephemeral,omitempty"`
@@ -189,7 +185,6 @@ type diffChunkPayload struct {
 
 // createGitCredentialRequest is the JSON body for CreateGitCredential.
 type createGitCredentialRequest struct {
-	RepoID   string `json:"repo_id"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password"`
 }

@@ -88,7 +88,7 @@ func TestDefaultBaseURLs(t *testing.T) {
 func TestCreateRepoDefaultBranch(t *testing.T) {
 	var receivedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repos" {
+		if r.URL.Path != "/api/repos" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		decoder := json.NewDecoder(r.Body)
@@ -376,7 +376,7 @@ func TestListReposScopes(t *testing.T) {
 
 func TestFindOneReturnsRepo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repo" {
+		if r.URL.Path != "/api/repos/repo-1" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -736,7 +736,7 @@ func TestCreateGitCredential(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/repos/git-credentials" {
+		if r.URL.Path != "/api/repos/repo-abc/git-credentials" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		decoder := json.NewDecoder(r.Body)
@@ -763,8 +763,8 @@ func TestCreateGitCredential(t *testing.T) {
 	if cred.ID != "cred-123" {
 		t.Fatalf("expected cred id cred-123, got %s", cred.ID)
 	}
-	if receivedBody["repo_id"] != "repo-abc" {
-		t.Fatalf("expected repo_id repo-abc")
+	if _, ok := receivedBody["repo_id"]; ok {
+		t.Fatalf("expected no repo_id in body, got %v", receivedBody["repo_id"])
 	}
 	if receivedBody["username"] != "user1" {
 		t.Fatalf("expected username user1")

@@ -262,7 +262,7 @@ func (c *Client) FindOne(ctx context.Context, options FindOneOptions) (*Repo, er
 		return nil, err
 	}
 
-	resp, err := c.api.get(ctx, "repo", nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	resp, err := c.api.get(ctx, "repos/"+url.PathEscape(options.ID), nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (c *Client) DeleteRepo(ctx context.Context, options DeleteRepoOptions) (Del
 		return DeleteRepoResult{}, err
 	}
 
-	resp, err := c.api.delete(ctx, "repos/delete", nil, nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true, 409: true}})
+	resp, err := c.api.delete(ctx, "repos/"+url.PathEscape(options.ID), nil, nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true, 409: true}})
 	if err != nil {
 		return DeleteRepoResult{}, err
 	}
@@ -359,14 +359,13 @@ func (c *Client) CreateGitCredential(ctx context.Context, options CreateGitCrede
 	}
 
 	body := &createGitCredentialRequest{
-		RepoID:   options.RepoID,
 		Password: options.Password,
 	}
 	if strings.TrimSpace(options.Username) != "" {
 		body.Username = options.Username
 	}
 
-	resp, err := c.api.post(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
+	resp, err := c.api.post(ctx, "repos/"+url.PathEscape(options.RepoID)+"/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -407,8 +406,8 @@ func (c *Client) UpdateGitCredential(ctx context.Context, options UpdateGitCrede
 	if strings.TrimSpace(options.Username) != "" {
 		body.Username = options.Username
 	}
-
-	resp, err := c.api.put(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	// Stays on the legacy v1 route: the canonical route needs the repo name, which these options lack.
+	resp, err := c.api.put(ctx, "v1/repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -441,8 +440,8 @@ func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCrede
 	}
 
 	body := &deleteGitCredentialRequest{ID: options.ID}
-
-	resp, err := c.api.delete(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	// Stays on the legacy v1 route: the canonical route needs the repo name, which these options lack.
+	resp, err := c.api.delete(ctx, "v1/repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return err
 	}

@@ -26,9 +26,13 @@ type Options struct {
 	Token          string // pre-minted JWT, used verbatim if set
 	APIBaseURL     string
 	StorageBaseURL string
-	APIVersion     int
-	DefaultTTL     time.Duration
-	HTTPClient     *http.Client
+	// APIVersion is deprecated: the API is unversioned and this value is
+	// accepted but ignored when building request URLs.
+	//
+	// Deprecated: no longer used for URL construction.
+	APIVersion int
+	DefaultTTL time.Duration
+	HTTPClient *http.Client
 }
 
 // Op is a policy operation included in the JWT.
