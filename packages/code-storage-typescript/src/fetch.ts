@@ -36,11 +36,13 @@ export class ApiError extends Error {
 export class ApiFetcher {
   constructor(
     private readonly API_BASE_URL: string,
-    private readonly version: ValidAPIVersion
+    // Retained as a cache-key discriminator in getApiInstance; no longer
+    // affects request URLs (the API is served on unversioned /api paths).
+    _version: ValidAPIVersion
   ) {}
 
   private getBaseUrl() {
-    return `${this.API_BASE_URL}/api/v${this.version}`;
+    return `${this.API_BASE_URL}/api`;
   }
 
   private getRequestUrl(path: ValidPath) {

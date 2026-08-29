@@ -1,15 +1,16 @@
 """Main client for Pierre Git Storage SDK."""
 
 import uuid
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
 from pierre_storage.auth import generate_jwt
 from pierre_storage.errors import ApiError
-from pierre_storage.repo import DEFAULT_TOKEN_TTL_SECONDS, RepoImpl
+from pierre_storage.repo import DEFAULT_TOKEN_TTL_SECONDS, RepoImpl, build_api_url
 from pierre_storage.types import (
     BaseRepo,
     CreateGitCredentialResult,
@@ -27,7 +28,7 @@ from pierre_storage.version import get_user_agent
 
 DEFAULT_API_BASE_URL = "https://api.{{org}}.code.storage"
 DEFAULT_STORAGE_BASE_URL = "{{org}}.code.storage"
-DEFAULT_API_VERSION = 1
+DEFAULT_API_VERSION = 1  # deprecated: retained for config compatibility, unused in URLs
 
 
 class GitStorage:
@@ -82,6 +83,12 @@ class GitStorage:
         storage_base_url = options.get("storage_base_url") or self.get_default_storage_base_url(
             name
         )
+        if options.get("api_version") is not None:
+            warnings.warn(
+                "api_version is deprecated and no longer controls request routes",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         api_version = options.get("api_version") or DEFAULT_API_VERSION
         default_ttl = options.get("default_ttl")
 
@@ -156,7 +163,7 @@ class GitStorage:
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
+        url = self._api_url("repos")
         body: Dict[str, Any] = {}
 
         # Match backend priority: base_repo.default_branch > default_branch > 'main'
@@ -261,7 +268,7 @@ class GitStorage:
             if q_clean:
                 params["q"] = q_clean
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
+        url = self._api_url("repos")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -318,7 +325,7 @@ class GitStorage:
             {"permissions": ["git:read"], "ttl": DEFAULT_TOKEN_TTL_SECONDS},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repo"
+        url = self._api_url(repo_name=repo_id)
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -411,7 +418,7 @@ class GitStorage:
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/delete"
+        url = self._api_url(repo_name=repo_id)
 
         async with httpx.AsyncClient() as client:
             response = await client.delete(
@@ -446,16 +453,18 @@ class GitStorage:
     async def create_git_credential(
         self,
         *,
-        repo_id: str,
         password: str,
+        repo_name: Optional[str] = None,
+        repo_id: Optional[str] = None,
         username: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> CreateGitCredentialResult:
         """Create a generic git credential for a repository.
 
         Args:
-            repo_id: Repository ID to associate the credential with
             password: Password or token for authentication
+            repo_name: Repository name for the preferred route
+            repo_id: Deprecated internal repository ID for the legacy route
             username: Optional username for authentication
             ttl: Token TTL in seconds
 
@@ -465,20 +474,35 @@ class GitStorage:
         Raises:
             ApiError: If credential creation fails or already exists
         """
+        repo_name_clean = (repo_name or "").strip()
+        repo_id_clean = (repo_id or "").strip()
+        if repo_id is not None:
+            warnings.warn(
+                "repo_id is deprecated; use repo_name instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if not repo_name_clean and not repo_id_clean:
+            raise ValueError("create_git_credential requires repo_name or repo_id")
+
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        repository = repo_name_clean or repo_id_clean
         jwt = self._generate_jwt(
-            repo_id,
+            repository,
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
         body: Dict[str, Any] = {
-            "repo_id": repo_id,
             "password": password,
         }
         if username is not None:
             body["username"] = username
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        if repo_name_clean:
+            url = self._api_url("git-credentials", repo_name=repo_name_clean)
+        else:
+            body["repo_id"] = repo_id_clean
+            url = self._legacy_git_credential_url()
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -510,6 +534,7 @@ class GitStorage:
         *,
         id: str,
         password: str,
+        repo_name: Optional[str] = None,
         username: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> GitCredential:
@@ -518,6 +543,8 @@ class GitStorage:
         Args:
             id: Credential ID to update
             password: New password or token
+            repo_name: Repository name for the preferred route. When omitted,
+                the SDK keeps the deprecated request.
             username: Optional new username
             ttl: Token TTL in seconds
 
@@ -527,20 +554,31 @@ class GitStorage:
         Raises:
             ApiError: If credential not found or update fails
         """
+        repo_name_clean = (repo_name or "").strip()
+        if not repo_name_clean:
+            warnings.warn(
+                "update_git_credential without repo_name is deprecated; pass repo_name instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_name_clean or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        body: Dict[str, Any] = {
-            "id": id,
-            "password": password,
-        }
+        body: Dict[str, Any] = {"password": password}
         if username is not None:
             body["username"] = username
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        if repo_name_clean:
+            url = self._api_url(
+                f"git-credentials/{quote(id, safe='')}",
+                repo_name=repo_name_clean,
+            )
+        else:
+            body["id"] = id
+            url = self._legacy_git_credential_url()
 
         async with httpx.AsyncClient() as client:
             response = await client.put(
@@ -574,36 +612,57 @@ class GitStorage:
         self,
         *,
         id: str,
+        repo_name: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> None:
         """Delete a generic git credential.
 
         Args:
             id: Credential ID to delete
+            repo_name: Repository name for the preferred route. When omitted,
+                the SDK keeps the deprecated request.
             ttl: Token TTL in seconds
 
         Raises:
             ApiError: If credential not found or deletion fails
         """
+        repo_name_clean = (repo_name or "").strip()
+        if not repo_name_clean:
+            warnings.warn(
+                "delete_git_credential without repo_name is deprecated; pass repo_name instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_name_clean or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        if repo_name_clean:
+            url = self._api_url(
+                f"git-credentials/{quote(id, safe='')}",
+                repo_name=repo_name_clean,
+            )
+        else:
+            url = self._legacy_git_credential_url()
+
+        request_options: Dict[str, Any] = {
+            "headers": {
+                "Authorization": f"Bearer {jwt}",
+                "Content-Type": "application/json",
+                "Code-Storage-Agent": get_user_agent(),
+            },
+            "timeout": 30.0,
+        }
+        if not repo_name_clean:
+            request_options["json"] = {"id": id}
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
                 "DELETE",
                 url,
-                headers={
-                    "Authorization": f"Bearer {jwt}",
-                    "Content-Type": "application/json",
-                    "Code-Storage-Agent": get_user_agent(),
-                },
-                json={"id": id},
-                timeout=30.0,
+                **request_options,
             )
 
             if response.status_code == 404:
@@ -623,6 +682,16 @@ class GitStorage:
             Copy of current configuration
         """
         return {**self.options}
+
+    def _api_url(self, relative: str = "", *, repo_name: Optional[str] = None) -> str:
+        """Build a canonical API URL rooted at this client's api_base_url."""
+        api_base_url: str = self.options["api_base_url"]  # type: ignore[assignment]
+        return build_api_url(api_base_url, relative, repo_name=repo_name)
+
+    def _legacy_git_credential_url(self) -> str:
+        """Build the deprecated git credential URL."""
+        api_base_url: str = self.options["api_base_url"]  # type: ignore[assignment]
+        return f"{api_base_url.rstrip('/')}/api/v1/repos/git-credentials"
 
     def _generate_jwt(
         self,

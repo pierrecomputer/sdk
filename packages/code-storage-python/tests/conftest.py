@@ -24,5 +24,4 @@ def git_storage_options(test_key: str) -> dict:
         "key": test_key,
         "api_base_url": "https://api.test.code.storage",
         "storage_base_url": "test.code.storage",
-        "api_version": 1,
     }

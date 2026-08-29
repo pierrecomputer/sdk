@@ -41,6 +41,11 @@ import type {
 export interface OverrideableGitStorageOptions {
   apiBaseUrl?: string;
   storageBaseUrl?: string;
+  /**
+   * @deprecated The API is served on unversioned `/api` paths; this option is
+   * still accepted for backwards compatibility but no longer affects request
+   * URLs.
+   */
   apiVersion?: ValidAPIVersion;
   defaultTTL?: number;
 }
@@ -222,13 +227,28 @@ export interface ForkBaseRepo {
 export type BaseRepo = GitHubBaseRepo | ForkBaseRepo | GenericGitBaseRepo;
 
 export interface CreateGitCredentialOptions {
+  /** @deprecated Use `repoName` with `CreateGitCredentialByNameOptions`. */
   repoId: string;
   username?: string;
   password: string;
   ttl?: number;
 }
 
+export interface CreateGitCredentialByNameOptions {
+  repoName: string;
+  /** @deprecated The preferred route ignores this internal repository ID. */
+  repoId?: string;
+  username?: string;
+  password: string;
+  ttl?: number;
+}
+
 export interface UpdateGitCredentialOptions {
+  /**
+   * Repository name. When omitted, the SDK keeps the deprecated request for
+   * source compatibility.
+   */
+  repoName?: string;
   id: string;
   username?: string;
   password: string;
@@ -236,6 +256,11 @@ export interface UpdateGitCredentialOptions {
 }
 
 export interface DeleteGitCredentialOptions {
+  /**
+   * Repository name. When omitted, the SDK keeps the deprecated request for
+   * source compatibility.
+   */
+  repoName?: string;
   id: string;
   ttl?: number;
 }

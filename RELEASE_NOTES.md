@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Preferred REST routes
+
+- Changed preferred SDK calls to use the unversioned `/api` collection and
+  repository-scoped `/api/repos/{repo_name}/*` routes.
+- Added `repoName`, `repo_name`, and `RepoName` options to Git credential
+  methods. Preferred requests omit legacy identifier fields from their bodies.
+- Kept create-only `repoId`, `repo_id`, and `RepoID` options as deprecated
+  internal repository IDs. These calls keep their exact `/api/v1` request.
+- Kept update and delete calls without a repository name compatible with their
+  exact old request. Preferred create input wins when callers pass both names.
+- Deprecated `apiVersion`, `api_version`, and `APIVersion`. These options remain
+  accepted but no longer control preferred request routes.
+- Repository and credential names are encoded as one path segment. JWT `repo`
+  claims keep the raw repository name.
+
 ### Standard API vocabulary
 
 - Added preferred revision and ref names across the TypeScript, Python, and Go

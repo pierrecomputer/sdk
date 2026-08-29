@@ -280,22 +280,20 @@ class CommitBuilderImpl:
         self,
         options: CreateCommitOptions,
         get_auth_token: Callable[[], str],
-        base_url: str,
-        api_version: int,
+        url: str,
     ) -> None:
         """Initialize the commit builder.
 
         Args:
             options: Commit options
             get_auth_token: Function to get auth token
-            base_url: API base URL
-            api_version: API version
+            url: Fully-built commit-pack endpoint URL
 
         Raises:
             ValueError: If required options are missing or invalid
         """
         self.get_auth_token = get_auth_token
-        self.url = f"{base_url.rstrip('/')}/api/v{api_version}/repos/commit-pack"
+        self.url = url
         self.operations: List[FileOperation] = []
         self.sent = False
 
@@ -477,8 +475,7 @@ async def send_diff_commit_request(
     options: CreateCommitOptions,
     diff_source: FileSource,
     get_auth_token: Callable[[], str],
-    base_url: str,
-    api_version: int,
+    url: str,
 ) -> CommitResult:
     """Send a diff-based commit request."""
     normalized_options = _normalize_commit_options(options)
@@ -502,8 +499,6 @@ async def send_diff_commit_request(
                 }
             }
             yield json.dumps(payload).encode("utf-8") + b"\n"
-
-    url = f"{base_url.rstrip('/')}/api/v{api_version}/repos/diff-commit"
 
     async with httpx.AsyncClient() as client:
         async with client.stream(

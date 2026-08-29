@@ -26,9 +26,13 @@ type Options struct {
 	Token          string // pre-minted JWT, used verbatim if set
 	APIBaseURL     string
 	StorageBaseURL string
-	APIVersion     int
-	DefaultTTL     time.Duration
-	HTTPClient     *http.Client
+	// APIVersion is deprecated: the API is unversioned and this value is
+	// accepted but ignored when building request URLs.
+	//
+	// Deprecated: no longer used for URL construction.
+	APIVersion int
+	DefaultTTL time.Duration
+	HTTPClient *http.Client
 }
 
 // Op is a policy operation included in the JWT.
@@ -205,6 +209,10 @@ type DeleteRepoResult struct {
 // CreateGitCredentialOptions controls git credential creation.
 type CreateGitCredentialOptions struct {
 	InvocationOptions
+	RepoName string
+	// RepoID is the internal repository ID.
+	//
+	// Deprecated: Use RepoName for the preferred route.
 	RepoID   string
 	Username string
 	Password string
@@ -213,6 +221,9 @@ type CreateGitCredentialOptions struct {
 // UpdateGitCredentialOptions controls git credential updates.
 type UpdateGitCredentialOptions struct {
 	InvocationOptions
+	// RepoName selects the preferred route. When empty, the SDK keeps the
+	// deprecated request for source compatibility.
+	RepoName string
 	ID       string
 	Username string
 	Password string
@@ -221,7 +232,10 @@ type UpdateGitCredentialOptions struct {
 // DeleteGitCredentialOptions controls git credential deletion.
 type DeleteGitCredentialOptions struct {
 	InvocationOptions
-	ID string
+	// RepoName selects the preferred route. When empty, the SDK keeps the
+	// deprecated request for source compatibility.
+	RepoName string
+	ID       string
 }
 
 // GitCredential describes a git credential.

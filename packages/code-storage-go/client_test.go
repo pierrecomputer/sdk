@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -88,7 +89,7 @@ func TestDefaultBaseURLs(t *testing.T) {
 func TestCreateRepoDefaultBranch(t *testing.T) {
 	var receivedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repos" {
+		if r.URL.Path != "/api/repos" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		decoder := json.NewDecoder(r.Body)
@@ -376,7 +377,7 @@ func TestListReposScopes(t *testing.T) {
 
 func TestFindOneReturnsRepo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repo" {
+		if r.URL.Path != "/api/repos/repo-1" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -730,6 +731,93 @@ func TestCreateRepoGenericGitBaseRepo(t *testing.T) {
 	}
 }
 
+func TestPreferredGitCredentialRoutes(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if claims["repo"] != "owner/repo" {
+			t.Fatalf("unexpected repo claim: %v", claims["repo"])
+		}
+
+		switch requestCount {
+		case 1:
+			if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/git-credentials" {
+				t.Fatalf("unexpected create request: %s %s", r.Method, r.URL.EscapedPath())
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			if body["repo_id"] != nil || body["password"] != "token" {
+				t.Fatalf("unexpected create body: %#v", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"cred/123"}`))
+		case 2:
+			if r.Method != http.MethodPut || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/git-credentials/cred%2F123" {
+				t.Fatalf("unexpected update request: %s %s", r.Method, r.URL.EscapedPath())
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			if body["id"] != nil || body["password"] != "new-token" {
+				t.Fatalf("unexpected update body: %#v", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"cred/123"}`))
+		case 3:
+			if r.Method != http.MethodDelete || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/git-credentials/cred%2F123" {
+				t.Fatalf("unexpected delete request: %s %s", r.Method, r.URL.EscapedPath())
+			}
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read delete body: %v", err)
+			}
+			if len(body) != 0 {
+				t.Fatalf("expected empty delete body, got %q", body)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected extra request")
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL, APIVersion: 1})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	_, err = client.CreateGitCredential(nil, CreateGitCredentialOptions{
+		RepoName: "owner/repo",
+		RepoID:   "internal-id",
+		Password: "token",
+	})
+	if err != nil {
+		t.Fatalf("create credential error: %v", err)
+	}
+	_, err = client.UpdateGitCredential(nil, UpdateGitCredentialOptions{
+		RepoName: "owner/repo",
+		ID:       "cred/123",
+		Password: "new-token",
+	})
+	if err != nil {
+		t.Fatalf("update credential error: %v", err)
+	}
+	if err := client.DeleteGitCredential(nil, DeleteGitCredentialOptions{
+		RepoName: "owner/repo",
+		ID:       "cred/123",
+	}); err != nil {
+		t.Fatalf("delete credential error: %v", err)
+	}
+	if requestCount != 3 {
+		t.Fatalf("expected 3 requests, got %d", requestCount)
+	}
+}
+
 func TestCreateGitCredential(t *testing.T) {
 	var receivedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -764,7 +852,7 @@ func TestCreateGitCredential(t *testing.T) {
 		t.Fatalf("expected cred id cred-123, got %s", cred.ID)
 	}
 	if receivedBody["repo_id"] != "repo-abc" {
-		t.Fatalf("expected repo_id repo-abc")
+		t.Fatalf("expected repo_id repo-abc, got %v", receivedBody["repo_id"])
 	}
 	if receivedBody["username"] != "user1" {
 		t.Fatalf("expected username user1")

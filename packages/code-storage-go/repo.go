@@ -44,6 +44,11 @@ var noteWriteAllowedStatus = map[int]bool{
 	504: true,
 }
 
+// apiPath returns the canonical repo-scoped API path for suffix.
+func (r *Repo) apiPath(suffix string) string {
+	return "repos/" + url.PathEscape(r.ID) + "/" + suffix
+}
+
 // RemoteURL returns an authenticated remote URL.
 func (r *Repo) RemoteURL(ctx context.Context, options RemoteURLOptions) (string, error) {
 	jwtToken, err := r.client.generateJWT(r.ID, options)
@@ -108,7 +113,7 @@ func (r *Repo) FileStream(ctx context.Context, options GetFileOptions) (*http.Re
 	params := buildGetFileParams(options)
 	reqOpts := buildFileRequestOptions(options.Headers)
 
-	resp, err := r.client.api.get(ctx, "repos/file", params, jwtToken, reqOpts)
+	resp, err := r.client.api.get(ctx, r.apiPath("file"), params, jwtToken, reqOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +136,7 @@ func (r *Repo) HeadFile(ctx context.Context, options HeadFileOptions) (FileMetad
 	params := buildGetFileParams(options)
 	reqOpts := buildFileRequestOptions(options.Headers)
 
-	resp, err := r.client.api.head(ctx, "repos/file", params, jwtToken, reqOpts)
+	resp, err := r.client.api.head(ctx, r.apiPath("file"), params, jwtToken, reqOpts)
 	if err != nil {
 		return FileMetadata{}, err
 	}
@@ -238,7 +243,7 @@ func (r *Repo) ArchiveStream(ctx context.Context, options ArchiveOptions) (*http
 		body = req
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/archive", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("archive"), nil, body, jwtToken, nil)
 	if err != nil {
 		return nil, fmt.Errorf("archive stream request: %w", err)
 	}
@@ -277,7 +282,7 @@ func (r *Repo) ListFiles(ctx context.Context, options ListFilesOptions) (ListFil
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/files", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("files"), params, jwtToken, nil)
 	if err != nil {
 		return ListFilesResult{}, err
 	}
@@ -338,7 +343,7 @@ func (r *Repo) ListFilesWithMetadata(ctx context.Context, options ListFilesWithM
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/files/metadata", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("files/metadata"), params, jwtToken, nil)
 	if err != nil {
 		return ListFilesWithMetadataResult{}, err
 	}
@@ -398,7 +403,7 @@ func (r *Repo) ListBranches(ctx context.Context, options ListBranchesOptions) (L
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/branches", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("branches"), params, jwtToken, nil)
 	if err != nil {
 		return ListBranchesResult{}, err
 	}
@@ -443,7 +448,7 @@ func (r *Repo) ListTags(ctx context.Context, options ListTagsOptions) (ListTagsR
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/tags", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("tags"), params, jwtToken, nil)
 	if err != nil {
 		return ListTagsResult{}, err
 	}
@@ -496,7 +501,7 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/commits", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("commits"), params, jwtToken, nil)
 	if err != nil {
 		return ListCommitsResult{}, err
 	}
@@ -544,7 +549,7 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 	params := url.Values{}
 	params.Set("ref", ref)
 
-	resp, err := r.client.api.get(ctx, "repos/commit", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("commit"), params, jwtToken, nil)
 	if err != nil {
 		return GetCommitResult{}, err
 	}
@@ -604,7 +609,7 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 		params.Set("detect_moves", "true")
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/blame", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("blame"), params, jwtToken, nil)
 	if err != nil {
 		return BlameResult{}, err
 	}
@@ -662,7 +667,7 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 		params.Set("notes_ref", notesRef)
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/notes", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("notes"), params, jwtToken, nil)
 	if err != nil {
 		return GetNoteResult{}, err
 	}
@@ -713,7 +718,7 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 		body.Author = &authorInfo{Name: options.Author.Name, Email: options.Author.Email}
 	}
 
-	resp, err := r.client.api.delete(ctx, "repos/notes", nil, body, jwtToken, &requestOptions{allowedStatus: noteWriteAllowedStatus})
+	resp, err := r.client.api.delete(ctx, r.apiPath("notes"), nil, body, jwtToken, &requestOptions{allowedStatus: noteWriteAllowedStatus})
 	if err != nil {
 		return NoteWriteResult{}, err
 	}
@@ -772,7 +777,7 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 		body.Author = &authorInfo{Name: author.Name, Email: author.Email}
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/notes", nil, body, jwtToken, &requestOptions{allowedStatus: noteWriteAllowedStatus})
+	resp, err := r.client.api.post(ctx, r.apiPath("notes"), nil, body, jwtToken, &requestOptions{allowedStatus: noteWriteAllowedStatus})
 	if err != nil {
 		return NoteWriteResult{}, err
 	}
@@ -825,7 +830,7 @@ func (r *Repo) ListNotesRefs(ctx context.Context, options ListNotesRefsOptions) 
 		params = nil
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/notes/refs", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("notes/refs"), params, jwtToken, nil)
 	if err != nil {
 		return ListNotesRefsResult{}, err
 	}
@@ -879,7 +884,7 @@ func (r *Repo) GetBranchDiff(ctx context.Context, options GetBranchDiffOptions) 
 		}
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/branches/diff", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("branches/diff"), params, jwtToken, nil)
 	if err != nil {
 		return GetBranchDiffResult{}, err
 	}
@@ -926,7 +931,7 @@ func (r *Repo) GetCommitDiff(ctx context.Context, options GetCommitDiffOptions) 
 		}
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/diff", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("diff"), params, jwtToken, nil)
 	if err != nil {
 		return GetCommitDiffResult{}, err
 	}
@@ -1037,7 +1042,7 @@ func (r *Repo) Grep(ctx context.Context, options GrepOptions) (GrepResult, error
 		}
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/grep", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("grep"), nil, body, jwtToken, nil)
 	if err != nil {
 		return GrepResult{}, err
 	}
@@ -1080,7 +1085,7 @@ func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) er
 		body.Ref = options.Ref
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/pull-upstream", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("pull-upstream"), nil, body, jwtToken, nil)
 	if err != nil {
 		return err
 	}
@@ -1121,7 +1126,7 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 		body.BaseBranch = baseBranch
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/branches/create", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("branches/create"), nil, body, jwtToken, nil)
 	if err != nil {
 		return CreateBranchResult{}, err
 	}
@@ -1158,7 +1163,7 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 	}
 
 	body := &deleteBranchRequest{TargetBranch: targetBranch, Ephemeral: options.Ephemeral}
-	resp, err := r.client.api.delete(ctx, "repos/branches", nil, body, jwtToken, nil)
+	resp, err := r.client.api.delete(ctx, r.apiPath("branches"), nil, body, jwtToken, nil)
 	if err != nil {
 		return DeleteBranchResult{}, err
 	}
@@ -1239,7 +1244,7 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 		return MergeResult{}, err
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/merge", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("merge"), nil, body, jwtToken, nil)
 	if err != nil {
 		return MergeResult{}, err
 	}
@@ -1296,7 +1301,7 @@ func (r *Repo) PreviewMerge(ctx context.Context, options PreviewMergeOptions) (P
 		params.Set("include_content", strconv.FormatBool(*options.IncludeContent))
 	}
 
-	resp, err := r.client.api.get(ctx, "repos/merge/preview", params, jwtToken, nil)
+	resp, err := r.client.api.get(ctx, r.apiPath("merge/preview"), params, jwtToken, nil)
 	if err != nil {
 		return PreviewMergeResult{}, err
 	}
@@ -1378,7 +1383,7 @@ func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateT
 	}
 
 	body := &createTagRequest{Name: name, Ref: ref}
-	resp, err := r.client.api.post(ctx, "repos/tags", nil, body, jwtToken, nil)
+	resp, err := r.client.api.post(ctx, r.apiPath("tags"), nil, body, jwtToken, nil)
 	if err != nil {
 		return CreateTagResult{}, err
 	}
@@ -1412,8 +1417,7 @@ func (r *Repo) DeleteTag(ctx context.Context, options DeleteTagOptions) (DeleteT
 		return DeleteTagResult{}, err
 	}
 
-	body := &deleteTagRequest{Name: name}
-	resp, err := r.client.api.delete(ctx, "repos/tags", nil, body, jwtToken, nil)
+	resp, err := r.client.api.delete(ctx, r.apiPath("tags/"+url.PathEscape(name)), nil, nil, jwtToken, nil)
 	if err != nil {
 		return DeleteTagResult{}, err
 	}
@@ -1480,7 +1484,7 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 		}
 	}
 
-	resp, err := r.client.api.post(ctx, "repos/restore-commit", nil, &metadataEnvelope{Metadata: metadata}, jwtToken, &requestOptions{allowedStatus: restoreCommitAllowedStatus})
+	resp, err := r.client.api.post(ctx, r.apiPath("restore-commit"), nil, &metadataEnvelope{Metadata: metadata}, jwtToken, &requestOptions{allowedStatus: restoreCommitAllowedStatus})
 	if err != nil {
 		return RestoreCommitResult{}, err
 	}

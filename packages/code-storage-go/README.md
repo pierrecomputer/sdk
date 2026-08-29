@@ -10,6 +10,41 @@ New code should use `Ref`, `BaseRef`, `SourceRef`, `ObjectRef`, `NotesRef`,
 writes expose `NotesRef`; and ref updates expose `TargetBranch`. Deprecated
 result aliases remain populated with the preferred value.
 
+Repository methods now use the preferred `/api/repos/{repo_name}/*` routes.
+Git credential methods accept `RepoName` for these routes:
+
+```go
+credential, err := client.CreateGitCredential(ctx, storage.CreateGitCredentialOptions{
+	RepoName: "team/project",
+	Username: "git",
+	Password: os.Getenv("GIT_ACCESS_TOKEN"),
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+_, err = client.UpdateGitCredential(ctx, storage.UpdateGitCredentialOptions{
+	RepoName: "team/project",
+	ID:       credential.ID,
+	Password: os.Getenv("ROTATED_GIT_ACCESS_TOKEN"),
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+if err := client.DeleteGitCredential(ctx, storage.DeleteGitCredentialOptions{
+	RepoName: "team/project",
+	ID:       credential.ID,
+}); err != nil {
+	log.Fatal(err)
+}
+```
+
+The create-only `RepoID` field is deprecated and still means the internal
+repository ID. Update and delete calls without `RepoName` also keep their old
+request shape for compatibility. The deprecated `APIVersion` option is still
+accepted but does not select request routes.
+
 ## Usage
 
 ```go
