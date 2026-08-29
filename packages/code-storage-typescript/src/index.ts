@@ -2469,7 +2469,7 @@ export class GitStorage {
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(repoName ?? repoId!, {
+    const jwt = await this.generateJWT(repoName || repoId!, {
       permissions: ['repo:write'],
       ttl,
     });
@@ -2507,7 +2507,7 @@ export class GitStorage {
   ): Promise<GitCredential> {
     const repoName = options.repoName?.trim();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(repoName ?? 'org', {
+    const jwt = await this.generateJWT(repoName || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
@@ -2546,7 +2546,7 @@ export class GitStorage {
   async deleteGitCredential(options: DeleteGitCredentialOptions): Promise<void> {
     const repoName = options.repoName?.trim();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(repoName ?? 'org', {
+    const jwt = await this.generateJWT(repoName || 'org', {
       permissions: ['repo:write'],
       ttl,
     });

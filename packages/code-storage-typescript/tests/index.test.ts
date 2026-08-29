@@ -4116,6 +4116,33 @@ describe('GitStorage', () => {
       await store.createGitCredential({ repoId: 'internal-id', password: 'token' });
     });
 
+    it('uses repoId for a legacy create JWT when repoName is whitespace', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        const headers = init.headers as Record<string, string>;
+        const claims = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(new URL(url).pathname).toBe('/api/v1/repos/git-credentials');
+        expect(claims.repo).toBe('internal-id');
+        expect(JSON.parse(init.body as string)).toEqual({
+          repo_id: 'internal-id',
+          password: 'token',
+        });
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          statusText: 'Created',
+          json: async () => ({ id: 'cred-abc' }),
+        } as Response);
+      });
+
+      await store.createGitCredential({
+        repoName: '   ',
+        repoId: 'internal-id',
+        password: 'token',
+      });
+    });
+
     it('uses the canonical route for a preferred update request', async () => {
       const store = new GitStorage({ name: 'v0', key });
 
@@ -4166,6 +4193,33 @@ describe('GitStorage', () => {
       await store.updateGitCredential({ id: 'cred-abc', password: 'token' });
     });
 
+    it('uses the org JWT claim for a legacy update when repoName is whitespace', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        const headers = init.headers as Record<string, string>;
+        const claims = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(new URL(url).pathname).toBe('/api/v1/repos/git-credentials');
+        expect(claims.repo).toBe('org');
+        expect(JSON.parse(init.body as string)).toEqual({
+          id: 'cred-abc',
+          password: 'token',
+        });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ id: 'cred-abc' }),
+        } as Response);
+      });
+
+      await store.updateGitCredential({
+        repoName: '   ',
+        id: 'cred-abc',
+        password: 'token',
+      });
+    });
+
     it('uses the canonical route for a preferred delete request', async () => {
       const store = new GitStorage({ name: 'v0', key });
 
@@ -4210,6 +4264,26 @@ describe('GitStorage', () => {
       });
 
       await store.deleteGitCredential({ id: 'cred-abc' });
+    });
+
+    it('uses the org JWT claim for a legacy delete when repoName is whitespace', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url: string, init: RequestInit) => {
+        const headers = init.headers as Record<string, string>;
+        const claims = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(new URL(url).pathname).toBe('/api/v1/repos/git-credentials');
+        expect(claims.repo).toBe('org');
+        expect(JSON.parse(init.body as string)).toEqual({ id: 'cred-abc' });
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          statusText: 'No Content',
+          json: async () => ({}),
+        } as Response);
+      });
+
+      await store.deleteGitCredential({ repoName: '   ', id: 'cred-abc' });
     });
 
     it('createGitCredential posts to repos/git-credentials', async () => {
