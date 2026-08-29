@@ -119,10 +119,24 @@ describe('preferred REST route contract', () => {
       invoke: () => repo.listBranches(),
     },
     {
+      name: 'getBranch',
+      method: 'GET',
+      path: '/api/repos/owner%2Fname/branch',
+      query: { name: 'feature/one', ephemeral: 'false' },
+      invoke: () => repo.getBranch({ name: 'feature/one', ephemeral: false }),
+    },
+    {
       name: 'listTags',
       method: 'GET',
       path: '/api/repos/owner%2Fname/tags',
       invoke: () => repo.listTags(),
+    },
+    {
+      name: 'getTag',
+      method: 'GET',
+      path: '/api/repos/owner%2Fname/tag',
+      query: { name: 'release/v1' },
+      invoke: () => repo.getTag({ name: 'release/v1' }),
     },
     {
       name: 'listCommits',

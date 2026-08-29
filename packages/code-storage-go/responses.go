@@ -49,6 +49,14 @@ type branchInfoRaw struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type getBranchResponse struct {
+	Branch struct {
+		Name      string `json:"name"`
+		HeadSHA   string `json:"head_sha"`
+		CreatedAt string `json:"created_at"`
+	} `json:"branch"`
+}
+
 type listCommitsResponse struct {
 	Commits    []commitInfoRaw `json:"commits"`
 	NextCursor string          `json:"next_cursor"`
@@ -272,6 +280,13 @@ type tagInfoRaw struct {
 	Cursor string `json:"cursor"`
 	Name   string `json:"name"`
 	SHA    string `json:"sha"`
+}
+
+type getTagResponse struct {
+	Tag struct {
+		Name string `json:"name"`
+		SHA  string `json:"sha"`
+	} `json:"tag"`
 }
 
 type createTagResponse struct {
