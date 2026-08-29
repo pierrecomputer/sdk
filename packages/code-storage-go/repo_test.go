@@ -824,8 +824,19 @@ func TestPreviewMergeRequestAndResponse(t *testing.T) {
 		if got := r.URL.Query().Get("target_branch"); got != "main" {
 			t.Fatalf("unexpected target_branch: %s", got)
 		}
+		if got := r.URL.Query().Get("source_is_ephemeral"); got != "true" {
+			t.Fatalf("unexpected source_is_ephemeral: %s", got)
+		}
+		if got := r.URL.Query().Get("target_is_ephemeral"); got != "false" {
+			t.Fatalf("unexpected target_is_ephemeral: %s", got)
+		}
 		if got := r.URL.Query().Get("include_content"); got != "true" {
 			t.Fatalf("unexpected include_content: %s", got)
+		}
+		for _, name := range []string{"sourceIsEphemeral", "targetIsEphemeral", "source_ephemeral", "target_ephemeral"} {
+			if r.URL.Query().Has(name) {
+				t.Fatalf("unexpected query parameter: %s", name)
+			}
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		claims := parseJWTFromToken(t, token)
@@ -846,9 +857,11 @@ func TestPreviewMergeRequestAndResponse(t *testing.T) {
 	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
 
 	result, err := repo.PreviewMerge(nil, PreviewMergeOptions{
-		SourceBranch:   " feature/preview ",
-		TargetBranch:   " main ",
-		IncludeContent: boolPtr(true),
+		SourceBranch:      " feature/preview ",
+		SourceIsEphemeral: boolPtr(true),
+		TargetBranch:      " main ",
+		TargetIsEphemeral: boolPtr(false),
+		IncludeContent:    boolPtr(true),
 	})
 	if err != nil {
 		t.Fatalf("preview merge error: %v", err)
@@ -883,6 +896,71 @@ func TestPreviewMergeRequestAndResponse(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestPreviewMergePreservesFalseAndOmitsAbsentEphemeralFlags(t *testing.T) {
+	requestNumber := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestNumber++
+		query := r.URL.Query()
+		for _, name := range []string{"sourceIsEphemeral", "targetIsEphemeral", "source_ephemeral", "target_ephemeral"} {
+			if query.Has(name) {
+				t.Fatalf("unexpected query parameter: %s", name)
+			}
+		}
+
+		switch requestNumber {
+		case 1:
+			if got := query.Get("source_is_ephemeral"); got != "false" {
+				t.Fatalf("unexpected source_is_ephemeral: %s", got)
+			}
+			if got := query.Get("target_is_ephemeral"); got != "true" {
+				t.Fatalf("unexpected target_is_ephemeral: %s", got)
+			}
+		case 2:
+			if query.Has("source_is_ephemeral") {
+				t.Fatal("unexpected source_is_ephemeral")
+			}
+			if query.Has("target_is_ephemeral") {
+				t.Fatal("unexpected target_is_ephemeral")
+			}
+		default:
+			t.Fatalf("unexpected request number: %d", requestNumber)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"clean","result":"fast_forward","source_branch":"main","target_branch":"feature/preview","source_tip_sha":"source123","target_tip_sha":"target123","merge_base_sha":"base123"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	sourceNormal := false
+	targetEphemeral := true
+	_, err = repo.PreviewMerge(nil, PreviewMergeOptions{
+		SourceBranch:      "main",
+		SourceIsEphemeral: &sourceNormal,
+		TargetBranch:      "feature/preview",
+		TargetIsEphemeral: &targetEphemeral,
+	})
+	if err != nil {
+		t.Fatalf("preview merge with flags error: %v", err)
+	}
+
+	_, err = repo.PreviewMerge(nil, PreviewMergeOptions{
+		SourceBranch: "feature/preview",
+		TargetBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("preview merge without flags error: %v", err)
+	}
+	if requestNumber != 2 {
+		t.Fatalf("unexpected request count: %d", requestNumber)
 	}
 }
 

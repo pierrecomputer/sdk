@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Ephemeral merge previews
+
+- Added source and target ephemeral namespace flags to merge previews in the TypeScript, Python, and Go SDKs.
+- Kept both flags optional. Existing calls omit both query parameters.
+
 ### Exact branch and tag lookup
 
 - Added exact branch and tag lookup methods to the TypeScript, Python, and Go SDKs.
