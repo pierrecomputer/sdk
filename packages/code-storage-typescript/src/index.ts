@@ -1865,6 +1865,12 @@ class RepoImpl implements Repo {
       source_branch: sourceBranch,
       target_branch: targetBranch,
     };
+    if (typeof options.sourceIsEphemeral === 'boolean') {
+      params.source_is_ephemeral = String(options.sourceIsEphemeral);
+    }
+    if (typeof options.targetIsEphemeral === 'boolean') {
+      params.target_is_ephemeral = String(options.targetIsEphemeral);
+    }
     if (typeof options.includeContent === 'boolean') {
       params.include_content = String(options.includeContent);
     }

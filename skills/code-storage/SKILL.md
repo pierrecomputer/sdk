@@ -382,12 +382,12 @@ Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved o
 ## GET /repos/merge/preview — Preview Merge
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/merge/preview?source_branch=feature/demo&target_branch=main&include_content=true" \
+curl "$CODE_STORAGE_BASE_URL/repos/merge/preview?source_branch=feature/demo&source_is_ephemeral=true&target_branch=main&target_is_ephemeral=false&include_content=true" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
 Required params: `source_branch`, `target_branch`.
-Optional: `include_content=true` to include bounded conflict blob content.
+Optional: `source_is_ephemeral` and `target_is_ephemeral` select each branch namespace. The SDKs send `true` or `false` for explicit values and omit absent values. Use `include_content=true` to include bounded conflict blob content.
 Scope: `git:read`.
 
 Clean previews return HTTP 200 with `status: "clean"` and `result` set to
@@ -1108,4 +1108,4 @@ git push origin feature-branch
 | `expected_target_sha` | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
-| Merge preview         | `GET /repos/merge/preview?source_branch=...&target_branch=...&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |
+| Merge preview         | `GET /repos/merge/preview?source_branch=...&source_is_ephemeral=true&target_branch=...&target_is_ephemeral=false&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |

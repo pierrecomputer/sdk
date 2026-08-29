@@ -1118,6 +1118,8 @@ class RepoImpl:
         *,
         source_branch: str,
         target_branch: str,
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
         include_content: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> PreviewMergeResult:
@@ -1137,6 +1139,10 @@ class RepoImpl:
             "source_branch": source_branch_clean,
             "target_branch": target_branch_clean,
         }
+        if source_is_ephemeral is not None:
+            params["source_is_ephemeral"] = "true" if source_is_ephemeral else "false"
+        if target_is_ephemeral is not None:
+            params["target_is_ephemeral"] = "true" if target_is_ephemeral else "false"
         if include_content is not None:
             params["include_content"] = "true" if include_content else "false"
 

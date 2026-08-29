@@ -516,9 +516,11 @@ type MergeResult struct {
 // PreviewMergeOptions configures read-only branch merge previews.
 type PreviewMergeOptions struct {
 	InvocationOptions
-	SourceBranch   string
-	TargetBranch   string
-	IncludeContent *bool
+	SourceBranch      string
+	SourceIsEphemeral *bool
+	TargetBranch      string
+	TargetIsEphemeral *bool
+	IncludeContent    *bool
 }
 
 // PreviewMergeBlob describes a conflict stage blob in a merge preview.

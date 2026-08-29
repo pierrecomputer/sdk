@@ -1215,6 +1215,8 @@ class TestRepoBranchOperations:
             result = await repo.preview_merge(
                 source_branch=" feature/preview ",
                 target_branch=" main ",
+                source_is_ephemeral=True,
+                target_is_ephemeral=False,
                 include_content=True,
                 ttl=900,
             )
@@ -1226,13 +1228,78 @@ class TestRepoBranchOperations:
             assert parsed.path.endswith("/api/v1/repos/merge/preview")
             assert params["source_branch"] == ["feature/preview"]
             assert params["target_branch"] == ["main"]
+            assert params["source_is_ephemeral"] == ["true"]
+            assert params["target_is_ephemeral"] == ["false"]
             assert params["include_content"] == ["true"]
+            assert "sourceIsEphemeral" not in params
+            assert "targetIsEphemeral" not in params
+            assert "source_ephemeral" not in params
+            assert "target_ephemeral" not in params
 
             headers = preview_call.kwargs["headers"]
             token = headers["Authorization"].replace("Bearer ", "")
             payload = jwt.decode(token, options={"verify_signature": False})
             assert payload["scopes"] == ["git:read"]
             assert payload["exp"] - payload["iat"] == 900
+
+    @pytest.mark.asyncio
+    async def test_preview_merge_preserves_false_and_omits_absent_flags(
+        self, git_storage_options: dict
+    ) -> None:
+        """Test preview_merge keeps explicit false values and omits absent flags."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        preview_response = MagicMock()
+        preview_response.status_code = 200
+        preview_response.is_success = True
+        preview_response.json.return_value = {
+            "status": "clean",
+            "result": "fast_forward",
+            "source_branch": "main",
+            "target_branch": "feature/preview",
+            "source_tip_sha": "source123",
+            "target_tip_sha": "target123",
+            "merge_base_sha": "base123",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=create_repo_response)
+            client_instance.get = AsyncMock(return_value=preview_response)
+
+            repo = await storage.create_repo(id="test-repo")
+            await repo.preview_merge(
+                source_branch="main",
+                source_is_ephemeral=False,
+                target_branch="feature/preview",
+                target_is_ephemeral=True,
+            )
+            await repo.preview_merge(source_branch="feature/preview", target_branch="main")
+
+            explicit_params = parse_qs(
+                urlparse(client_instance.get.await_args_list[0].args[0]).query
+            )
+            assert explicit_params["source_is_ephemeral"] == ["false"]
+            assert explicit_params["target_is_ephemeral"] == ["true"]
+            assert "sourceIsEphemeral" not in explicit_params
+            assert "targetIsEphemeral" not in explicit_params
+            assert "source_ephemeral" not in explicit_params
+            assert "target_ephemeral" not in explicit_params
+
+            omitted_params = parse_qs(
+                urlparse(client_instance.get.await_args_list[1].args[0]).query
+            )
+            assert "source_is_ephemeral" not in omitted_params
+            assert "target_is_ephemeral" not in omitted_params
+            assert "sourceIsEphemeral" not in omitted_params
+            assert "targetIsEphemeral" not in omitted_params
+            assert "source_ephemeral" not in omitted_params
+            assert "target_ephemeral" not in omitted_params
 
     @pytest.mark.asyncio
     async def test_preview_merge_validation(self, git_storage_options: dict) -> None:

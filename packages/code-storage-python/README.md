@@ -241,7 +241,9 @@ print(ephemeral_delete["ephemeral"])  # True
 # Preview whether a source branch can merge without creating commits or updating refs
 preview = await repo.preview_merge(
     source_branch="feature/preview",
+    source_is_ephemeral=True,
     target_branch="main",
+    target_is_ephemeral=False,
     include_content=True,  # optional bounded conflict blob content
 )
 print(preview["status"], preview["result"])
@@ -856,6 +858,8 @@ class Repo:
         *,
         source_branch: str,
         target_branch: str,
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
         include_content: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> PreviewMergeResult: ...

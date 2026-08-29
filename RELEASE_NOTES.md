@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Ephemeral merge previews
+
+- Added source and target ephemeral namespace flags to merge previews in the TypeScript, Python, and Go SDKs.
+- Kept both flags optional. Existing calls omit both query parameters.
+
 ### Standard API vocabulary
 
 - Added preferred revision and ref names across the TypeScript, Python, and Go
