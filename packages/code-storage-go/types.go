@@ -1074,7 +1074,7 @@ type CommitBuilder struct {
 type CommitOptions struct {
 	InvocationOptions
 	TargetBranch string
-	// Deprecated: use TargetBranch instead.
+	// TargetRef is a fully qualified refs/heads/* target. TargetBranch wins when both fields are set.
 	TargetRef         string
 	CommitMessage     string
 	ExpectedTargetSHA string

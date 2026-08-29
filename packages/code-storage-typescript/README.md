@@ -511,9 +511,9 @@ reason, and ref details.
 - `signal` (optional): Abort an in-flight upload with `AbortController`.
 - `targetIsEphemeral` and `baseIsEphemeral` (optional): Select the ephemeral
   namespace for the target and base branches.
-- `targetRef` (deprecated, optional): Fully qualified ref (for example
-  `refs/heads/main`). Prefer `targetBranch`, which now accepts plain branch
-  names.
+- `targetRef` (optional): Fully qualified branch ref (for example
+  `refs/heads/main`). It remains supported without a deprecation. When both
+  target forms are present, `targetBranch` wins.
 
 Deprecated request aliases remain accepted for migration. These include
 `expectedHeadSha`, `ephemeral`, and `ephemeralBase` for commits; `sha` and

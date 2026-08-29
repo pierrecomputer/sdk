@@ -37,7 +37,7 @@ func (b *CommitBuilder) normalize() error {
 		}
 		b.options.TargetBranch = branch
 	} else if b.options.TargetRef != "" {
-		branch, err := normalizeLegacyTargetRef(b.options.TargetRef)
+		branch, err := normalizeTargetRef(b.options.TargetRef)
 		if err != nil {
 			return err
 		}
@@ -360,7 +360,7 @@ func normalizeBranchName(value string) (string, error) {
 	return trimmed, nil
 }
 
-func normalizeLegacyTargetRef(ref string) (string, error) {
+func normalizeTargetRef(ref string) (string, error) {
 	trimmed := strings.TrimSpace(ref)
 	if trimmed == "" {
 		return "", errors.New("createCommit targetRef is required")
