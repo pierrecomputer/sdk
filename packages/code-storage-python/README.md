@@ -246,6 +246,10 @@ branches = await repo.list_branches(
 )
 print(branches["branches"])
 
+# Get one branch when you know its exact name
+branch = await repo.get_branch(name="feature/preview")
+print(branch["head_sha"], branch["created_at"])
+
 # Create or promote a branch (synchronous Temporal workflow)
 branch_result = await repo.create_branch(
     base_ref="main",
@@ -301,6 +305,10 @@ print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
 # List tags
 tags = await repo.list_tags(limit=10)
 print(tags["tags"])
+
+# Get one tag when you know its exact name
+tag = await repo.get_tag(name="v1.0.0")
+print(tag["sha"])
 
 # Create a lightweight tag at a commit SHA
 tag_result = await repo.create_tag(
@@ -841,6 +849,14 @@ class Repo:
         ttl: Optional[int] = None,
     ) -> ListBranchesResult: ...
 
+    async def get_branch(
+        self,
+        *,
+        name: str,
+        ephemeral: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> GetBranchResult: ...
+
     async def create_branch(
         self,
         *,
@@ -896,6 +912,13 @@ class Repo:
         limit: Optional[int] = None,
         ttl: Optional[int] = None,
     ) -> ListTagsResult: ...
+
+    async def get_tag(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> GetTagResult: ...
 
     async def create_tag(
         self,
@@ -1097,7 +1120,9 @@ from pierre_storage.types import (
     ListFilesResult,
     ListFilesWithMetadataResult,
     ListBranchesResult,
+    GetBranchResult,
     ListTagsResult,
+    GetTagResult,
     ListCommitsResult,
     BlameResult,
     GetBranchDiffResult,

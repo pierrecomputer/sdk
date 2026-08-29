@@ -61,7 +61,11 @@ func TestPreferredRESTRouteContract(t *testing.T) {
 		{name: "ListFiles", method: "GET", path: "/api/repos/owner%2Fname/files", invoke: func(_ *Client, r *Repo) { _, _ = r.ListFiles(ctx, ListFilesOptions{}) }},
 		{name: "ListFilesWithMetadata", method: "GET", path: "/api/repos/owner%2Fname/files/metadata", invoke: func(_ *Client, r *Repo) { _, _ = r.ListFilesWithMetadata(ctx, ListFilesWithMetadataOptions{}) }},
 		{name: "ListBranches", method: "GET", path: "/api/repos/owner%2Fname/branches", invoke: func(_ *Client, r *Repo) { _, _ = r.ListBranches(ctx, ListBranchesOptions{}) }},
+		{name: "GetBranch", method: "GET", path: "/api/repos/owner%2Fname/branch", query: url.Values{"name": {"feature/one"}, "ephemeral": {"false"}}, invoke: func(_ *Client, r *Repo) {
+			_, _ = r.GetBranch(ctx, GetBranchOptions{Name: "feature/one", Ephemeral: boolPtr(false)})
+		}},
 		{name: "ListTags", method: "GET", path: "/api/repos/owner%2Fname/tags", invoke: func(_ *Client, r *Repo) { _, _ = r.ListTags(ctx, ListTagsOptions{}) }},
+		{name: "GetTag", method: "GET", path: "/api/repos/owner%2Fname/tag", query: url.Values{"name": {"release/v1"}}, invoke: func(_ *Client, r *Repo) { _, _ = r.GetTag(ctx, GetTagOptions{Name: "release/v1"}) }},
 		{name: "ListCommits", method: "GET", path: "/api/repos/owner%2Fname/commits", invoke: func(_ *Client, r *Repo) { _, _ = r.ListCommits(ctx, ListCommitsOptions{}) }},
 		{name: "GetCommit", method: "GET", path: "/api/repos/owner%2Fname/commit", invoke: func(_ *Client, r *Repo) { _, _ = r.GetCommit(ctx, GetCommitOptions{Ref: "main"}) }},
 		{name: "GetBlame", method: "GET", path: "/api/repos/owner%2Fname/blame", invoke: func(_ *Client, r *Repo) { _, _ = r.GetBlame(ctx, BlameOptions{Path: "README.md"}) }},

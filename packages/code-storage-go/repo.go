@@ -429,6 +429,37 @@ func (r *Repo) ListBranches(ctx context.Context, options ListBranchesOptions) (L
 	return result, nil
 }
 
+// GetBranch gets one branch by its exact name.
+func (r *Repo) GetBranch(ctx context.Context, options GetBranchOptions) (GetBranchResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return GetBranchResult{}, err
+	}
+
+	params := url.Values{}
+	params.Set("name", options.Name)
+	if options.Ephemeral != nil {
+		params.Set("ephemeral", strconv.FormatBool(*options.Ephemeral))
+	}
+
+	resp, err := r.client.api.get(ctx, r.apiPath("branch"), params, jwtToken, nil)
+	if err != nil {
+		return GetBranchResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload getBranchResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return GetBranchResult{}, err
+	}
+	return GetBranchResult{
+		Name:      payload.Branch.Name,
+		HeadSHA:   payload.Branch.HeadSHA,
+		CreatedAt: payload.Branch.CreatedAt,
+	}, nil
+}
+
 // ListTags lists tags.
 func (r *Repo) ListTags(ctx context.Context, options ListTagsOptions) (ListTagsResult, error) {
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -471,6 +502,29 @@ func (r *Repo) ListTags(ctx context.Context, options ListTagsOptions) (ListTagsR
 		})
 	}
 	return result, nil
+}
+
+// GetTag gets one tag by its exact name.
+func (r *Repo) GetTag(ctx context.Context, options GetTagOptions) (GetTagResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+	if err != nil {
+		return GetTagResult{}, err
+	}
+
+	params := url.Values{}
+	params.Set("name", options.Name)
+	resp, err := r.client.api.get(ctx, r.apiPath("tag"), params, jwtToken, nil)
+	if err != nil {
+		return GetTagResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload getTagResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return GetTagResult{}, err
+	}
+	return GetTagResult{Name: payload.Tag.Name, SHA: payload.Tag.SHA}, nil
 }
 
 // ListCommits lists commits.

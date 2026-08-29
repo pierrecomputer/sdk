@@ -271,12 +271,20 @@ const branches = await repo.listBranches({
 });
 console.log(branches.branches);
 
+// Get one branch when you know its exact name
+const branch = await repo.getBranch({ name: 'feature/preview' });
+console.log(branch.headSha, branch.createdAt);
+
 // List tags
 const tags = await repo.listTags({
   limit: 10,
   cursor: undefined, // for pagination
 });
 console.log(tags.tags);
+
+// Get one tag when you know its exact name
+const tag = await repo.getTag({ name: 'v1.0.0' });
+console.log(tag.sha);
 
 // Create a lightweight tag at a commit SHA
 const createdTag = await repo.createTag({
@@ -658,6 +666,9 @@ interface Repo {
     options?: ListFilesWithMetadataOptions
   ): Promise<ListFilesWithMetadataResult>;
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
+  getBranch(options: GetBranchOptions): Promise<GetBranchResult>;
+  listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
+  getTag(options: GetTagOptions): Promise<GetTagResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
   getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
   getBlame(options: BlameOptions): Promise<BlameResult>;
@@ -885,6 +896,28 @@ interface BranchInfo {
   name: string;
   headSha: string;
   createdAt: string;
+}
+
+interface GetBranchOptions {
+  name: string;
+  ephemeral?: boolean;
+  ttl?: number;
+}
+
+interface GetBranchResult {
+  name: string;
+  headSha: string;
+  createdAt: string;
+}
+
+interface GetTagOptions {
+  name: string;
+  ttl?: number;
+}
+
+interface GetTagResult {
+  name: string;
+  sha: string;
 }
 
 interface ListCommitsOptions {
