@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -508,6 +508,7 @@ class GitStorage:
         id: str,
         password: str,
         username: Optional[str] = None,
+        repo_id: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> GitCredential:
         """Update an existing generic git credential.
@@ -516,6 +517,10 @@ class GitStorage:
             id: Credential ID to update
             password: New password or token
             username: Optional new username
+            repo_id: Repository the credential belongs to. When set, the
+                request uses the canonical repo-scoped route. The current
+                backend resolves the repository from the token, so omitting
+                it is not compatible with it.
             ttl: Token TTL in seconds
 
         Returns:
@@ -526,20 +531,25 @@ class GitStorage:
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_id or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
         body: Dict[str, Any] = {
-            "id": id,
             "password": password,
         }
         if username is not None:
             body["username"] = username
 
-        # Deliberately kept on the legacy route: the canonical repo-scoped
-        # route needs the repo name, which these options do not carry.
-        url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
+        # With a repository id the canonical repo-scoped route applies.
+        # Without one, fall back to the legacy versioned route; the current
+        # backend resolves the repository from the token and rejects that
+        # fallback.
+        if repo_id:
+            url = self._api_url(f"git-credentials/{quote(id, safe='')}", repo_id=repo_id)
+        else:
+            body["id"] = id
+            url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.put(
@@ -573,12 +583,17 @@ class GitStorage:
         self,
         *,
         id: str,
+        repo_id: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> None:
         """Delete a generic git credential.
 
         Args:
             id: Credential ID to delete
+            repo_id: Repository the credential belongs to. When set, the
+                request uses the canonical repo-scoped route. The current
+                backend resolves the repository from the token, so omitting
+                it is not compatible with it.
             ttl: Token TTL in seconds
 
         Raises:
@@ -586,13 +601,20 @@ class GitStorage:
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_id or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        # Deliberately kept on the legacy route: the canonical repo-scoped
-        # route needs the repo name, which these options do not carry.
-        url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
+        # With a repository id the canonical repo-scoped route applies.
+        # Without one, fall back to the legacy versioned route; the current
+        # backend resolves the repository from the token and rejects that
+        # fallback.
+        delete_body: Optional[Dict[str, Any]] = None
+        if repo_id:
+            url = self._api_url(f"git-credentials/{quote(id, safe='')}", repo_id=repo_id)
+        else:
+            delete_body = {"id": id}
+            url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
@@ -603,7 +625,7 @@ class GitStorage:
                     "Content-Type": "application/json",
                     "Code-Storage-Agent": get_user_agent(),
                 },
-                json={"id": id},
+                json=delete_body,
                 timeout=30.0,
             )
 

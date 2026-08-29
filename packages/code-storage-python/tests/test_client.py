@@ -755,6 +755,34 @@ class TestGitStorage:
             assert body["username"] == "newuser"
 
     @pytest.mark.asyncio
+    async def test_update_git_credential_with_repo_id(self, git_storage_options: dict) -> None:
+        """repo_id routes updates through the canonical repo-scoped path."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock(status_code=200, is_success=True)
+        mock_response.json.return_value = {"id": "cred-123"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_put = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.put = mock_put
+
+            await storage.update_git_credential(
+                id="cred-123",
+                repo_id="owner/repo",
+                password="new-secret",
+            )
+
+        call = mock_put.await_args
+        assert call.args[0] == (
+            "https://api.test.code.storage/api/repos/owner%2Frepo/git-credentials/cred-123"
+        )
+        assert call.kwargs["json"] == {"password": "new-secret"}
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["repo"] == "owner/repo"
+        assert claims["scopes"] == ["repo:write"]
+
+    @pytest.mark.asyncio
     async def test_update_git_credential_not_found(self, git_storage_options: dict) -> None:
         """Test updating a git credential that doesn't exist."""
         storage = GitStorage(git_storage_options)
@@ -802,6 +830,29 @@ class TestGitStorage:
             call_kwargs = mock_request.call_args[1]
             body = call_kwargs["json"]
             assert body["id"] == "cred-123"
+
+    @pytest.mark.asyncio
+    async def test_delete_git_credential_with_repo_id(self, git_storage_options: dict) -> None:
+        """repo_id routes deletion through the canonical repo-scoped path."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_request = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.request = mock_request
+
+            await storage.delete_git_credential(id="cred-123", repo_id="owner/repo")
+
+        call = mock_request.await_args
+        assert call.args[0] == "DELETE"
+        assert call.args[1] == (
+            "https://api.test.code.storage/api/repos/owner%2Frepo/git-credentials/cred-123"
+        )
+        assert call.kwargs["json"] is None
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["repo"] == "owner/repo"
 
     @pytest.mark.asyncio
     async def test_delete_git_credential_not_found(self, git_storage_options: dict) -> None:
