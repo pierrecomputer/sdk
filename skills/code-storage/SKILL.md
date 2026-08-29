@@ -828,6 +828,7 @@ Stop when `"has_more": false` or `next_cursor` is absent.
 # Step 1 — Mint JWT with repo:write scope for the new repo ID
 # (Use SDK or manual JWT generation; set TOKEN env var)
 export CODE_STORAGE_TOKEN="$(mint_jwt --repo my-app --scope repo:write)"
+export REPO_NAME="my-app"
 
 # Step 2 — Create the repository
 curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
@@ -911,6 +912,7 @@ curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
 
 # Step 3 — Customize with a commit
 export CODE_STORAGE_TOKEN="$(mint_jwt --repo users/alice/my-project --scope git:write)"
+export REPO_NAME="users%2Falice%2Fmy-project"   # slashes URL-encoded to one path segment
 printf '%s\n%s\n' \
   '{"metadata":{"target_branch":"main","commit_message":"Initialize project","author":{"name":"System","email":"system@x.com"},"files":[{"path":"README.md","operation":"upsert","content_id":"r1"}]}}' \
   '{"blob_chunk":{"content_id":"r1","data":"IyBNeSBQcm9qZWN0Cg==","eof":true}}' | \
@@ -926,6 +928,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME/commit-pack" -X POST \
 ```bash
 # Step 1 — Create repo with GitHub base_repo (GitHub App must be installed)
 export CODE_STORAGE_TOKEN="$(mint_jwt --repo my-synced-repo --scope repo:write)"
+export REPO_NAME="my-synced-repo"
 curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
