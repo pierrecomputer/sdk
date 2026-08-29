@@ -746,8 +746,10 @@ class TestGitStorage:
 
             with pytest.warns(DeprecationWarning, match="repo_id"):
                 await storage.create_git_credential(repo_id="internal-id", password="token")
-            await storage.update_git_credential(id="cred-123", password="new-token")
-            await storage.delete_git_credential(id="cred-123")
+            with pytest.warns(DeprecationWarning, match="repo_name"):
+                await storage.update_git_credential(id="cred-123", password="new-token")
+            with pytest.warns(DeprecationWarning, match="repo_name"):
+                await storage.delete_git_credential(id="cred-123")
 
         legacy_url = "https://api.test.code.storage/api/v1/repos/git-credentials"
         assert mock_post.call_args.args[0] == legacy_url
@@ -774,6 +776,29 @@ class TestGitStorage:
                 options={"verify_signature": False},
             )
             assert claims["repo"] == "org"
+
+    @pytest.mark.asyncio
+    async def test_legacy_credential_warning_points_to_the_caller(
+        self, git_storage_options: dict
+    ) -> None:
+        """Set stacklevel so update and delete warnings point to caller code."""
+        storage = GitStorage(git_storage_options)
+        update_response = MagicMock(status_code=200, is_success=True)
+        update_response.json.return_value = {"id": "cred-123"}
+        delete_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            async_client = mock_client.return_value.__aenter__.return_value
+            async_client.put = AsyncMock(return_value=update_response)
+            async_client.request = AsyncMock(return_value=delete_response)
+
+            with pytest.warns(DeprecationWarning) as update_warnings:
+                await storage.update_git_credential(id="cred-123", password="new-token")
+            with pytest.warns(DeprecationWarning) as delete_warnings:
+                await storage.delete_git_credential(id="cred-123")
+
+        assert update_warnings[0].filename == __file__
+        assert delete_warnings[0].filename == __file__
 
     @pytest.mark.asyncio
     async def test_create_git_credential(self, git_storage_options: dict) -> None:

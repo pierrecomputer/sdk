@@ -58,6 +58,7 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateGitCredentialByNameOptions,
   CreateTagOptions,
   CreateTagResponse,
   CreateTagResult,
@@ -2460,9 +2461,16 @@ export class GitStorage {
    * Used to authenticate sync operations for non-GitHub providers (GitLab, Bitbucket, etc.)
    */
   async createGitCredential(
+    options: CreateGitCredentialByNameOptions
+  ): Promise<GitCredential>;
+  async createGitCredential(
     options: CreateGitCredentialOptions
+  ): Promise<GitCredential>;
+  async createGitCredential(
+    options: CreateGitCredentialOptions | CreateGitCredentialByNameOptions
   ): Promise<GitCredential> {
-    const repoName = options.repoName?.trim();
+    const repoName =
+      'repoName' in options ? options.repoName?.trim() : undefined;
     const repoId = options.repoId?.trim();
     if (!repoName && !repoId) {
       throw new Error('createGitCredential repoName or repoId is required');

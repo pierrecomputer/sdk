@@ -555,6 +555,12 @@ class GitStorage:
             ApiError: If credential not found or update fails
         """
         repo_name_clean = (repo_name or "").strip()
+        if not repo_name_clean:
+            warnings.warn(
+                "update_git_credential without repo_name is deprecated; pass repo_name instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
             repo_name_clean or "org",
@@ -621,6 +627,12 @@ class GitStorage:
             ApiError: If credential not found or deletion fails
         """
         repo_name_clean = (repo_name or "").strip()
+        if not repo_name_clean:
+            warnings.warn(
+                "delete_git_credential without repo_name is deprecated; pass repo_name instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
             repo_name_clean or "org",

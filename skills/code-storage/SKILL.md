@@ -125,7 +125,7 @@ repo.RemoteURL(ctx, storage.RemoteURLOptions{
 ### Git Remote URL Format
 
 ```
-https://t:{JWT}@{ORG_NAME}.code.storage/{REPO_ID}.git
+https://t:{JWT}@{ORG_NAME}.code.storage/{REPO_NAME}.git
 ```
 Username is always `t`. Password is the JWT.
 
@@ -240,7 +240,7 @@ After creating a generic Git Sync repository, store upstream credentials with `/
   "base_repo": {
     "provider": "code",
     "owner": "ORG_NAME",
-    "name": "source-repo-id",
+    "name": "source-repo-name",
     "operation": "fork",
     "ref": "main",
     "auth": { "token": "JWT_WITH_GIT_READ_ON_SOURCE" }
@@ -251,7 +251,9 @@ After creating a generic Git Sync repository, store upstream credentials with `/
 to pin an exact source commit; `sha` overrides `ref`. `owner` is the
 organization name (the same value used as the JWT `iss`).
 
-Response `201`: `{ "repo_id": "...", "message": "..." }`
+Response `200` includes both identities: `{ "repo_id": "repo_7f2b3d9", "repo_name": "team/project", "message": "repository created" }`.
+`repo_id` is the stable internal repository ID. `repo_name` is the public name or path used in API
+paths, Git URLs, and the JWT `repo` claim.
 Errors: `401` bad JWT/scope, `409` repo already exists or upstream already configured, `412` GitHub App config required for authenticated GitHub sync
 
 ## POST/PUT/DELETE /repos/{repo_name}/git-credentials — Manage Generic Git Sync Credentials
@@ -830,18 +832,19 @@ Stop when `"has_more": false` or `next_cursor` is absent.
 **Goal:** Create a repo and push initial files via HTTP API (no local git required).
 
 ```bash
-# Step 1 — Mint JWT with repo:write scope for the new repo ID
-# (Use SDK or manual JWT generation; set TOKEN env var)
-export CODE_STORAGE_TOKEN="$(mint_jwt --repo my-app --scope repo:write)"
+# Step 1 — Mint JWT with repo:write scope for the new public repository name
 export REPO_NAME="my-app"
 export REPO_NAME_ENCODED="my-app"
+# (Use SDK or manual JWT generation; set TOKEN env var)
+export CODE_STORAGE_TOKEN="$(mint_jwt --repo "$REPO_NAME" --scope repo:write)"
 
 # Step 2 — Create the repository
 curl "$CODE_STORAGE_BASE_URL/repos" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"default_branch":"main"}'
-# Response: { "repo_id": "my-app", ... }
+# Response: { "repo_id": "repo_7f2b3d9", "repo_name": "my-app", ... }
+# Keep repo_id only when you need the stable internal identifier.
 
 # Step 3 — Mint JWT with git:write scope for commits
 export CODE_STORAGE_TOKEN="$(mint_jwt --repo my-app --scope git:write)"
@@ -1054,7 +1057,7 @@ All API errors return JSON: `{ "error": "description" }` plus HTTP status code.
 | **400**     | Bad request / invalid params    | Fix request body or query params. Check required fields and formats.         |
 | **401**     | Invalid or missing JWT          | Re-mint JWT. Verify `iss`, `repo`, `exp` claims. Check key matches org.     |
 | **403**     | JWT valid but missing scope     | Re-mint JWT with required scope (`git:read`, `git:write`, `repo:write`).    |
-| **404**     | Resource not found              | Verify repo ID, branch name, file path, or commit SHA. Repo may be empty.   |
+| **404**     | Resource not found              | Verify repository name, branch name, file path, or commit SHA. The repository may be empty.   |
 | **409**     | Conflict (optimistic lock)      | Fetch current state (`GET /repo`, list commits), resolve, retry with fresh `expected_target_sha`. |
 | **500**     | Internal server error           | Retry once with exponential backoff. If persistent, contact support.         |
 | **502/503** | Storage unavailable / sync busy | Wait and retry. Repository may be mid-sync or storage temporarily offline.   |
@@ -1091,13 +1094,13 @@ Repository may be warming up from cold tier storage. Wait 5-10 seconds and retry
 
 ```bash
 # Clone (git:read JWT)
-git clone "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_ID}.git"
+git clone "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_NAME}.git"
 
 # Push (git:write JWT)
-git push "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_ID}.git" main
+git push "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_NAME}.git" main
 
 # Ephemeral remote (insert +ephemeral before .git)
-git remote add ephemeral "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_ID}+ephemeral.git"
+git remote add ephemeral "https://t:${JWT}@${ORG_NAME}.code.storage/${REPO_NAME}+ephemeral.git"
 git push ephemeral feature-branch
 
 # Promote ephemeral → default
@@ -1114,9 +1117,10 @@ git push origin feature-branch
 
 | Concept               | Details                                                                                 |
 |-----------------------|-----------------------------------------------------------------------------------------|
-| Repo ID               | String; can contain `/` for namespacing (e.g. `team/project`, `users/alice/app`)       |
-| JWT `repo` claim      | Must match exactly the repo ID being accessed                                           |
-| Ephemeral namespace   | Set `target_is_ephemeral:true` on commits and `ephemeral:true` on files; URL: `REPO_ID+ephemeral.git`; no GitHub sync    |
+| Repository name       | Public name or path; can contain `/` for namespacing (for example, `team/project`)     |
+| Internal repo ID      | Stable `repo_id` returned by repository responses; it is not used in Git URLs or JWT `repo` claims |
+| JWT `repo` claim      | Must match the raw public repository name exactly                                       |
+| Ephemeral namespace   | Set `target_is_ephemeral:true` on commits and `ephemeral:true` on files; URL: `REPO_NAME+ephemeral.git`; no GitHub sync |
 | Forking               | One-time copy from Code Storage repo. Independent after fork. Same org only.           |
 | Git Sync              | Upstream sync via GitHub App or generic HTTPS Git providers with stored credentials.   |
 | Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `notes_ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/{repo_name}/notes/refs`. |
