@@ -30,6 +30,8 @@ import {
   errorEnvelopeSchema,
   blameResponseSchema,
   getCommitResponseSchema,
+  getBranchResponseSchema,
+  getTagResponseSchema,
   grepResponseSchema,
   listBranchesResponseSchema,
   listCommitsResponseSchema,
@@ -85,6 +87,8 @@ import type {
   GetBranchDiffOptions,
   GetBranchDiffResponse,
   GetBranchDiffResult,
+  GetBranchOptions,
+  GetBranchResult,
   GetCommitDiffOptions,
   GetCommitDiffResponse,
   GetCommitDiffResult,
@@ -99,6 +103,8 @@ import type {
   GetNoteOptions,
   GetNoteResult,
   GetRemoteURLOptions,
+  GetTagOptions,
+  GetTagResult,
   GitCredential,
   GitHubBaseRepo,
   GitStorageOptions,
@@ -1204,6 +1210,29 @@ class RepoImpl implements Repo {
     });
   }
 
+  async getBranch(options: GetBranchOptions): Promise<GetBranchResult> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+    const params: Record<string, string> = { name: options.name };
+    if (typeof options.ephemeral === 'boolean') {
+      params.ephemeral = String(options.ephemeral);
+    }
+
+    const response = await this.api.get(
+      { path: this.repoPath('branch'), params },
+      jwt
+    );
+    const raw = getBranchResponseSchema.parse(await response.json()).branch;
+    return {
+      name: raw.name,
+      headSha: raw.head_sha,
+      createdAt: raw.created_at,
+    };
+  }
+
   async listTags(options?: ListTagsOptions): Promise<ListTagsResult> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
     const jwt = await this.generateJWT(this.id, {
@@ -1235,6 +1264,20 @@ class RepoImpl implements Repo {
       ...raw,
       next_cursor: raw.next_cursor ?? undefined,
     });
+  }
+
+  async getTag(options: GetTagOptions): Promise<GetTagResult> {
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['git:read'],
+      ttl,
+    });
+    const response = await this.api.get(
+      { path: this.repoPath('tag'), params: { name: options.name } },
+      jwt
+    );
+    const raw = getTagResponseSchema.parse(await response.json()).tag;
+    return { name: raw.name, sha: raw.sha };
   }
 
   async listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult> {

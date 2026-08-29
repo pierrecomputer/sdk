@@ -141,6 +141,7 @@ Username is always `t`. Password is the JWT.
 | **BRANCHES**                  |          |                                   |                 |
 | Create branch                 | POST     | `/repos/{repo_name}/branches/create`          | `git:write`     |
 | List branches                 | GET      | `/repos/{repo_name}/branches`                 | `git:read`      |
+| Get branch by name            | GET      | `/repos/{repo_name}/branch?name=...`          | `git:read`      |
 | Get branch diff               | GET      | `/repos/{repo_name}/branches/diff`            | `git:read`      |
 | Preview merge                 | GET      | `/repos/{repo_name}/merge/preview`            | `git:read`      |
 | Merge branches                | POST     | `/repos/{repo_name}/merge`                    | `git:write`     |
@@ -162,6 +163,7 @@ Username is always `t`. Password is the JWT.
 | **TAGS**                      |          |                                   |                 |
 | Create tag                    | POST     | `/repos/{repo_name}/tags`                     | `git:write`     |
 | List tags                     | GET      | `/repos/{repo_name}/tags`                     | `git:read`      |
+| Get tag by name               | GET      | `/repos/{repo_name}/tag?name=...`             | `git:read`      |
 | Delete tag                    | DELETE   | `/repos/{repo_name}/tags/{tag_name}` | `git:read`+`git:write` |
 | **NOTES**                     |          |                                   |                 |
 | Create note on commit         | POST     | `/repos/{repo_name}/notes` (action:"add")     | `git:write`     |
@@ -346,6 +348,17 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/branches?limit=20&cursor=C
 Optional `ephemeral=true` lists branches under the ephemeral namespace instead of regular branches (defaults to `false`).
 
 Response: `{ "branches": [{ "name", "head_sha", "created_at" }], "next_cursor", "has_more" }`
+
+## GET /repos/{repo_name}/branch — Get Branch by Name
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/branch?name=feature%2Fpreview" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+Use `ephemeral=true` to read from the ephemeral namespace. The exact response is `{ "branch": { "name", "head_sha", "created_at" } }`. It has no cursor.
+
+SDK methods: TypeScript `getBranch`, Python `get_branch`, and Go `GetBranch`.
 
 ## GET /repos/{repo_name}/branches/diff — Get Branch Diff
 
@@ -698,7 +711,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/archive" -X POST \
 
 Response: streaming `tar.gz`. Headers: `Content-Type: application/gzip`.
 
-## Tags Endpoints (POST/GET /repos/{repo_name}/tags, DELETE /repos/{repo_name}/tags/{tag_name})
+## Tags Endpoints (POST/GET /repos/{repo_name}/tags, GET /repos/{repo_name}/tag, DELETE /repos/{repo_name}/tags/{tag_name})
 
 ```bash
 # Create lightweight tag
@@ -710,13 +723,19 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/tags" -X POST \
 curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/tags?limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 
+# Get one tag by its exact name
+curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/tag?name=releases%2Fv1.0.0" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+
 # Delete tag
 curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/tags/v1.0.0" -X DELETE \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
 Tag names must not start with `refs/`. `ref` must be a resolvable revision.
-Create uses `git:write`; list uses `git:read`; delete requires both `git:read` and `git:write`.
+Create uses `git:write`; list and exact lookup use `git:read`; delete requires both `git:read` and `git:write`.
+The exact response is `{ "tag": { "name", "sha" } }`. The SHA is the dereferenced commit SHA. The response has no cursor or `object_sha`.
+SDK methods: TypeScript `getTag`, Python `get_tag`, and Go `GetTag`.
 If the repository is synced to GitHub, tag create/delete triggers sync automatically.
 
 ## Notes Endpoints (POST/GET/DELETE /repos/{repo_name}/notes)

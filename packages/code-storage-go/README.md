@@ -164,14 +164,28 @@ to blame the whole file. The top-level `CommitSHA` is the SHA `Ref` resolved
 to; each `BlameLine` carries its authoring commit's metadata inline, with
 `PreviousCommitSHA` empty when the line has no prior version.
 
-### Manage tags
+### Read branches and manage tags
 
 ```go
+branch, err := repo.GetBranch(context.Background(), storage.GetBranchOptions{
+	Name: "feature/preview",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(branch.HeadSHA, branch.CreatedAt)
+
 tags, err := repo.ListTags(context.Background(), storage.ListTagsOptions{Limit: 10})
 if err != nil {
 	log.Fatal(err)
 }
 fmt.Println(tags.Tags)
+
+tag, err := repo.GetTag(context.Background(), storage.GetTagOptions{Name: "v1.0.0"})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(tag.SHA)
 
 createdTag, err := repo.CreateTag(context.Background(), storage.CreateTagOptions{
 	Name: "v1.0.0",

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Exact branch and tag lookup
+
+- Added exact branch and tag lookup methods to the TypeScript, Python, and Go SDKs.
+- Added ephemeral branch lookup and the preferred repository-scoped REST routes.
+- Exact results omit list cursors and the private tag object SHA.
+
 ### Preferred REST routes
 
 - Changed preferred SDK calls to use the unversioned `/api` collection and

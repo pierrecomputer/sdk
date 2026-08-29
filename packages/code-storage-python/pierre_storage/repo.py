@@ -38,8 +38,10 @@ from pierre_storage.types import (
     FileWithMetadata,
     FilteredFile,
     GetBranchDiffResult,
+    GetBranchResult,
     GetCommitDiffResult,
     GetCommitResult,
+    GetTagResult,
     GrepFileMatch,
     GrepLine,
     GrepResult,
@@ -835,6 +837,37 @@ class RepoImpl:
                 "has_more": data["has_more"],
             }
 
+    async def get_branch(
+        self,
+        *,
+        name: str,
+        ephemeral: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> GetBranchResult:
+        """Get one branch by its exact name."""
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+        params = {"name": name}
+        if ephemeral is not None:
+            params["ephemeral"] = "true" if ephemeral else "false"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self._url('branch')}?{urlencode(params)}",
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            branch = response.json()["branch"]
+            return {
+                "name": branch["name"],
+                "head_sha": branch["head_sha"],
+                "created_at": branch["created_at"],
+            }
+
     async def create_branch(
         self,
         *,
@@ -1248,6 +1281,29 @@ class RepoImpl:
                 "next_cursor": data.get("next_cursor"),
                 "has_more": data["has_more"],
             }
+
+    async def get_tag(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> GetTagResult:
+        """Get one tag by its exact name."""
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self._url('tag')}?{urlencode({'name': name})}",
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            tag = response.json()["tag"]
+            return {"name": tag["name"], "sha": tag["sha"]}
 
     async def create_tag(
         self,

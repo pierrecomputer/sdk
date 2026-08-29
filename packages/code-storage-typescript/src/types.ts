@@ -8,6 +8,7 @@ import type {
   DeleteTagResponseRaw,
   BlameResponseRaw,
   GetBranchDiffResponseRaw,
+  GetBranchResponseRaw,
   GetCommitDiffResponseRaw,
   GetCommitResponseRaw,
   ListBranchesResponseRaw,
@@ -21,6 +22,7 @@ import type {
   PreviewMergeFilteredConflictRaw as SchemaPreviewMergeFilteredConflict,
   PreviewMergeResponseRaw,
   ListTagsResponseRaw,
+  GetTagResponseRaw,
   ListNotesRefsResponseRaw,
   NoteReadResponseRaw,
   NoteWriteResponseRaw,
@@ -127,7 +129,9 @@ export interface Repo {
     options?: ListFilesWithMetadataOptions,
   ): Promise<ListFilesWithMetadataResult>;
   listBranches(options?: ListBranchesOptions): Promise<ListBranchesResult>;
+  getBranch(options: GetBranchOptions): Promise<GetBranchResult>;
   listTags(options?: ListTagsOptions): Promise<ListTagsResult>;
+  getTag(options: GetTagOptions): Promise<GetTagResult>;
   listCommits(options?: ListCommitsOptions): Promise<ListCommitsResult>;
   getCommit(options: GetCommitOptions): Promise<GetCommitResult>;
   getBlame(options: BlameOptions): Promise<BlameResult>;
@@ -461,6 +465,19 @@ export interface ListBranchesResult {
   hasMore: boolean;
 }
 
+export interface GetBranchOptions extends GitStorageInvocationOptions {
+  name: string;
+  ephemeral?: boolean;
+}
+
+export type GetBranchResponse = GetBranchResponseRaw;
+
+export interface GetBranchResult {
+  name: string;
+  headSha: string;
+  createdAt: string;
+}
+
 // Create Branch API types
 export interface CreateBranchOptions
   extends GitStorageInvocationOptions, PolicyOptions {
@@ -518,6 +535,17 @@ export interface ListTagsResult {
   tags: TagInfo[];
   nextCursor?: string;
   hasMore: boolean;
+}
+
+export interface GetTagOptions extends GitStorageInvocationOptions {
+  name: string;
+}
+
+export type GetTagResponse = GetTagResponseRaw;
+
+export interface GetTagResult {
+  name: string;
+  sha: string;
 }
 
 export interface CreateTagOptions
