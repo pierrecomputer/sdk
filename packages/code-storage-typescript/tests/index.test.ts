@@ -2170,6 +2170,41 @@ describe('GitStorage', () => {
       });
     });
 
+    it('posts targetPrefix when the server generates the branch name', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-create-generated-branch' });
+
+      mockFetch.mockImplementationOnce((_url, init) => {
+        const body = JSON.parse((init as RequestInit).body as string);
+        expect(body).toEqual({
+          base_ref: 'main',
+          target_prefix: 'attempt/',
+          target_is_ephemeral: true,
+        });
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            message: 'branch created',
+            target_branch: 'attempt/opaque-id',
+            target_is_ephemeral: true,
+            commit_sha: 'abc123',
+          }),
+        } as any);
+      });
+
+      const result = await repo.createBranch({
+        baseRef: 'main',
+        targetPrefix: ' attempt/ ',
+        targetIsEphemeral: true,
+      });
+
+      expect(result.targetBranch).toBe('attempt/opaque-id');
+      expect(result.commitSha).toBe('abc123');
+    });
+
     it('falls back to deprecated baseBranch when baseRef is absent', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({ id: 'repo-create-branch-fallback' });
@@ -2266,7 +2301,7 @@ describe('GitStorage', () => {
       });
     });
 
-    it('requires an effective base source and target branch', async () => {
+    it('requires an effective base source and rejects two target options', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({
         id: 'repo-create-branch-validation',
@@ -2285,8 +2320,14 @@ describe('GitStorage', () => {
       ).rejects.toThrow('createBranch baseRef or baseBranch is required');
 
       await expect(
-        repo.createBranch({ baseRef: 'refs/heads/main', targetBranch: '' })
-      ).rejects.toThrow('createBranch targetBranch is required');
+        repo.createBranch({
+          baseRef: 'refs/heads/main',
+          targetBranch: 'feature/demo',
+          targetPrefix: 'attempt/',
+        })
+      ).rejects.toThrow(
+        'createBranch targetBranch and targetPrefix are mutually exclusive'
+      );
     });
   });
 

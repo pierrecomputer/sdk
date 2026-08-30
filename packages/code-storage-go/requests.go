@@ -98,7 +98,8 @@ type archiveOptions struct {
 type createBranchRequest struct {
 	BaseRef           string `json:"base_ref,omitempty"`
 	BaseBranch        string `json:"base_branch,omitempty"`
-	TargetBranch      string `json:"target_branch"`
+	TargetBranch      string `json:"target_branch,omitempty"`
+	TargetPrefix      string `json:"target_prefix,omitempty"`
 	BaseIsEphemeral   bool   `json:"base_is_ephemeral,omitempty"`
 	TargetIsEphemeral bool   `json:"target_is_ephemeral,omitempty"`
 }

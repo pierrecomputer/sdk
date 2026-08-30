@@ -440,7 +440,8 @@ export interface CreateBranchOptions
   baseRef?: string;
   /** @deprecated Use baseRef instead. */
   baseBranch?: string;
-  targetBranch: string;
+  targetBranch?: string;
+  targetPrefix?: string;
   baseIsEphemeral?: boolean;
   targetIsEphemeral?: boolean;
 }

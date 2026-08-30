@@ -345,6 +345,23 @@ if err != nil {
 fmt.Println(repo.ID)
 ```
 
+### Create a server-named branch
+
+Omit `TargetBranch` to let the server allocate a name. `TargetPrefix` is optional and literal.
+
+```go
+branch, err := repo.CreateBranch(context.Background(), storage.CreateBranchOptions{
+	BaseRef:           "main",
+	TargetPrefix:      "attempt/",
+	TargetIsEphemeral: true,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(branch.TargetBranch, branch.CommitSHA)
+```
+
 ## Features
 
 - Create, list, find, and delete repositories.

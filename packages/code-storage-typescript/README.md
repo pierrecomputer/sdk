@@ -354,6 +354,15 @@ const branch = await repo.createBranch({
 });
 console.log(branch.targetBranch, branch.commitSha);
 
+// Omit targetBranch to let the server allocate a name. The optional prefix is
+// literal, so include the separator that you want before the opaque segment.
+const attempt = await repo.createBranch({
+  baseRef: 'refs/heads/main',
+  targetPrefix: 'attempt/',
+  targetIsEphemeral: true,
+});
+console.log(attempt.targetBranch, attempt.commitSha);
+
 // Delete a branch (default branch deletion is rejected)
 const deletedBranch = await repo.deleteBranch({ name: 'feature/demo' });
 console.log(deletedBranch.message);
