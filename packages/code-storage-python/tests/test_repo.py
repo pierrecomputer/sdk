@@ -1877,6 +1877,70 @@ class TestRepoCommitOperations:
             assert params.get("path") == ["docs/guide.md"]
 
     @pytest.mark.asyncio
+    async def test_list_commits_inline_notes(self, git_storage_options: dict) -> None:
+        """notes_refs repeat the query key and preserve null note markers."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock()
+        create_response.status_code = 200
+        create_response.is_success = True
+        create_response.json.return_value = {"repo_id": "test-repo"}
+
+        commits_response = MagicMock()
+        commits_response.status_code = 200
+        commits_response.is_success = True
+        commits_response.json.return_value = {
+            "commits": [
+                {
+                    "sha": "abc123",
+                    "parent_shas": [],
+                    "message": "Initial commit",
+                    "author_name": "Test User",
+                    "author_email": "test@example.com",
+                    "committer_name": "Test User",
+                    "committer_email": "test@example.com",
+                    "date": "2025-01-01T00:00:00Z",
+                    "notes": {
+                        "refs/notes/reviews": "approved\n",
+                        "refs/notes/approvals": None,
+                    },
+                },
+                {
+                    "sha": "def456",
+                    "parent_shas": ["abc123"],
+                    "message": "Second commit",
+                    "author_name": "Test User",
+                    "author_email": "test@example.com",
+                    "committer_name": "Test User",
+                    "committer_email": "test@example.com",
+                    "date": "2025-01-02T00:00:00Z",
+                    "notes": {},
+                },
+            ],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=create_response
+            )
+            mock_get = AsyncMock(return_value=commits_response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.list_commits(notes_refs=["reviews", "approvals"])
+
+            called_url = mock_get.await_args.args[0]
+            params = parse_qs(urlparse(called_url).query)
+            assert params.get("notes_ref") == ["reviews", "approvals"]
+            assert result["commits"][0]["notes"] == {
+                "refs/notes/reviews": "approved\n",
+                "refs/notes/approvals": None,
+            }
+            assert result["commits"][1]["notes"] == {}
+
+    @pytest.mark.asyncio
     async def test_get_commit(self, git_storage_options: dict) -> None:
         """Test fetching a single commit's metadata."""
         storage = GitStorage(git_storage_options)
@@ -2409,9 +2473,7 @@ class TestRepoNoteOperations:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
-            client_instance.post = AsyncMock(
-                side_effect=[create_response, create_note_response]
-            )
+            client_instance.post = AsyncMock(side_effect=[create_response, create_note_response])
             mock_get = AsyncMock(return_value=note_read_response)
             client_instance.get = mock_get
             client_instance.request = AsyncMock(return_value=delete_note_response)
@@ -2485,9 +2547,7 @@ class TestRepoNoteOperations:
             assert result["prefix"] == "refs/notes/reviews/"
 
     @pytest.mark.asyncio
-    async def test_list_notes_refs_no_options(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_notes_refs_no_options(self, git_storage_options: dict) -> None:
         """With no options, no query string is sent and an empty page parses."""
         storage = GitStorage(git_storage_options)
 

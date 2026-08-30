@@ -386,6 +386,41 @@ func TestListCommitsPath(t *testing.T) {
 	}
 }
 
+func TestListCommitsInlineNotes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query()["notes_ref"]; !reflect.DeepEqual(got, []string{"reviews", "approvals"}) {
+			t.Fatalf("notes_ref=%v want=%v", got, []string{"reviews", "approvals"})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"commits":[{"sha":"abc123","parent_shas":[],"message":"initial","author_name":"Test","author_email":"test@example.com","committer_name":"Test","committer_email":"test@example.com","date":"2026-08-30T12:00:00Z","notes":{"refs/notes/reviews":"approved\n","refs/notes/approvals":null}},{"sha":"def456","parent_shas":["abc123"],"message":"second","author_name":"Test","author_email":"test@example.com","committer_name":"Test","committer_email":"test@example.com","date":"2026-08-30T12:01:00Z","notes":{}}],"has_more":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.ListCommits(nil, ListCommitsOptions{NotesRefs: []string{"reviews", "approvals"}})
+	if err != nil {
+		t.Fatalf("list commits error: %v", err)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("commits=%d want=2", len(result.Commits))
+	}
+	reviewNote := result.Commits[0].Notes["refs/notes/reviews"]
+	if reviewNote == nil || *reviewNote != "approved\n" {
+		t.Fatalf("review note=%v want=%q", reviewNote, "approved\n")
+	}
+	if approval, ok := result.Commits[0].Notes["refs/notes/approvals"]; !ok || approval != nil {
+		t.Fatalf("approval note=(%v,%t) want=(nil,true)", approval, ok)
+	}
+	if result.Commits[1].Notes == nil || len(result.Commits[1].Notes) != 0 {
+		t.Fatalf("second commit notes=%v want an empty map", result.Commits[1].Notes)
+	}
+}
+
 func TestFileStreamForwardsConditionalHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

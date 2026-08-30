@@ -442,7 +442,7 @@ Diff must be compatible with `git apply --cached --binary`. Same response schema
 ## GET /repos/commits — List Commits
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&path=docs/guide.md&limit=20&cursor=CURSOR" \
+curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&path=docs/guide.md&notes_ref=reviews&notes_ref=approvals&limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
@@ -451,10 +451,19 @@ Params:
 - `ephemeral=true` (resolve `branch` from the ephemeral namespace; defaults to `false`)
 - `path` (optional repository-relative file or subtree to scope history to —
   only commits that touched that path are returned)
+- `notes_ref` (optional and repeatable; accepts a bare name, `notes/<name>`, or
+  a full `refs/notes/<name>` ref; the API normalizes and deduplicates up to four
+  distinct refs)
 - `cursor`, `limit` (default 20, max 100)
 
-Response: `{ "commits": [{ "sha", "parent_shas", "message", "author_name", "author_email", "committer_name", "committer_email", "date" }], "next_cursor", "has_more" }`
+Response: `{ "commits": [{ "sha", "parent_shas", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "notes"? }], "next_cursor", "has_more" }`
 `parent_shas` preserves Git parent order and is an empty array for root commits.
+When the request includes `notes_ref`, every commit has a `notes` object keyed
+by normalized full ref. A missing note yields no key. A commit with no notes has
+`{}`. A value is `null` when the note exceeds 64 KiB or the response exceeds its
+2 MiB notes budget. Read that note with `GET /repos/notes`. The response omits
+`notes` when the request omits `notes_ref`. SDK option names are `notesRefs`
+(TypeScript), `notes_refs` (Python), and `NotesRefs` (Go).
 
 ## GET /repos/commit — Get Commit
 
@@ -1101,7 +1110,7 @@ git push origin feature-branch
 | Ephemeral namespace   | Set `ephemeral:true` on commits/files; URL: `REPO_ID+ephemeral.git`; no GitHub sync    |
 | Forking               | One-time copy from Code Storage repo. Independent after fork. Same org only.           |
 | Git Sync              | Upstream sync via GitHub App or generic HTTPS Git providers with stored credentials.   |
-| Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/notes/refs`. |
+| Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `ref` to target another `refs/notes/*` ref. List refs via `GET /repos/notes/refs`. Repeat `notes_ref` on `GET /repos/commits` to return notes inline. |
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
 | `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |

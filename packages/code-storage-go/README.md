@@ -266,15 +266,16 @@ if err != nil {
 fmt.Println(result.CommitSHA)
 ```
 
-### Inspect commit parents
+### Inspect commit parents and notes
 
 `ListCommits` and `GetCommit` expose parent SHAs in Git parent order. Root
 commits return an empty slice.
 
 ```go
 commits, err := repo.ListCommits(context.Background(), storage.ListCommitsOptions{
-	Branch: "main",
-	Limit:  20,
+	Branch:    "main",
+	Limit:     20,
+	NotesRefs: []string{"reviews", "approvals"},
 })
 if err != nil {
 	log.Fatal(err)
@@ -282,8 +283,18 @@ if err != nil {
 
 for _, commit := range commits.Commits {
 	fmt.Println(commit.SHA, commit.ParentSHAs)
+	for notesRef, note := range commit.Notes {
+		if note == nil {
+			fmt.Println(notesRef, "content exceeds an inline limit")
+			continue
+		}
+		fmt.Println(notesRef, *note)
+	}
 }
 ```
+
+`Notes` is nil when the request omits `NotesRefs`. A requested commit with no
+notes has an empty map. The map uses normalized full refs as keys.
 
 ### Get an applicable commit diff
 

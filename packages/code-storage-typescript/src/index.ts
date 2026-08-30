@@ -367,6 +367,7 @@ function transformCommitInfo(raw: RawCommitInfo): CommitInfo {
     committerEmail: raw.committer_email,
     date: parsedDate,
     rawDate: raw.date,
+    ...(raw.notes !== undefined ? { notes: raw.notes } : {}),
   };
 }
 
@@ -1198,13 +1199,14 @@ class RepoImpl implements Repo {
       ttl,
     });
 
-    let params: Record<string, string> | undefined;
+    let params: Record<string, string | string[]> | undefined;
 
     if (
       options?.branch ||
       options?.cursor ||
       options?.limit ||
       options?.path ||
+      (options?.notesRefs && options.notesRefs.length > 0) ||
       typeof options?.ephemeral === 'boolean'
     ) {
       params = {};
@@ -1222,6 +1224,9 @@ class RepoImpl implements Repo {
       }
       if (typeof options?.path === 'string' && options.path !== '') {
         params.path = options.path;
+      }
+      if (options?.notesRefs && options.notesRefs.length > 0) {
+        params.notes_ref = options.notesRefs;
       }
     }
 

@@ -492,6 +492,9 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	if options.Path != "" {
 		params.Set("path", options.Path)
 	}
+	for _, notesRef := range options.NotesRefs {
+		params.Add("notes_ref", notesRef)
+	}
 	if len(params) == 0 {
 		params = nil
 	}
@@ -512,7 +515,7 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 		result.NextCursor = payload.NextCursor
 	}
 	for _, commit := range payload.Commits {
-		result.Commits = append(result.Commits, CommitInfo{
+		commitInfo := CommitInfo{
 			SHA:            commit.SHA,
 			ParentSHAs:     commit.ParentSHAs,
 			Message:        commit.Message,
@@ -522,7 +525,11 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 			CommitterEmail: commit.CommitterEmail,
 			Date:           parseTime(commit.Date),
 			RawDate:        commit.Date,
-		})
+		}
+		if commit.Notes != nil {
+			commitInfo.Notes = commit.Notes
+		}
+		result.Commits = append(result.Commits, commitInfo)
 	}
 
 	return result, nil

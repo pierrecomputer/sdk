@@ -607,6 +607,9 @@ type ListCommitsOptions struct {
 	Limit     int
 	Ephemeral *bool
 	Path      string
+	// NotesRefs lists notes refs to return with each commit. The client sends
+	// one notes_ref query key per value.
+	NotesRefs []string
 }
 
 // CommitInfo describes a commit entry.
@@ -622,6 +625,9 @@ type CommitInfo struct {
 	CommitterEmail string
 	Date           time.Time
 	RawDate        string
+	// Notes maps full notes refs to content. A nil value marks content over an
+	// inline response limit. The map is nil when the request omits NotesRefs.
+	Notes map[string]*string
 	// Signature is the armored OpenPGP/SSH signature from the commit's gpgsig
 	// header. Only populated by GetCommit for signed commits. Always empty for
 	// ListCommits entries and unsigned commits.

@@ -65,6 +65,7 @@ export const commitInfoRawSchema = z.object({
   committer_name: z.string(),
   committer_email: z.string(),
   date: z.string(),
+  notes: z.record(z.string(), z.string().nullable()).optional(),
 });
 
 export const listCommitsResponseSchema = z.object({

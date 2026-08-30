@@ -281,10 +281,12 @@ commits = await repo.list_commits(
     branch="main",  # optional
     limit=20,
     cursor=None,  # for pagination
+    notes_refs=["reviews", "approvals"],  # optional; at most four distinct refs
 )
 print(commits["commits"])
 for commit in commits["commits"]:
     print(commit["sha"], commit["parent_shas"])  # Git parent order; [] for a root commit
+    print(commit.get("notes"))  # Full ref keys; values can be None when over a limit
 
 # Get a single commit's metadata (no diff)
 result = await repo.get_commit(sha="abc123...")
@@ -884,6 +886,7 @@ class Repo:
         cursor: Optional[str] = None,
         ephemeral: Optional[bool] = None,
         path: Optional[str] = None,
+        notes_refs: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult: ...
 
