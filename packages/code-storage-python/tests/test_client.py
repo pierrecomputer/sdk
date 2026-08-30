@@ -90,12 +90,14 @@ class TestGitStorage:
     async def test_token_sent_verbatim(self) -> None:
         """Test that a pre-minted token is sent verbatim in the Authorization header."""
         expected_token = "my-pre-minted-jwt-token-value"
-        storage = GitStorage({
-            "name": "test-customer",
-            "token": expected_token,
-            "api_base_url": "https://api.test.code.storage",
-            "storage_base_url": "test.code.storage",
-        })
+        storage = GitStorage(
+            {
+                "name": "test-customer",
+                "token": expected_token,
+                "api_base_url": "https://api.test.code.storage",
+                "storage_base_url": "test.code.storage",
+            }
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -284,6 +286,50 @@ class TestGitStorage:
             token = body["base_repo"]["auth"]["token"]
             payload = jwt.decode(token, options={"verify_signature": False})
             assert payload["repo"] == "template-repo"
+            assert payload["scopes"] == ["git:read"]
+
+    @pytest.mark.asyncio
+    async def test_create_repo_with_history_free_snapshot(self, git_storage_options: dict) -> None:
+        """Test creating one root commit from a source tree."""
+        storage = GitStorage(git_storage_options)
+
+        mock_post_response = MagicMock()
+        mock_post_response.status_code = 201
+        mock_post_response.is_success = True
+        mock_post_response.json.return_value = {"repo_id": "shared-copy"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(return_value=mock_post_response)
+
+            await storage.create_repo(
+                id="shared-copy",
+                default_branch="main",
+                base_repo={
+                    "id": "source-repo",
+                    "operation": "snapshot",
+                    "ref": "main~2",
+                },
+                initial_commit={
+                    "message": "Create project from share link",
+                    "author": {"name": "Bitrig", "email": "commits@bitrig.com"},
+                },
+            )
+
+            body = client_instance.post.call_args[1]["json"]
+            assert body["default_branch"] == "main"
+            assert body["base_repo"]["provider"] == "code.storage"
+            assert body["base_repo"]["name"] == "source-repo"
+            assert body["base_repo"]["operation"] == "snapshot"
+            assert body["base_repo"]["ref"] == "main~2"
+            assert body["initial_commit"] == {
+                "message": "Create project from share link",
+                "author": {"name": "Bitrig", "email": "commits@bitrig.com"},
+            }
+
+            token = body["base_repo"]["auth"]["token"]
+            payload = jwt.decode(token, options={"verify_signature": False})
+            assert payload["repo"] == "source-repo"
             assert payload["scopes"] == ["git:read"]
 
     @pytest.mark.asyncio
@@ -672,9 +718,7 @@ class TestGitStorage:
             assert body["username"] == "myuser"
 
     @pytest.mark.asyncio
-    async def test_create_git_credential_without_username(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_create_git_credential_without_username(self, git_storage_options: dict) -> None:
         """Test creating a git credential without a username."""
         storage = GitStorage(git_storage_options)
 
@@ -959,9 +1003,7 @@ class TestJWTGeneration:
             assert "test-repo+import.git" in url
 
     @pytest.mark.asyncio
-    async def test_get_import_remote_url_with_permissions(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_get_import_remote_url_with_permissions(self, git_storage_options: dict) -> None:
         """Test import remote URL with custom permissions."""
         storage = GitStorage(git_storage_options)
 

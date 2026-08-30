@@ -64,6 +64,22 @@ const forkedRepo = await store.createRepo({
 });
 // If defaultBranch is omitted, the SDK returns "main".
 
+// Create one new root commit from a source tree without copying source history
+const sharedCopy = await store.createRepo({
+  id: 'shared-copy',
+  defaultBranch: 'main',
+  baseRepo: {
+    id: 'source-repo',
+    operation: 'snapshot',
+    ref: 'main~2',
+  },
+  initialCommit: {
+    message: 'Create project from share link',
+    author: { name: 'Bitrig', email: 'commits@bitrig.com' },
+  },
+});
+// Git LFS pointer files are copied, but their external LFS objects are not.
+
 // Create a repo synced to a public GitHub repository without app auth
 const publicSyncRepo = await store.createRepo({
   baseRepo: {
@@ -569,6 +585,11 @@ interface CreateRepoOptions {
         sha?: string; // Optional commit SHA to fork from
       }
     | {
+        id: string; // Snapshot source repo ID
+        operation: 'snapshot';
+        ref: string; // Required source revision
+      }
+    | {
         owner: string; // GitHub owner
         name: string; // GitHub repository name
         defaultBranch?: string;
@@ -578,6 +599,10 @@ interface CreateRepoOptions {
         };
       };
   defaultBranch?: string; // Optional default branch name (defaults to "main")
+  initialCommit?: {
+    message: string; // Required with a snapshot baseRepo
+    author: { name: string; email: string };
+  };
 }
 
 interface FindOneOptions {

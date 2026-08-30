@@ -99,6 +99,7 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 
 	var baseRepo *baseRepoPayload
 	isFork := false
+	isSnapshot := false
 	resolvedDefaultBranch := ""
 
 	if options.BaseRepo != nil {
@@ -124,6 +125,34 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 			}
 			if strings.TrimSpace(options.DefaultBranch) != "" {
 				resolvedDefaultBranch = options.DefaultBranch
+			}
+		case SnapshotBaseRepo:
+			isSnapshot = true
+			if base.Operation != SnapshotOperation {
+				return nil, errors.New("snapshot base repo operation must be snapshot")
+			}
+			if strings.TrimSpace(base.Ref) == "" {
+				return nil, errors.New("snapshot base repo ref is required")
+			}
+			if options.InitialCommit == nil {
+				return nil, errors.New("snapshot create requires initial commit")
+			}
+			baseRepoToken, err := c.generateJWT(base.ID, RemoteURLOptions{Permissions: []Permission{PermissionGitRead}, TTL: ttl})
+			if err != nil {
+				return nil, err
+			}
+			baseRepo = &baseRepoPayload{
+				Provider:  "code.storage",
+				Owner:     c.options.Name,
+				Name:      base.ID,
+				Operation: string(SnapshotOperation),
+				Ref:       base.Ref,
+				Auth:      &authPayload{Token: baseRepoToken},
+			}
+			if strings.TrimSpace(options.DefaultBranch) != "" {
+				resolvedDefaultBranch = options.DefaultBranch
+			} else {
+				resolvedDefaultBranch = "main"
 			}
 		case GitHubBaseRepo:
 			provider := base.Provider
@@ -159,6 +188,9 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 			return nil, errors.New("unsupported base repo type")
 		}
 	}
+	if options.InitialCommit != nil && !isSnapshot {
+		return nil, errors.New("initial commit is valid only for snapshot create")
+	}
 
 	if resolvedDefaultBranch == "" {
 		if strings.TrimSpace(options.DefaultBranch) != "" {
@@ -170,10 +202,20 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 
 	var body interface{}
 	if baseRepo != nil || resolvedDefaultBranch != "" {
-		body = &createRepoRequest{
+		request := &createRepoRequest{
 			BaseRepo:      baseRepo,
 			DefaultBranch: resolvedDefaultBranch,
 		}
+		if options.InitialCommit != nil {
+			request.InitialCommit = &initialCommitPayload{
+				Message: options.InitialCommit.Message,
+				Author: identityPayload{
+					Name:  options.InitialCommit.Author.Name,
+					Email: options.InitialCommit.Author.Email,
+				},
+			}
+		}
+		body = request
 	}
 
 	resp, err := c.api.post(ctx, "repos", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})

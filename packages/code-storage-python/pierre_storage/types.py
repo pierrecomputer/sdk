@@ -89,6 +89,28 @@ class ForkBaseRepo(TypedDict, total=False):
     sha: Optional[str]
 
 
+class SnapshotBaseRepo(TypedDict):
+    """Source repository for a one-commit history-free snapshot."""
+
+    id: str
+    operation: Literal["snapshot"]
+    ref: str
+
+
+class CommitIdentity(TypedDict):
+    """Commit author identity."""
+
+    name: str
+    email: str
+
+
+class InitialCommit(TypedDict):
+    """Metadata for a history-free snapshot root commit."""
+
+    message: str
+    author: CommitIdentity
+
+
 class GenericGitBaseRepo(TypedDict, total=False):
     """Base repository configuration for generic git providers (GitLab, Bitbucket, etc.)."""
 
@@ -101,7 +123,7 @@ class GenericGitBaseRepo(TypedDict, total=False):
     upstream_host: Optional[str]  # bare hostname, e.g. "gitlab.example.com"
 
 
-BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo, GenericGitBaseRepo]
+BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo, SnapshotBaseRepo, GenericGitBaseRepo]
 
 
 class DeleteRepoResult(TypedDict):

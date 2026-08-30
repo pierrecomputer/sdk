@@ -2,8 +2,19 @@ package storage
 
 // createRepoRequest is the JSON body for CreateRepo.
 type createRepoRequest struct {
-	BaseRepo      *baseRepoPayload `json:"base_repo,omitempty"`
-	DefaultBranch string           `json:"default_branch,omitempty"`
+	BaseRepo      *baseRepoPayload      `json:"base_repo,omitempty"`
+	DefaultBranch string                `json:"default_branch,omitempty"`
+	InitialCommit *initialCommitPayload `json:"initial_commit,omitempty"`
+}
+
+type initialCommitPayload struct {
+	Message string          `json:"message"`
+	Author  identityPayload `json:"author"`
+}
+
+type identityPayload struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type baseRepoPayload struct {
