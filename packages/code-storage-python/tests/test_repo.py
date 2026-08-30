@@ -2473,7 +2473,9 @@ class TestRepoNoteOperations:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
-            client_instance.post = AsyncMock(side_effect=[create_response, create_note_response])
+            client_instance.post = AsyncMock(
+                side_effect=[create_response, create_note_response]
+            )
             mock_get = AsyncMock(return_value=note_read_response)
             client_instance.get = mock_get
             client_instance.request = AsyncMock(return_value=delete_note_response)
@@ -2547,7 +2549,9 @@ class TestRepoNoteOperations:
             assert result["prefix"] == "refs/notes/reviews/"
 
     @pytest.mark.asyncio
-    async def test_list_notes_refs_no_options(self, git_storage_options: dict) -> None:
+    async def test_list_notes_refs_no_options(
+        self, git_storage_options: dict
+    ) -> None:
         """With no options, no query string is sent and an empty page parses."""
         storage = GitStorage(git_storage_options)
 
