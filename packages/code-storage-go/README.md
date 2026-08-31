@@ -53,7 +53,7 @@ Configure hosting while creating or updating a repository:
 deployOnPush := true
 apiURL := "https://example.com"
 repo, err := client.CreateRepo(ctx, storage.CreateRepoOptions{
-	ID: "owner/site",
+	ID: "my-custom-repo",
 	Deployment: &storage.DeploymentSettings{
 		DeployOnPush:             &deployOnPush,
 		Framework:                storage.SetDeploymentString("nextjs"),
@@ -94,6 +94,19 @@ page, err := repo.ListDeployments(ctx, storage.ListDeploymentsOptions{Limit: 20}
 current, err := repo.GetDeployment(ctx, storage.GetDeploymentOptions{
 	DeploymentID: created.ID,
 })
+```
+
+`WaitForDeployment` polls until the deployment reaches a terminal state
+(2s interval, 10m timeout by default):
+
+```go
+ready, err := repo.WaitForDeployment(ctx, storage.WaitForDeploymentOptions{
+	DeploymentID: created.ID,
+})
+if err != nil {
+	log.Fatal(err) // *storage.DeploymentFailedError on error/canceled status
+}
+fmt.Println(ready.URL)
 ```
 
 Reuse the same idempotency key when retrying creation. The SDK mints the
