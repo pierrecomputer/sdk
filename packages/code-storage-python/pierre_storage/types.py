@@ -1193,6 +1193,17 @@ class Repo(Protocol):
         """Get one durable deployment."""
         ...
 
+    async def wait_for_deployment(
+        self,
+        *,
+        deployment_id: str,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Wait for a durable deployment to reach a terminal state."""
+        ...
+
     async def restore_commit(
         self,
         *,
