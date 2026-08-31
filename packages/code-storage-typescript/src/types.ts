@@ -154,6 +154,9 @@ export interface Repo {
     options?: ListDeploymentsOptions,
   ): Promise<ListDeploymentsResult>;
   getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
+  waitForDeployment(
+    options: WaitForDeploymentOptions,
+  ): Promise<DeploymentResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
@@ -382,6 +385,13 @@ export interface ListDeploymentsResult {
 
 export interface GetDeploymentOptions extends GitStorageInvocationOptions {
   deploymentId: string;
+}
+export interface WaitForDeploymentOptions extends GitStorageInvocationOptions {
+  deploymentId: string;
+  /** Delay between status polls in milliseconds. Defaults to 2000. */
+  pollIntervalMs?: number;
+  /** Overall wait budget in milliseconds. Defaults to 600000 (10 minutes). */
+  timeoutMs?: number;
 }
 
 export interface DeleteRepoOptions extends GitStorageInvocationOptions {

@@ -13,7 +13,7 @@ import {
   resolveCommitTtlSeconds,
 } from './commit';
 import { FetchDiffCommitTransport, sendCommitFromDiff } from './diff-commit';
-import { RefUpdateError } from './errors';
+import { DeploymentFailedError, RefUpdateError } from './errors';
 import { ApiError, ApiFetcher } from './fetch';
 import type {
   MergeResponseRaw,
@@ -165,13 +165,14 @@ import type {
   UpdateRepoResponse,
   UpdateRepoResult,
   ValidAPIVersion,
+  WaitForDeploymentOptions,
 } from './types';
 
 /**
  * Type definitions for Pierre Git Storage SDK
  */
 
-export { RefUpdateError } from './errors';
+export { DeploymentFailedError, RefUpdateError } from './errors';
 export { ApiError } from './fetch';
 // Import additional types from types.ts
 export * from './types';
@@ -197,6 +198,8 @@ const API_VERSION: ValidAPIVersion = 1;
 
 const apiInstanceMap = new Map<string, ApiFetcher>();
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
+const DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_DEPLOYMENT_WAIT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const RESTORE_COMMIT_ALLOWED_STATUS = [
   400, // Bad Request - validation errors
   401, // Unauthorized - missing/invalid auth header
@@ -1916,6 +1919,60 @@ class RepoImpl implements Repo {
     return transformDeploymentResult(
       deploymentResponseSchema.parse(await response.json())
     );
+  }
+
+  async waitForDeployment(
+    options: WaitForDeploymentOptions
+  ): Promise<DeploymentResult> {
+    const deploymentId = options?.deploymentId?.trim();
+    if (!deploymentId) {
+      throw new Error('waitForDeployment deploymentId is required');
+    }
+
+    const pollIntervalMs =
+      options.pollIntervalMs ?? DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS;
+    if (!(pollIntervalMs > 0)) {
+      throw new Error(
+        'waitForDeployment pollIntervalMs must be greater than 0'
+      );
+    }
+    const timeoutMs = options.timeoutMs ?? DEFAULT_DEPLOYMENT_WAIT_TIMEOUT_MS;
+    if (!(timeoutMs > 0)) {
+      throw new Error('waitForDeployment timeoutMs must be greater than 0');
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const deployment = await this.getDeployment({
+        deploymentId,
+        ttl: options.ttl,
+      });
+      if (deployment.status === 'ready') {
+        return deployment;
+      }
+      if (deployment.status === 'error' || deployment.status === 'canceled') {
+        throw new DeploymentFailedError(
+          `Deployment ${deploymentId} failed with status ${deployment.status}: ` +
+            `${deployment.errorCode ?? ''} ${deployment.errorMessage ?? ''}`.trimEnd(),
+          {
+            status: deployment.status,
+            errorCode: deployment.errorCode,
+            errorMessage: deployment.errorMessage,
+          }
+        );
+      }
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new Error(
+          `waitForDeployment timed out after ${timeoutMs}ms waiting for ` +
+            `deployment ${deploymentId} (last status: ${deployment.status})`
+        );
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(pollIntervalMs, remainingMs))
+      );
+    }
   }
 
   async createBranch(
