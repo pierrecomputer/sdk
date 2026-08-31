@@ -117,7 +117,7 @@ Configure hosting when creating or updating a repository:
 
 ```typescript
 const repo = await store.createRepo({
-  id: 'owner/site',
+  id: 'my-custom-repo',
   deployment: {
     deployOnPush: true,
     productionBranch: 'main',
@@ -158,6 +158,15 @@ const page = await repo.listDeployments({ limit: 20 });
 const current = await repo.getDeployment({
   deploymentId: created.id,
 });
+```
+
+`waitForDeployment` polls until the deployment reaches a terminal state (2s
+interval, 10m timeout by default) and throws `DeploymentFailedError` when the
+deployment ends in `error` or `canceled`:
+
+```typescript
+const ready = await repo.waitForDeployment({ deploymentId: created.id });
+console.log(ready.url);
 ```
 
 Creation returns `queued`, `building`, `ready`, `error`, or `canceled` state.

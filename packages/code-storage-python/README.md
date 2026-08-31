@@ -103,7 +103,7 @@ Configure hosting when creating or updating a repository:
 
 ```python
 repo = await storage.create_repo(
-    id="owner/site",
+    id="my-custom-repo",
     deployment={
         "deploy_on_push": True,
         "production_branch": "main",
@@ -136,6 +136,15 @@ created = await repo.create_deployment(
 )
 page = await repo.list_deployments(limit=20)
 current = await repo.get_deployment(deployment_id=created["id"])
+```
+
+`wait_for_deployment` polls until the deployment reaches a terminal state (2s
+interval, 10m timeout by default) and raises `DeploymentFailedError` when the
+deployment ends in `error` or `canceled`:
+
+```python
+ready = await repo.wait_for_deployment(deployment_id=created["id"])
+print(ready["url"])
 ```
 
 Reuse the same idempotency key when retrying creation. The SDK mints the
