@@ -53,6 +53,32 @@ class RefUpdateError(Exception):
         self.ref_update: Dict[str, str] = ref_update or {}  # type: ignore[assignment]
 
 
+
+class DeploymentFailedError(Exception):
+    """Exception raised when a deployment ends in a failed state."""
+
+    def __init__(
+        self,
+        message: str,
+        status: Optional[str] = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Initialize the DeploymentFailedError.
+
+        Args:
+            message: Error message
+            status: Terminal deployment status (error or canceled)
+            error_code: Failure code reported by the server
+            error_message: Failure message reported by the server
+        """
+        super().__init__(message)
+        self.message = message
+        self.status = status or "unknown"
+        self.error_code = error_code or ""
+        self.error_message = error_message or ""
+
+
 def infer_ref_update_reason(status_code: str) -> str:
     """Infer the ref update reason from HTTP status code.
 

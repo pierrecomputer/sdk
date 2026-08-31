@@ -5,7 +5,7 @@ A Python SDK for interacting with Pierre's git storage system.
 
 from pierre_storage.auth import encode_refs_claim, generate_jwt
 from pierre_storage.client import GitStorage, create_client
-from pierre_storage.errors import ApiError, RefUpdateError
+from pierre_storage.errors import ApiError, DeploymentFailedError, RefUpdateError
 from pierre_storage.types import (
     OP_NO_FORCE_PUSH,
     OP_NO_PUSH,
@@ -85,6 +85,7 @@ __all__ = [
     "generate_jwt",
     # Errors
     "ApiError",
+    "DeploymentFailedError",
     "RefUpdateError",
     # Types
     "BaseRepo",
