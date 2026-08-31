@@ -48,3 +48,22 @@ export function inferRefUpdateReason(status?: string): RefUpdateReason {
   const label = trimmed.toLowerCase();
   return REF_REASON_MAP[label] ?? 'unknown';
 }
+export interface DeploymentFailedErrorOptions {
+  status: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export class DeploymentFailedError extends Error {
+  public readonly status: string;
+  public readonly errorCode: string;
+  public readonly errorMessage: string;
+
+  constructor(message: string, options: DeploymentFailedErrorOptions) {
+    super(message);
+    this.name = 'DeploymentFailedError';
+    this.status = options.status;
+    this.errorCode = options.errorCode ?? '';
+    this.errorMessage = options.errorMessage ?? '';
+  }
+}
