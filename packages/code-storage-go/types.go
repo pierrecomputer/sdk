@@ -2,6 +2,7 @@ package storage
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -294,6 +295,27 @@ type ListDeploymentsResult struct {
 type GetDeploymentOptions struct {
 	InvocationOptions
 	DeploymentID string
+}
+
+// WaitForDeploymentOptions controls deployment readiness polling.
+type WaitForDeploymentOptions struct {
+	InvocationOptions
+	DeploymentID string
+	// PollInterval is the delay between status polls; zero defaults to 2 seconds.
+	PollInterval time.Duration
+	// Timeout bounds the overall wait; zero defaults to 10 minutes.
+	Timeout time.Duration
+}
+
+// DeploymentFailedError reports a deployment that reached a failed state.
+type DeploymentFailedError struct {
+	Status       DeploymentStatus
+	ErrorCode    string
+	ErrorMessage string
+}
+
+func (e *DeploymentFailedError) Error() string {
+	return fmt.Sprintf("deployment failed with status %q (error_code %q): %s", e.Status, e.ErrorCode, e.ErrorMessage)
 }
 
 // CreateRepoOptions controls repo creation.

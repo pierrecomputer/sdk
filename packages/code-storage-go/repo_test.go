@@ -2533,3 +2533,144 @@ func TestGetDeployment(t *testing.T) {
 		t.Fatalf("result = %#v, want %#v", result, want)
 	}
 }
+
+func TestWaitForDeploymentReady(t *testing.T) {
+	statuses := []string{"queued", "building", "ready"}
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet ||
+			r.URL.EscapedPath() != "/api/repos/owner%2Frepo/deployments/deployment-1" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		status := statuses[calls]
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		body := `{"id":"deployment-1","url":"https://app.example.test","target":"production","ref":"main","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"` + status + `","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}`
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{
+		DeploymentID: "deployment-1",
+		PollInterval: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != len(statuses) {
+		t.Fatalf("polls = %d, want %d", calls, len(statuses))
+	}
+	want := DeploymentResult{
+		ID:        "deployment-1",
+		URL:       "https://app.example.test",
+		Target:    DeploymentTargetProduction,
+		Ref:       "main",
+		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
+		Status:    DeploymentStatusReady,
+		CreatedAt: "2026-08-27T10:00:00Z",
+		UpdatedAt: "2026-08-27T10:00:01Z",
+	}
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("result = %#v, want %#v", result, want)
+	}
+}
+
+func TestWaitForDeploymentError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"deployment-1","target":"production","ref":"main","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"error","error_code":"build_failed","error_message":"Build failed","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{
+		DeploymentID: "deployment-1",
+		PollInterval: time.Millisecond,
+	})
+	var failedErr *DeploymentFailedError
+	if !errors.As(err, &failedErr) {
+		t.Fatalf("error = %v, want *DeploymentFailedError", err)
+	}
+	if failedErr.Status != DeploymentStatusError ||
+		failedErr.ErrorCode != "build_failed" ||
+		failedErr.ErrorMessage != "Build failed" {
+		t.Fatalf("error = %#v", failedErr)
+	}
+	if !strings.Contains(err.Error(), "build_failed") || !strings.Contains(err.Error(), "Build failed") {
+		t.Fatalf("error message = %q", err.Error())
+	}
+}
+
+func TestWaitForDeploymentTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"deployment-1","target":"production","ref":"main","commit_sha":"0123456789abcdef0123456789abcdef01234567","status":"building","created_at":"2026-08-27T10:00:00Z","updated_at":"2026-08-27T10:00:01Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{
+		DeploymentID: "deployment-1",
+		PollInterval: time.Millisecond,
+		Timeout:      5 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !strings.Contains(err.Error(), "deployment-1") || !strings.Contains(err.Error(), "building") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	var failedErr *DeploymentFailedError
+	if errors.As(err, &failedErr) {
+		t.Fatalf("error = %#v, want timeout error", failedErr)
+	}
+}
+
+func TestWaitForDeploymentValidation(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{}); err == nil ||
+		err.Error() != "wait for deployment id is required" {
+		t.Fatalf("error = %v", err)
+	}
+	if _, err := repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{
+		DeploymentID: "deployment-1",
+		PollInterval: -time.Second,
+	}); err == nil || err.Error() != "wait for deployment poll interval must be positive" {
+		t.Fatalf("error = %v", err)
+	}
+	if _, err := repo.WaitForDeployment(t.Context(), WaitForDeploymentOptions{
+		DeploymentID: "deployment-1",
+		Timeout:      -time.Second,
+	}); err == nil || err.Error() != "wait for deployment timeout must be positive" {
+		t.Fatalf("error = %v", err)
+	}
+}
