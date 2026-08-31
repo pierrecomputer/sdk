@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var restoreCommitAllowedStatus = map[int]bool{
@@ -1215,6 +1216,65 @@ func (r *Repo) GetDeployment(ctx context.Context, options GetDeploymentOptions) 
 		return DeploymentResult{}, err
 	}
 	return deploymentResult(payload), nil
+}
+
+// WaitForDeployment polls a deployment until it is ready, fails, or the wait times out.
+func (r *Repo) WaitForDeployment(ctx context.Context, options WaitForDeploymentOptions) (DeploymentResult, error) {
+	deploymentID := strings.TrimSpace(options.DeploymentID)
+	if deploymentID == "" {
+		return DeploymentResult{}, errors.New("wait for deployment id is required")
+	}
+	pollInterval := options.PollInterval
+	if pollInterval == 0 {
+		pollInterval = 2 * time.Second
+	}
+	if pollInterval < 0 {
+		return DeploymentResult{}, errors.New("wait for deployment poll interval must be positive")
+	}
+	timeout := options.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Minute
+	}
+	if timeout < 0 {
+		return DeploymentResult{}, errors.New("wait for deployment timeout must be positive")
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var lastStatus DeploymentStatus
+	for {
+		deployment, err := r.GetDeployment(waitCtx, GetDeploymentOptions{
+			InvocationOptions: options.InvocationOptions,
+			DeploymentID:      deploymentID,
+		})
+		if err != nil {
+			if ctx.Err() == nil && waitCtx.Err() != nil {
+				return DeploymentResult{}, fmt.Errorf("wait for deployment %s timed out after %s (last status %q)", deploymentID, timeout, lastStatus)
+			}
+			return DeploymentResult{}, err
+		}
+		lastStatus = deployment.Status
+		switch deployment.Status {
+		case DeploymentStatusReady:
+			return deployment, nil
+		case DeploymentStatusError, DeploymentStatusCanceled:
+			return DeploymentResult{}, &DeploymentFailedError{
+				Status:       deployment.Status,
+				ErrorCode:    deployment.ErrorCode,
+				ErrorMessage: deployment.ErrorMessage,
+			}
+		}
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-waitCtx.Done():
+			timer.Stop()
+			if err := ctx.Err(); err != nil {
+				return DeploymentResult{}, err
+			}
+			return DeploymentResult{}, fmt.Errorf("wait for deployment %s timed out after %s (last status %q)", deploymentID, timeout, lastStatus)
+		case <-timer.C:
+		}
+	}
 }
 
 // CreateBranch creates a new branch.
