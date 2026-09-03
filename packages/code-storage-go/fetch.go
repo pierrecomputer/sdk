@@ -120,6 +120,7 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 			Method:     method,
 			URL:        urlStr,
 			Body:       parsed,
+			Header:     resp.Header.Clone(),
 		}
 	}
 

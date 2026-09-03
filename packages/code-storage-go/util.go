@@ -176,6 +176,7 @@ func parseNoteWriteResponse(resp *http.Response, method string) (NoteWriteResult
 				Method:     method,
 				URL:        resp.Request.URL.String(),
 				Body:       env,
+				Header:     resp.Header.Clone(),
 			}
 		}
 	}
@@ -195,6 +196,7 @@ func parseNoteWriteResponse(resp *http.Response, method string) (NoteWriteResult
 		Method:     method,
 		URL:        resp.Request.URL.String(),
 		Body:       string(rawBody),
+		Header:     resp.Header.Clone(),
 	}
 }
 
