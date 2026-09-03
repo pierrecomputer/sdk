@@ -233,9 +233,11 @@ func (c *Client) ListRepos(ctx context.Context, options ListReposOptions) (ListR
 		result.NextCursor = payload.NextCursor
 	}
 	for _, repo := range payload.Repos {
+		repoName := preferredResponseString(repo.RepoName, repo.URL)
 		entry := RepoInfo{
 			RepoID:        repo.RepoID,
-			URL:           repo.URL,
+			RepoName:      repoName,
+			URL:           repoName,
 			DefaultBranch: repo.DefaultBranch,
 			CreatedAt:     repo.CreatedAt,
 		}

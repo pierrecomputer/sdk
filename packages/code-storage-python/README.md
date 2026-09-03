@@ -12,6 +12,14 @@ uv add pierre-storage
 pip install pierre-storage
 ```
 
+## Standard vocabulary
+
+New code should use `ref`, `base_ref`, `source_ref`, `object_ref`, `notes_ref`,
+`target_branch`, and `expected_target_sha`. Repository list entries expose
+`repo_name`; commit diffs expose `base_sha`; merge sources expose `ref`; note
+writes expose `notes_ref`; and ref updates expose `target_branch`. Deprecated
+result aliases remain populated with the preferred value.
+
 ## Usage
 
 ### Basic Setup
@@ -220,12 +228,12 @@ branch_result = await repo.create_branch(
 print(branch_result["target_branch"], branch_result.get("commit_sha"))
 
 # Delete a branch (default branch deletion is rejected)
-delete_branch_result = await repo.delete_branch(name="feature/old-onboarding")
+delete_branch_result = await repo.delete_branch(target_branch="feature/old-onboarding")
 print(delete_branch_result["message"])
 
 # Pass ephemeral=True to delete a branch from the ephemeral namespace
 ephemeral_delete = await repo.delete_branch(
-    name="merge/123e4567-e89b-12d3-a456-426614174000",
+    target_branch="merge/123e4567-e89b-12d3-a456-426614174000",
     ephemeral=True,
 )
 print(ephemeral_delete["ephemeral"])  # True
@@ -241,7 +249,7 @@ print(preview["conflict_paths"], preview["filtered_conflicts"])
 
 # Merge one branch into another
 merge_result = await repo.merge(
-    source_branch="feature/preview",
+    source_ref="feature/preview",
     source_is_ephemeral=True,   # optional; source branch can live in ephemeral namespace
     target_branch="main",
     target_is_ephemeral=False,  # optional; target branch can independently be ephemeral
@@ -268,7 +276,7 @@ print(tags["tags"])
 # Create a lightweight tag at a commit SHA
 tag_result = await repo.create_tag(
     name="v1.0.0",
-    target="0123456789abcdef0123456789abcdef01234567",
+    ref="0123456789abcdef0123456789abcdef01234567",
 )
 print(tag_result["message"])
 
@@ -278,7 +286,7 @@ print(delete_result["message"])
 
 # List commits
 commits = await repo.list_commits(
-    branch="main",  # optional
+    ref="main",  # optional
     limit=20,
     cursor=None,  # for pagination
 )
@@ -287,7 +295,7 @@ for commit in commits["commits"]:
     print(commit["sha"], commit["parent_shas"])  # Git parent order; [] for a root commit
 
 # Get a single commit's metadata (no diff)
-result = await repo.get_commit(sha="abc123...")
+result = await repo.get_commit(ref="abc123...")
 print(
     result["commit"]["message"],
     result["commit"]["author_name"],
@@ -312,12 +320,12 @@ for line in blame["lines"]:
     print(f"{line['line_number']} ({line['commit_sha'][:7]}): {line['author_name']} — {line['summary']}")
 
 # Read a git note for a commit
-note = await repo.get_note(sha="abc123...")
+note = await repo.get_note(object_ref="abc123...")
 print(note["note"])
 
 # Add a git note
 note_result = await repo.create_note(
-    sha="abc123...",
+    object_ref="abc123...",
     note="Release QA approved",
     author={"name": "Release Bot", "email": "release@example.com"},
 )
@@ -325,18 +333,18 @@ print(note_result["new_ref_sha"])
 
 # Append to a git note
 await repo.append_note(
-    sha="abc123...",
+    object_ref="abc123...",
     note="Follow-up review complete",
 )
 
 # Delete a git note
-await repo.delete_note(sha="abc123...")
+await repo.delete_note(object_ref="abc123...")
 
-# Notes default to refs/notes/commits. Pass `ref` to target another notes ref;
+# Notes default to refs/notes/commits. Pass `notes_ref` to target another notes ref;
 # a bare name like "reviews" is placed under refs/notes/ (a fully-qualified
 # refs/notes/* ref also works). Custom refs must be enabled server-side.
-await repo.create_note(sha="abc123...", note="LGTM", ref="reviews")
-review_note = await repo.get_note(sha="abc123...", ref="reviews")
+await repo.create_note(object_ref="abc123...", note="LGTM", notes_ref="reviews")
+review_note = await repo.get_note(object_ref="abc123...", notes_ref="reviews")
 
 # Discover custom notes namespaces with cursor pagination. Requires the custom
 # notes refs feature to be enabled server-side.
@@ -358,8 +366,8 @@ print(branch_diff["files"])
 
 # Get commit diff
 commit_diff = await repo.get_commit_diff(
-    sha="abc123...",
-    base_sha="def456...",  # optional base commit
+    ref="abc123...",
+    base_ref="def456...",  # optional base commit
     git_apply_compatible=True,  # generate raw diffs for use with git apply
 )
 print(commit_diff["stats"])
@@ -408,6 +416,7 @@ The builder exposes:
     "pack_bytes": int,
     "blob_count": int,
     "ref_update": {
+        "target_branch": str,
         "branch": str,
         "old_sha": str,  # All zeroes when the ref is created
         "new_sha": str,
@@ -421,18 +430,25 @@ containing the status, reason, and ref details.
 **Options:**
 
 - `target_branch` (required): Branch name (without `refs/heads/` prefix)
-- `expected_head_sha` (optional): Branch or commit that must match the remote
+- `expected_target_sha` (optional): Branch or commit that must match the remote
   tip
 - `base_branch` (optional): Name of the branch to use as the base when creating
   a new branch (without `refs/heads/` prefix)
-- `ephemeral` (optional): Mark the target branch as ephemeral (stored in
+- `target_is_ephemeral` (optional): Mark the target branch as ephemeral (stored in
   separate namespace)
-- `ephemeral_base` (optional): Indicates the base branch is ephemeral (requires
+- `base_is_ephemeral` (optional): Indicates the base branch is ephemeral (requires
   `base_branch`)
 - `commit_message` (required): The commit message
 - `author` (required): Dictionary with `name` and `email`
 - `committer` (optional): Dictionary with `name` and `email` (defaults to
   author)
+
+Deprecated request aliases remain accepted and emit `DeprecationWarning`.
+These include `expected_head_sha`, `ephemeral`, and `ephemeral_base` for
+commits; `sha` and `branch` for revision reads; `source_branch` for merges;
+`target_commit_sha` for restores; `target` for tag creation; `name` for branch
+deletion; and `sha`, `ref`, and `expected_ref_sha` for notes. Preferred values
+win when both forms are present.
 
 ### Creating Commits from Diff Streams
 
@@ -453,7 +469,7 @@ result = await repo.create_commit_from_diff(
     commit_message="Apply docs update",
     diff=diff_text,
     author={"name": "Docs Bot", "email": "docs@example.com"},
-    expected_head_sha="abc123...",  # optional optimistic lock
+    expected_target_sha="abc123...",  # optional optimistic lock
     base_branch="release",          # optional branch fallback
 )
 
@@ -466,14 +482,14 @@ endpoint and returns a `CommitResult`. On conflicts or validation errors, it
 raises `RefUpdateError` with the server-provided status and message.
 
 You can provide the same metadata options as `create_commit`, including
-`expected_head_sha`, `base_branch`, `ephemeral`, `ephemeral_base`, and
+`expected_target_sha`, `base_branch`, `target_is_ephemeral`, `base_is_ephemeral`, and
 `committer`.
 
 > Files are chunked into 4 MiB segments, allowing streaming of large assets
 > without buffering in memory.
 
 > The `target_branch` must already exist on the remote repository. To seed an
-> empty repository, omit `expected_head_sha`; the service will create the first
+> empty repository, omit `expected_target_sha`; the service will create the first
 > commit only when no refs are present.
 
 **Branching Example:**
@@ -569,8 +585,9 @@ Use `create_branch(base_ref=...)` for new code when you need to choose the base.
 **Key points about ephemeral branches:**
 
 - Ephemeral branches are stored separately from regular branches
-- Use `ephemeral=True` when creating commits, reading files, or listing files
-- Use `ephemeral_base=True` when branching off another ephemeral branch
+- Use `target_is_ephemeral=True` when creating commits. Use `ephemeral=True`
+  when reading files or listing files.
+- Use `base_is_ephemeral=True` when committing from another ephemeral branch
   (requires `base_branch`)
 - Promote an ephemeral branch with `repo.promote_ephemeral_branch()`; omit
   `target_branch` to keep the same name
@@ -591,7 +608,7 @@ async def file_chunks():
 result = await (
     repo.create_commit(
         target_branch="assets",
-        expected_head_sha="abc123...",
+        expected_target_sha="abc123...",
         commit_message="Upload latest design bundle",
         author={"name": "Assets Uploader", "email": "assets@example.com"},
     )
@@ -659,8 +676,8 @@ You can restore a repository to a previous commit:
 ```python
 result = await repo.restore_commit(
     target_branch="main",
-    target_commit_sha="abc123...",  # Commit to restore to
-    expected_head_sha="def456...",  # Optional: current HEAD for safety
+    base_ref="abc123...",  # Revision to restore
+    expected_target_sha="def456...",  # Optional: current target for safety
     commit_message="Restore to stable version",
     author={"name": "DevOps", "email": "devops@example.com"},
 )
@@ -810,7 +827,7 @@ class Repo:
     async def delete_branch(
         self,
         *,
-        name: str,
+        target_branch: str,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -819,7 +836,7 @@ class Repo:
     async def merge(
         self,
         *,
-        source_branch: str,
+        source_ref: str,
         target_branch: str,
         strategy: Literal["merge", "ff_only", "ff_prefer"],
         source_is_ephemeral: Optional[bool] = None,
@@ -855,7 +872,7 @@ class Repo:
         self,
         *,
         name: str,
-        target: str,
+        ref: str,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> CreateTagResult: ...
@@ -879,7 +896,7 @@ class Repo:
     async def list_commits(
         self,
         *,
-        branch: Optional[str] = None,
+        ref: Optional[str] = None,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
         ephemeral: Optional[bool] = None,
@@ -890,7 +907,7 @@ class Repo:
     async def get_commit(
         self,
         *,
-        sha: str,
+        ref: str,
         ttl: Optional[int] = None,
     ) -> GetCommitResult: ...
 
@@ -908,19 +925,19 @@ class Repo:
     async def get_note(
         self,
         *,
-        sha: str,
-        ref: Optional[str] = None,
+        object_ref: str,
+        notes_ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult: ...
 
     async def create_note(
         self,
         *,
-        sha: str,
+        object_ref: str,
         note: str,
-        expected_ref_sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
-        ref: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
@@ -928,11 +945,11 @@ class Repo:
     async def append_note(
         self,
         *,
-        sha: str,
+        object_ref: str,
         note: str,
-        expected_ref_sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
-        ref: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
@@ -940,10 +957,10 @@ class Repo:
     async def delete_note(
         self,
         *,
-        sha: str,
-        expected_ref_sha: Optional[str] = None,
+        object_ref: str,
+        expected_notes_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
-        ref: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult: ...
@@ -971,8 +988,10 @@ class Repo:
     async def get_commit_diff(
         self,
         *,
-        sha: str,
-        base_sha: Optional[str] = None,
+        ref: str,
+        base_ref: Optional[str] = None,
+        ref_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         git_apply_compatible: Optional[bool] = None,
         paths: Optional[List[str]] = None,
         ttl: Optional[int] = None,
@@ -990,10 +1009,10 @@ class Repo:
         self,
         *,
         target_branch: str,
-        target_commit_sha: str,
+        base_ref: str,
         author: CommitSignature,
         commit_message: Optional[str] = None,
-        expected_head_sha: Optional[str] = None,
+        expected_target_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -1005,10 +1024,10 @@ class Repo:
         target_branch: str,
         commit_message: str,
         author: CommitSignature,
-        expected_head_sha: Optional[str] = None,
+        expected_target_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
-        ephemeral: Optional[bool] = None,
-        ephemeral_base: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -1021,10 +1040,10 @@ class Repo:
         commit_message: str,
         diff: FileSource,
         author: CommitSignature,
-        expected_head_sha: Optional[str] = None,
+        expected_target_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
-        ephemeral: Optional[bool] = None,
-        ephemeral_base: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,

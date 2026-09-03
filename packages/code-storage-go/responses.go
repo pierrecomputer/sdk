@@ -109,6 +109,7 @@ type listReposResponse struct {
 
 type repoInfoRaw struct {
 	RepoID        string        `json:"repo_id"`
+	RepoName      *string       `json:"repo_name"`
 	URL           string        `json:"url"`
 	DefaultBranch string        `json:"default_branch"`
 	CreatedAt     string        `json:"created_at"`
@@ -129,6 +130,7 @@ type noteReadResponse struct {
 
 type noteWriteResponse struct {
 	SHA        string     `json:"sha"`
+	NotesRef   *string    `json:"notes_ref"`
 	TargetRef  string     `json:"target_ref"`
 	BaseCommit string     `json:"base_commit"`
 	NewRefSHA  string     `json:"new_ref_sha"`
@@ -190,6 +192,7 @@ type branchDiffResponse struct {
 
 type commitDiffResponse struct {
 	SHA           string            `json:"sha"`
+	BaseSHA       string            `json:"base_sha"`
 	Stats         diffStatsRaw      `json:"stats"`
 	Files         []fileDiffRaw     `json:"files"`
 	FilteredFiles []filteredFileRaw `json:"filtered_files"`
@@ -213,9 +216,10 @@ type mergeResponse struct {
 }
 
 type mergeSourceRaw struct {
-	Branch    string `json:"branch"`
-	Ephemeral bool   `json:"ephemeral"`
-	SHA       string `json:"sha"`
+	Ref       *string `json:"ref"`
+	Branch    string  `json:"branch"`
+	Ephemeral bool    `json:"ephemeral"`
+	SHA       string  `json:"sha"`
 }
 
 type mergeTargetRaw struct {
@@ -282,9 +286,10 @@ type deleteTagResponse struct {
 }
 
 type deleteBranchResponse struct {
-	Name      string `json:"name"`
-	Message   string `json:"message"`
-	Ephemeral bool   `json:"ephemeral"`
+	TargetBranch *string `json:"target_branch"`
+	Name         string  `json:"name"`
+	Message      string  `json:"message"`
+	Ephemeral    bool    `json:"ephemeral"`
 }
 
 type grepResponse struct {
@@ -320,12 +325,13 @@ type restoreCommitAck struct {
 		PackBytes    int    `json:"pack_bytes"`
 	} `json:"commit"`
 	Result struct {
-		Branch  string `json:"branch"`
-		OldSHA  string `json:"old_sha"`
-		NewSHA  string `json:"new_sha"`
-		Success bool   `json:"success"`
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		TargetBranch *string `json:"target_branch"`
+		Branch       string  `json:"branch"`
+		OldSHA       string  `json:"old_sha"`
+		NewSHA       string  `json:"new_sha"`
+		Success      bool    `json:"success"`
+		Status       string  `json:"status"`
+		Message      string  `json:"message"`
 	} `json:"result"`
 }
 
@@ -337,11 +343,12 @@ type restoreCommitResponse struct {
 		PackBytes    int    `json:"pack_bytes"`
 	} `json:"commit"`
 	Result struct {
-		Branch  string `json:"branch"`
-		OldSHA  string `json:"old_sha"`
-		NewSHA  string `json:"new_sha"`
-		Success *bool  `json:"success"`
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		TargetBranch *string `json:"target_branch"`
+		Branch       string  `json:"branch"`
+		OldSHA       string  `json:"old_sha"`
+		NewSHA       string  `json:"new_sha"`
+		Success      *bool   `json:"success"`
+		Status       string  `json:"status"`
+		Message      string  `json:"message"`
 	} `json:"result"`
 }

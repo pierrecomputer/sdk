@@ -232,11 +232,30 @@ function resolveInvocationTtlSeconds(
   return defaultValue;
 }
 
+function preferredInput(
+  preferred: string | undefined,
+  deprecated: string | undefined
+): string {
+  return preferred?.trim() || deprecated?.trim() || '';
+}
+
+function preferredResponse(
+  preferred: string | undefined,
+  deprecated: string | undefined
+): string {
+  return preferred !== undefined ? preferred : (deprecated ?? '');
+}
+
 type RestoreCommitAck = RestoreCommitAckRaw;
 
 function toRefUpdate(result: RestoreCommitAck['result']): RefUpdate {
+  const targetBranch = preferredResponse(
+    result.target_branch,
+    result.branch
+  );
   return {
-    branch: result.branch,
+    targetBranch,
+    branch: targetBranch,
     oldSha: result.old_sha,
     newSha: result.new_sha,
   };
@@ -277,6 +296,7 @@ function toPartialRefUpdate(
 ): Partial<RefUpdate> | undefined {
   const refUpdate: Partial<RefUpdate> = {};
   if (typeof branch === 'string' && branch.trim() !== '') {
+    refUpdate.targetBranch = branch;
     refUpdate.branch = branch;
   }
   if (typeof oldSha === 'string' && oldSha.trim() !== '') {
@@ -304,7 +324,7 @@ function parseRestoreCommitPayload(
         status: result.status,
         message: result.message,
         refUpdate: toPartialRefUpdate(
-          result.branch,
+          result.target_branch ?? result.branch,
           result.old_sha,
           result.new_sha
         ),
@@ -535,6 +555,7 @@ function transformCommitDiffResult(
 ): GetCommitDiffResult {
   return {
     sha: raw.sha,
+    baseSha: raw.base_sha,
     stats: raw.stats,
     files: raw.files.map(transformFileDiff),
     filteredFiles: raw.filtered_files.map(transformFilteredFile),
@@ -553,12 +574,14 @@ function transformCreateBranchResult(
 }
 
 function transformMergeResult(raw: MergeResponseRaw): MergeResult {
+  const sourceRef = preferredResponse(raw.source.ref, raw.source.branch);
   return {
     result: raw.result,
     commitSha: raw.commit_sha,
     treeSha: raw.tree_sha,
     source: {
-      branch: raw.source.branch,
+      ref: sourceRef,
+      branch: sourceRef,
       ephemeral: raw.source.ephemeral,
       sha: raw.source.sha,
     },
@@ -624,8 +647,10 @@ function transformDeleteTagResult(raw: DeleteTagResponse): DeleteTagResult {
 function transformDeleteBranchResult(
   raw: DeleteBranchResponse
 ): DeleteBranchResult {
+  const targetBranch = preferredResponse(raw.target_branch, raw.name);
   return {
-    name: raw.name,
+    targetBranch,
+    name: targetBranch,
     message: raw.message,
     ephemeral: raw.ephemeral ?? false,
   };
@@ -633,19 +658,23 @@ function transformDeleteBranchResult(
 
 function transformListReposResult(raw: ListReposResponse): ListReposResult {
   return {
-    repos: raw.repos.map((repo) => ({
-      repoId: repo.repo_id,
-      url: repo.url,
-      defaultBranch: repo.default_branch,
-      createdAt: repo.created_at,
-      baseRepo: repo.base_repo
-        ? {
-            provider: repo.base_repo.provider,
-            owner: repo.base_repo.owner,
-            name: repo.base_repo.name,
-          }
-        : undefined,
-    })),
+    repos: raw.repos.map((repo) => {
+      const repoName = preferredResponse(repo.repo_name, repo.url);
+      return {
+        repoId: repo.repo_id,
+        repoName,
+        url: repoName,
+        defaultBranch: repo.default_branch,
+        createdAt: repo.created_at,
+        baseRepo: repo.base_repo
+          ? {
+              provider: repo.base_repo.provider,
+              owner: repo.base_repo.owner,
+              name: repo.base_repo.name,
+            }
+          : undefined,
+      };
+    }),
     nextCursor: raw.next_cursor ?? undefined,
     hasMore: raw.has_more,
   };
@@ -687,14 +716,17 @@ function transformNoteReadResult(raw: {
 
 function transformNoteWriteResult(raw: {
   sha: string;
-  target_ref: string;
+  notes_ref?: string;
+  target_ref?: string;
   base_commit?: string;
   new_ref_sha: string;
   result: { success: boolean; status: string; message?: string };
 }): NoteWriteResult {
+  const notesRef = preferredResponse(raw.notes_ref, raw.target_ref);
   return {
     sha: raw.sha,
-    targetRef: raw.target_ref,
+    notesRef,
+    targetRef: notesRef,
     baseCommit: raw.base_commit,
     newRefSha: raw.new_ref_sha,
     result: {
@@ -725,29 +757,29 @@ function transformListNotesRefsResult(
 }
 
 function buildNoteWriteBody(
-  sha: string,
+  objectRef: string,
   note: string,
   action: 'add' | 'append',
   options: {
-    expectedRefSha?: string;
+    expectedNotesRefSha?: string;
     author?: { name: string; email: string };
-    ref?: string;
+    notesRef?: string;
   }
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    sha,
+    object_ref: objectRef,
     action,
     note,
   };
 
-  const ref = options.ref?.trim();
-  if (ref) {
-    body.ref = ref;
+  const notesRef = options.notesRef?.trim();
+  if (notesRef) {
+    body.notes_ref = notesRef;
   }
 
-  const expectedRefSha = options.expectedRefSha?.trim();
-  if (expectedRefSha) {
-    body.expected_ref_sha = expectedRefSha;
+  const expectedNotesRefSha = options.expectedNotesRefSha?.trim();
+  if (expectedNotesRefSha) {
+    body.expected_notes_ref_sha = expectedNotesRefSha;
   }
 
   if (options.author) {
@@ -1201,6 +1233,7 @@ class RepoImpl implements Repo {
     let params: Record<string, string> | undefined;
 
     if (
+      options?.ref ||
       options?.branch ||
       options?.cursor ||
       options?.limit ||
@@ -1208,8 +1241,9 @@ class RepoImpl implements Repo {
       typeof options?.ephemeral === 'boolean'
     ) {
       params = {};
-      if (options?.branch) {
-        params.branch = options.branch;
+      const ref = preferredInput(options?.ref, options?.branch);
+      if (ref) {
+        params.ref = ref;
       }
       if (options?.cursor) {
         params.cursor = options.cursor;
@@ -1235,9 +1269,9 @@ class RepoImpl implements Repo {
   }
 
   async getCommit(options: GetCommitOptions): Promise<GetCommitResult> {
-    const sha = options?.sha?.trim();
-    if (!sha) {
-      throw new Error('getCommit sha is required');
+    const ref = preferredInput(options?.ref, options?.sha);
+    if (!ref) {
+      throw new Error('getCommit ref is required');
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1247,7 +1281,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.get(
-      { path: 'repos/commit', params: { sha } },
+      { path: 'repos/commit', params: { ref } },
       jwt
     );
 
@@ -1291,9 +1325,9 @@ class RepoImpl implements Repo {
   }
 
   async getNote(options: GetNoteOptions): Promise<GetNoteResult> {
-    const sha = options?.sha?.trim();
-    if (!sha) {
-      throw new Error('getNote sha is required');
+    const objectRef = preferredInput(options?.objectRef, options?.sha);
+    if (!objectRef) {
+      throw new Error('getNote objectRef is required');
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1302,10 +1336,10 @@ class RepoImpl implements Repo {
       ttl,
     });
 
-    const params: Record<string, string> = { sha };
-    const ref = options?.ref?.trim();
-    if (ref) {
-      params.ref = ref;
+    const params: Record<string, string> = { object_ref: objectRef };
+    const notesRef = preferredInput(options?.notesRef, options?.ref);
+    if (notesRef) {
+      params.notes_ref = notesRef;
     }
 
     const response = await this.api.get(
@@ -1317,9 +1351,9 @@ class RepoImpl implements Repo {
   }
 
   async createNote(options: CreateNoteOptions): Promise<NoteWriteResult> {
-    const sha = options?.sha?.trim();
-    if (!sha) {
-      throw new Error('createNote sha is required');
+    const objectRef = preferredInput(options?.objectRef, options?.sha);
+    if (!objectRef) {
+      throw new Error('createNote objectRef is required');
     }
 
     const note = options?.note?.trim();
@@ -1334,10 +1368,13 @@ class RepoImpl implements Repo {
       refPolicies: options.refPolicies,
     });
 
-    const body = buildNoteWriteBody(sha, note, 'add', {
-      expectedRefSha: options.expectedRefSha,
+    const body = buildNoteWriteBody(objectRef, note, 'add', {
+      expectedNotesRefSha: preferredInput(
+        options.expectedNotesRefSha,
+        options.expectedRefSha
+      ),
       author: options.author,
-      ref: options.ref,
+      notesRef: preferredInput(options.notesRef, options.ref),
     });
 
     const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
@@ -1364,9 +1401,9 @@ class RepoImpl implements Repo {
   }
 
   async appendNote(options: AppendNoteOptions): Promise<NoteWriteResult> {
-    const sha = options?.sha?.trim();
-    if (!sha) {
-      throw new Error('appendNote sha is required');
+    const objectRef = preferredInput(options?.objectRef, options?.sha);
+    if (!objectRef) {
+      throw new Error('appendNote objectRef is required');
     }
 
     const note = options?.note?.trim();
@@ -1381,10 +1418,13 @@ class RepoImpl implements Repo {
       refPolicies: options.refPolicies,
     });
 
-    const body = buildNoteWriteBody(sha, note, 'append', {
-      expectedRefSha: options.expectedRefSha,
+    const body = buildNoteWriteBody(objectRef, note, 'append', {
+      expectedNotesRefSha: preferredInput(
+        options.expectedNotesRefSha,
+        options.expectedRefSha
+      ),
       author: options.author,
-      ref: options.ref,
+      notesRef: preferredInput(options.notesRef, options.ref),
     });
 
     const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
@@ -1411,9 +1451,9 @@ class RepoImpl implements Repo {
   }
 
   async deleteNote(options: DeleteNoteOptions): Promise<NoteWriteResult> {
-    const sha = options?.sha?.trim();
-    if (!sha) {
-      throw new Error('deleteNote sha is required');
+    const objectRef = preferredInput(options?.objectRef, options?.sha);
+    if (!objectRef) {
+      throw new Error('deleteNote objectRef is required');
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1424,17 +1464,20 @@ class RepoImpl implements Repo {
     });
 
     const body: Record<string, unknown> = {
-      sha,
+      object_ref: objectRef,
     };
 
-    const ref = options.ref?.trim();
-    if (ref) {
-      body.ref = ref;
+    const notesRef = preferredInput(options.notesRef, options.ref);
+    if (notesRef) {
+      body.notes_ref = notesRef;
     }
 
-    const expectedRefSha = options.expectedRefSha?.trim();
-    if (expectedRefSha) {
-      body.expected_ref_sha = expectedRefSha;
+    const expectedNotesRefSha = preferredInput(
+      options.expectedNotesRefSha,
+      options.expectedRefSha
+    );
+    if (expectedNotesRefSha) {
+      body.expected_notes_ref_sha = expectedNotesRefSha;
     }
 
     if (options.author) {
@@ -1562,6 +1605,10 @@ class RepoImpl implements Repo {
   async getCommitDiff(
     options: GetCommitDiffOptions
   ): Promise<GetCommitDiffResult> {
+    const ref = preferredInput(options?.ref, options?.sha);
+    if (!ref) {
+      throw new Error('getCommitDiff ref is required');
+    }
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
     const jwt = await this.generateJWT(this.id, {
       permissions: ['git:read'],
@@ -1569,14 +1616,21 @@ class RepoImpl implements Repo {
     });
 
     const params: Record<string, string | string[]> = {
-      sha: options.sha,
+      ref,
     };
 
-    if (options.baseSha) {
-      params.baseSha = options.baseSha;
+    const baseRef = preferredInput(options.baseRef, options.baseSha);
+    if (baseRef) {
+      params.base_ref = baseRef;
+    }
+    if (typeof options.refIsEphemeral === 'boolean') {
+      params.ref_is_ephemeral = String(options.refIsEphemeral);
+    }
+    if (typeof options.baseIsEphemeral === 'boolean') {
+      params.base_is_ephemeral = String(options.baseIsEphemeral);
     }
     if (typeof options.gitApplyCompatible === 'boolean') {
-      params.gitApplyCompatible = String(options.gitApplyCompatible);
+      params.git_apply_compatible = String(options.gitApplyCompatible);
     }
     if (options.paths && options.paths.length > 0) {
       params.path = options.paths;
@@ -1757,12 +1811,15 @@ class RepoImpl implements Repo {
   async deleteBranch(
     options: DeleteBranchOptions
   ): Promise<DeleteBranchResult> {
-    const name = options?.name?.trim();
-    if (!name) {
-      throw new Error('deleteBranch name is required');
+    const targetBranch = preferredInput(
+      options?.targetBranch,
+      options?.name
+    );
+    if (!targetBranch) {
+      throw new Error('deleteBranch targetBranch is required');
     }
-    if (name.startsWith('refs/')) {
-      throw new Error('deleteBranch name must not start with refs/');
+    if (targetBranch.startsWith('refs/')) {
+      throw new Error('deleteBranch targetBranch must not start with refs/');
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1772,7 +1829,7 @@ class RepoImpl implements Repo {
       refPolicies: options.refPolicies,
     });
 
-    const body: Record<string, unknown> = { name };
+    const body: Record<string, unknown> = { target_branch: targetBranch };
     if (typeof options.ephemeral === 'boolean') {
       body.ephemeral = options.ephemeral;
     }
@@ -1821,9 +1878,12 @@ class RepoImpl implements Repo {
   }
 
   async merge(options: MergeOptions): Promise<MergeResult> {
-    const sourceBranch = options?.sourceBranch?.trim();
-    if (!sourceBranch) {
-      throw new Error('merge sourceBranch is required');
+    const sourceRef = preferredInput(
+      options?.sourceRef,
+      options?.sourceBranch
+    );
+    if (!sourceRef) {
+      throw new Error('merge sourceRef is required');
     }
 
     const targetBranch = options?.targetBranch?.trim();
@@ -1850,7 +1910,7 @@ class RepoImpl implements Repo {
     });
 
     const body: Record<string, unknown> = {
-      source_branch: sourceBranch,
+      source_ref: sourceRef,
       target_branch: targetBranch,
       strategy,
     };
@@ -1914,9 +1974,9 @@ class RepoImpl implements Repo {
       throw new Error('createTag name must not start with refs/');
     }
 
-    const target = options?.target?.trim();
-    if (!target) {
-      throw new Error('createTag target is required');
+    const ref = preferredInput(options?.ref, options?.target);
+    if (!ref) {
+      throw new Error('createTag ref is required');
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1927,7 +1987,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.post(
-      { path: 'repos/tags', body: { name, target } },
+      { path: 'repos/tags', body: { name, ref } },
       jwt
     );
     const raw = createTagResponseSchema.parse(await response.json());
@@ -1971,9 +2031,9 @@ class RepoImpl implements Repo {
       );
     }
 
-    const targetCommitSha = options?.targetCommitSha?.trim();
-    if (!targetCommitSha) {
-      throw new Error('restoreCommit targetCommitSha is required');
+    const baseRef = preferredInput(options?.baseRef, options?.targetCommitSha);
+    if (!baseRef) {
+      throw new Error('restoreCommit baseRef is required');
     }
     const commitMessage = options?.commitMessage?.trim();
 
@@ -1992,7 +2052,7 @@ class RepoImpl implements Repo {
 
     const metadata: Record<string, unknown> = {
       target_branch: targetBranch,
-      target_commit_sha: targetCommitSha,
+      base_ref: baseRef,
       author: {
         name: authorName,
         email: authorEmail,
@@ -2003,9 +2063,12 @@ class RepoImpl implements Repo {
       metadata.commit_message = commitMessage;
     }
 
-    const expectedHeadSha = options.expectedHeadSha?.trim();
-    if (expectedHeadSha) {
-      metadata.expected_head_sha = expectedHeadSha;
+    const expectedTargetSha = preferredInput(
+      options.expectedTargetSha,
+      options.expectedHeadSha
+    );
+    if (expectedTargetSha) {
+      metadata.expected_target_sha = expectedTargetSha;
     }
 
     if (options.committer) {

@@ -19,7 +19,9 @@ func (d *diffCommitExecutor) normalize() (CommitFromDiffOptions, error) {
 	options := d.options
 	options.TargetBranch = strings.TrimSpace(options.TargetBranch)
 	options.CommitMessage = strings.TrimSpace(options.CommitMessage)
-	options.ExpectedHeadSHA = strings.TrimSpace(options.ExpectedHeadSHA)
+	options.ExpectedTargetSHA = preferredString(options.ExpectedTargetSHA, options.ExpectedHeadSHA)
+	options.TargetIsEphemeral = preferredBool(options.TargetIsEphemeral, options.Ephemeral)
+	options.BaseIsEphemeral = preferredBool(options.BaseIsEphemeral, options.EphemeralBase)
 	options.BaseBranch = strings.TrimSpace(options.BaseBranch)
 
 	if options.Diff == nil {
@@ -45,8 +47,8 @@ func (d *diffCommitExecutor) normalize() (CommitFromDiffOptions, error) {
 	if options.BaseBranch != "" && strings.HasPrefix(options.BaseBranch, "refs/") {
 		return options, errors.New("createCommitFromDiff baseBranch must not include refs/ prefix")
 	}
-	if options.EphemeralBase && options.BaseBranch == "" {
-		return options, errors.New("createCommitFromDiff ephemeralBase requires baseBranch")
+	if options.BaseIsEphemeral != nil && *options.BaseIsEphemeral && options.BaseBranch == "" {
+		return options, errors.New("createCommitFromDiff baseIsEphemeral requires baseBranch")
 	}
 
 	if options.Committer != nil {
@@ -129,18 +131,14 @@ func buildDiffCommitMetadata(options CommitFromDiffOptions) *commitMetadataPaylo
 		},
 	}
 
-	if options.ExpectedHeadSHA != "" {
-		metadata.ExpectedHeadSHA = options.ExpectedHeadSHA
+	if options.ExpectedTargetSHA != "" {
+		metadata.ExpectedTargetSHA = options.ExpectedTargetSHA
 	}
 	if options.BaseBranch != "" {
 		metadata.BaseBranch = options.BaseBranch
 	}
-	if options.Ephemeral {
-		metadata.Ephemeral = true
-	}
-	if options.EphemeralBase {
-		metadata.EphemeralBase = true
-	}
+	metadata.TargetIsEphemeral = options.TargetIsEphemeral
+	metadata.BaseIsEphemeral = options.BaseIsEphemeral
 	if options.Committer != nil {
 		metadata.Committer = &authorInfo{
 			Name:  options.Committer.Name,

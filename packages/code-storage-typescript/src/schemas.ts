@@ -112,7 +112,8 @@ export const repoBaseInfoSchema = z.object({
 
 export const repoInfoSchema = z.object({
   repo_id: z.string(),
-  url: z.string(),
+  repo_name: z.string().optional(),
+  url: z.string().optional(),
   default_branch: z.string(),
   created_at: z.string(),
   base_repo: repoBaseInfoSchema.optional().nullable(),
@@ -138,7 +139,8 @@ export const noteResultSchema = z.object({
 
 export const noteWriteResponseSchema = z.object({
   sha: z.string(),
-  target_ref: z.string(),
+  notes_ref: z.string().optional(),
+  target_ref: z.string().optional(),
   base_commit: z.string().optional(),
   new_ref_sha: z.string(),
   result: noteResultSchema,
@@ -193,6 +195,7 @@ export const branchDiffResponseSchema = z.object({
 
 export const commitDiffResponseSchema = z.object({
   sha: z.string(),
+  base_sha: z.string().optional(),
   stats: diffStatsSchema,
   files: z.array(diffFileRawSchema),
   filtered_files: z.array(filteredFileRawSchema),
@@ -206,7 +209,8 @@ export const createBranchResponseSchema = z.object({
 });
 
 export const mergeRefSchema = z.object({
-  branch: z.string(),
+  ref: z.string().optional(),
+  branch: z.string().optional(),
   ephemeral: z.boolean(),
   sha: z.string(),
 });
@@ -285,13 +289,15 @@ export const deleteTagResponseSchema = z.object({
 });
 
 export const deleteBranchResponseSchema = z.object({
-  name: z.string(),
+  target_branch: z.string().optional(),
+  name: z.string().optional(),
   message: z.string(),
   ephemeral: z.boolean().optional(),
 });
 
 export const refUpdateResultSchema = z.object({
-  branch: z.string(),
+  target_branch: z.string().optional(),
+  branch: z.string().optional(),
   old_sha: z.string(),
   new_sha: z.string(),
   success: z.boolean(),
@@ -312,6 +318,7 @@ export const restoreCommitCommitSchema = commitPackCommitSchema.omit({
 });
 
 export const refUpdateResultWithOptionalsSchema = z.object({
+  target_branch: z.string().optional(),
   branch: z.string().optional(),
   old_sha: z.string().optional(),
   new_sha: z.string().optional(),

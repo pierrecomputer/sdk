@@ -477,8 +477,8 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 	}
 
 	params := url.Values{}
-	if options.Branch != "" {
-		params.Set("branch", options.Branch)
+	if ref := preferredString(options.Ref, options.Branch); ref != "" {
+		params.Set("ref", ref)
 	}
 	if options.Cursor != "" {
 		params.Set("cursor", options.Cursor)
@@ -530,9 +530,9 @@ func (r *Repo) ListCommits(ctx context.Context, options ListCommitsOptions) (Lis
 
 // GetCommit returns metadata for a single commit without computing its diff.
 func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetCommitResult, error) {
-	sha := strings.TrimSpace(options.SHA)
-	if sha == "" {
-		return GetCommitResult{}, errors.New("getCommit sha is required")
+	ref := preferredString(options.Ref, options.SHA)
+	if ref == "" {
+		return GetCommitResult{}, errors.New("getCommit ref is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -542,7 +542,7 @@ func (r *Repo) GetCommit(ctx context.Context, options GetCommitOptions) (GetComm
 	}
 
 	params := url.Values{}
-	params.Set("sha", sha)
+	params.Set("ref", ref)
 
 	resp, err := r.client.api.get(ctx, "repos/commit", params, jwtToken, nil)
 	if err != nil {
@@ -645,9 +645,9 @@ func (r *Repo) GetBlame(ctx context.Context, options BlameOptions) (BlameResult,
 
 // GetNote reads a git note.
 func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResult, error) {
-	sha := strings.TrimSpace(options.SHA)
-	if sha == "" {
-		return GetNoteResult{}, errors.New("getNote sha is required")
+	objectRef := preferredString(options.ObjectRef, options.SHA)
+	if objectRef == "" {
+		return GetNoteResult{}, errors.New("getNote objectRef is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -657,9 +657,9 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 	}
 
 	params := url.Values{}
-	params.Set("sha", sha)
-	if ref := strings.TrimSpace(options.Ref); ref != "" {
-		params.Set("ref", ref)
+	params.Set("object_ref", objectRef)
+	if notesRef := preferredString(options.NotesRef, options.Ref); notesRef != "" {
+		params.Set("notes_ref", notesRef)
 	}
 
 	resp, err := r.client.api.get(ctx, "repos/notes", params, jwtToken, nil)
@@ -678,19 +678,19 @@ func (r *Repo) GetNote(ctx context.Context, options GetNoteOptions) (GetNoteResu
 
 // CreateNote adds a git note.
 func (r *Repo) CreateNote(ctx context.Context, options CreateNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "add", options.SHA, options.Note, options.ExpectedRefSHA, options.Ref, options.Author, options.RefPolicies)
+	return r.writeNote(ctx, options.InvocationOptions, "add", preferredString(options.ObjectRef, options.SHA), options.Note, preferredString(options.ExpectedNotesRefSHA, options.ExpectedRefSHA), preferredString(options.NotesRef, options.Ref), options.Author, options.RefPolicies)
 }
 
 // AppendNote appends to a git note.
 func (r *Repo) AppendNote(ctx context.Context, options AppendNoteOptions) (NoteWriteResult, error) {
-	return r.writeNote(ctx, options.InvocationOptions, "append", options.SHA, options.Note, options.ExpectedRefSHA, options.Ref, options.Author, options.RefPolicies)
+	return r.writeNote(ctx, options.InvocationOptions, "append", preferredString(options.ObjectRef, options.SHA), options.Note, preferredString(options.ExpectedNotesRefSHA, options.ExpectedRefSHA), preferredString(options.NotesRef, options.Ref), options.Author, options.RefPolicies)
 }
 
 // DeleteNote deletes a git note.
 func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteWriteResult, error) {
-	sha := strings.TrimSpace(options.SHA)
-	if sha == "" {
-		return NoteWriteResult{}, errors.New("deleteNote sha is required")
+	objectRef := preferredString(options.ObjectRef, options.SHA)
+	if objectRef == "" {
+		return NoteWriteResult{}, errors.New("deleteNote objectRef is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -699,12 +699,12 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 		return NoteWriteResult{}, err
 	}
 
-	body := &noteWriteRequest{SHA: sha}
-	if strings.TrimSpace(options.ExpectedRefSHA) != "" {
-		body.ExpectedRefSHA = options.ExpectedRefSHA
+	body := &noteWriteRequest{ObjectRef: objectRef}
+	if expectedNotesRefSHA := preferredString(options.ExpectedNotesRefSHA, options.ExpectedRefSHA); expectedNotesRefSHA != "" {
+		body.ExpectedNotesRefSHA = expectedNotesRefSHA
 	}
-	if ref := strings.TrimSpace(options.Ref); ref != "" {
-		body.Ref = ref
+	if notesRef := preferredString(options.NotesRef, options.Ref); notesRef != "" {
+		body.NotesRef = notesRef
 	}
 	if options.Author != nil {
 		if strings.TrimSpace(options.Author.Name) == "" || strings.TrimSpace(options.Author.Email) == "" {
@@ -731,16 +731,16 @@ func (r *Repo) DeleteNote(ctx context.Context, options DeleteNoteOptions) (NoteW
 		return NoteWriteResult{}, newRefUpdateError(
 			message,
 			result.Result.Status,
-			partialRefUpdate(result.TargetRef, result.BaseCommit, result.NewRefSHA),
+			partialRefUpdate(result.NotesRef, result.BaseCommit, result.NewRefSHA),
 		)
 	}
 	return result, nil
 }
 
-func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, sha string, note string, expectedRefSHA string, ref string, author *NoteAuthor, refPolicies RefPolicyList) (NoteWriteResult, error) {
-	sha = strings.TrimSpace(sha)
-	if sha == "" {
-		return NoteWriteResult{}, errors.New("note sha is required")
+func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, action string, objectRef string, note string, expectedNotesRefSHA string, notesRef string, author *NoteAuthor, refPolicies RefPolicyList) (NoteWriteResult, error) {
+	objectRef = strings.TrimSpace(objectRef)
+	if objectRef == "" {
+		return NoteWriteResult{}, errors.New("note objectRef is required")
 	}
 
 	note = strings.TrimSpace(note)
@@ -755,15 +755,15 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 	}
 
 	body := &noteWriteRequest{
-		SHA:    sha,
-		Action: action,
-		Note:   note,
+		ObjectRef: objectRef,
+		Action:    action,
+		Note:      note,
 	}
-	if strings.TrimSpace(expectedRefSHA) != "" {
-		body.ExpectedRefSHA = expectedRefSHA
+	if strings.TrimSpace(expectedNotesRefSHA) != "" {
+		body.ExpectedNotesRefSHA = expectedNotesRefSHA
 	}
-	if ref := strings.TrimSpace(ref); ref != "" {
-		body.Ref = ref
+	if notesRef := strings.TrimSpace(notesRef); notesRef != "" {
+		body.NotesRef = notesRef
 	}
 	if author != nil {
 		if strings.TrimSpace(author.Name) == "" || strings.TrimSpace(author.Email) == "" {
@@ -794,7 +794,7 @@ func (r *Repo) writeNote(ctx context.Context, invocation InvocationOptions, acti
 		return NoteWriteResult{}, newRefUpdateError(
 			message,
 			result.Result.Status,
-			partialRefUpdate(result.TargetRef, result.BaseCommit, result.NewRefSHA),
+			partialRefUpdate(result.NotesRef, result.BaseCommit, result.NewRefSHA),
 		)
 	}
 	return result, nil
@@ -895,8 +895,9 @@ func (r *Repo) GetBranchDiff(ctx context.Context, options GetBranchDiffOptions) 
 
 // GetCommitDiff returns a diff for a commit.
 func (r *Repo) GetCommitDiff(ctx context.Context, options GetCommitDiffOptions) (GetCommitDiffResult, error) {
-	if strings.TrimSpace(options.SHA) == "" {
-		return GetCommitDiffResult{}, errors.New("getCommitDiff sha is required")
+	ref := preferredString(options.Ref, options.SHA)
+	if ref == "" {
+		return GetCommitDiffResult{}, errors.New("getCommitDiff ref is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -906,12 +907,18 @@ func (r *Repo) GetCommitDiff(ctx context.Context, options GetCommitDiffOptions) 
 	}
 
 	params := url.Values{}
-	params.Set("sha", options.SHA)
-	if strings.TrimSpace(options.BaseSHA) != "" {
-		params.Set("baseSha", options.BaseSHA)
+	params.Set("ref", ref)
+	if baseRef := preferredString(options.BaseRef, options.BaseSHA); baseRef != "" {
+		params.Set("base_ref", baseRef)
+	}
+	if options.RefIsEphemeral != nil {
+		params.Set("ref_is_ephemeral", strconv.FormatBool(*options.RefIsEphemeral))
+	}
+	if options.BaseIsEphemeral != nil {
+		params.Set("base_is_ephemeral", strconv.FormatBool(*options.BaseIsEphemeral))
 	}
 	if options.GitApplyCompatible {
-		params.Set("gitApplyCompatible", "true")
+		params.Set("git_apply_compatible", "true")
 	}
 	for _, path := range options.Paths {
 		if strings.TrimSpace(path) != "" {
@@ -1136,12 +1143,12 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 
 // DeleteBranch deletes a branch.
 func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (DeleteBranchResult, error) {
-	name := strings.TrimSpace(options.Name)
-	if name == "" {
-		return DeleteBranchResult{}, errors.New("deleteBranch name is required")
+	targetBranch := preferredString(options.TargetBranch, options.Name)
+	if targetBranch == "" {
+		return DeleteBranchResult{}, errors.New("deleteBranch targetBranch is required")
 	}
-	if strings.HasPrefix(name, "refs/") {
-		return DeleteBranchResult{}, errors.New("deleteBranch name must not start with refs/")
+	if strings.HasPrefix(targetBranch, "refs/") {
+		return DeleteBranchResult{}, errors.New("deleteBranch targetBranch must not start with refs/")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -1150,7 +1157,7 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 		return DeleteBranchResult{}, err
 	}
 
-	body := &deleteBranchRequest{Name: name, Ephemeral: options.Ephemeral}
+	body := &deleteBranchRequest{TargetBranch: targetBranch, Ephemeral: options.Ephemeral}
 	resp, err := r.client.api.delete(ctx, "repos/branches", nil, body, jwtToken, nil)
 	if err != nil {
 		return DeleteBranchResult{}, err
@@ -1162,10 +1169,12 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 		return DeleteBranchResult{}, err
 	}
 
+	resultBranch := preferredResponseString(payload.TargetBranch, payload.Name)
 	return DeleteBranchResult{
-		Name:      payload.Name,
-		Message:   payload.Message,
-		Ephemeral: payload.Ephemeral,
+		TargetBranch: resultBranch,
+		Name:         resultBranch,
+		Message:      payload.Message,
+		Ephemeral:    payload.Ephemeral,
 	}, nil
 }
 
@@ -1175,9 +1184,9 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 // current target tip. Native Code Storage targets may retry stale target/repository
 // movement while preserving the resolved source commit.
 func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, error) {
-	sourceBranch := strings.TrimSpace(options.SourceBranch)
-	if sourceBranch == "" {
-		return MergeResult{}, errors.New("merge sourceBranch is required")
+	sourceRef := preferredString(options.SourceRef, options.SourceBranch)
+	if sourceRef == "" {
+		return MergeResult{}, errors.New("merge sourceRef is required")
 	}
 	targetBranch := strings.TrimSpace(options.TargetBranch)
 	if targetBranch == "" {
@@ -1195,7 +1204,7 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 	}
 
 	body := &mergeRequest{
-		SourceBranch:            sourceBranch,
+		SourceRef:               sourceRef,
 		SourceIsEphemeral:       options.SourceIsEphemeral,
 		TargetBranch:            targetBranch,
 		TargetIsEphemeral:       options.TargetIsEphemeral,
@@ -1241,12 +1250,14 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 		return MergeResult{}, err
 	}
 
+	resultSourceRef := preferredResponseString(payload.Source.Ref, payload.Source.Branch)
 	return MergeResult{
 		Result:    MergeResultStatus(payload.Result),
 		CommitSHA: payload.CommitSHA,
 		TreeSHA:   payload.TreeSHA,
 		Source: MergeRef{
-			Branch:    payload.Source.Branch,
+			Ref:       resultSourceRef,
+			Branch:    resultSourceRef,
 			Ephemeral: payload.Source.Ephemeral,
 			SHA:       payload.Source.SHA,
 		},
@@ -1355,9 +1366,9 @@ func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateT
 		return CreateTagResult{}, errors.New("createTag name must not start with refs/")
 	}
 
-	target := strings.TrimSpace(options.Target)
-	if target == "" {
-		return CreateTagResult{}, errors.New("createTag target is required")
+	ref := preferredString(options.Ref, options.Target)
+	if ref == "" {
+		return CreateTagResult{}, errors.New("createTag ref is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -1366,7 +1377,7 @@ func (r *Repo) CreateTag(ctx context.Context, options CreateTagOptions) (CreateT
 		return CreateTagResult{}, err
 	}
 
-	body := &createTagRequest{Name: name, Target: target}
+	body := &createTagRequest{Name: name, Ref: ref}
 	resp, err := r.client.api.post(ctx, "repos/tags", nil, body, jwtToken, nil)
 	if err != nil {
 		return CreateTagResult{}, err
@@ -1429,9 +1440,9 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 		return RestoreCommitResult{}, errors.New("restoreCommit targetBranch must not include refs/ prefix")
 	}
 
-	targetSHA := strings.TrimSpace(options.TargetCommitSHA)
-	if targetSHA == "" {
-		return RestoreCommitResult{}, errors.New("restoreCommit targetCommitSha is required")
+	baseRef := preferredString(options.BaseRef, options.TargetCommitSHA)
+	if baseRef == "" {
+		return RestoreCommitResult{}, errors.New("restoreCommit baseRef is required")
 	}
 
 	if strings.TrimSpace(options.Author.Name) == "" || strings.TrimSpace(options.Author.Email) == "" {
@@ -1445,8 +1456,8 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 	}
 
 	metadata := &restoreCommitMetadata{
-		TargetBranch:    targetBranch,
-		TargetCommitSHA: targetSHA,
+		TargetBranch: targetBranch,
+		BaseRef:      baseRef,
 		Author: authorInfo{
 			Name:  strings.TrimSpace(options.Author.Name),
 			Email: strings.TrimSpace(options.Author.Email),
@@ -1456,8 +1467,8 @@ func (r *Repo) RestoreCommit(ctx context.Context, options RestoreCommitOptions) 
 	if strings.TrimSpace(options.CommitMessage) != "" {
 		metadata.CommitMessage = options.CommitMessage
 	}
-	if strings.TrimSpace(options.ExpectedHeadSHA) != "" {
-		metadata.ExpectedHeadSHA = options.ExpectedHeadSHA
+	if expectedTargetSHA := preferredString(options.ExpectedTargetSHA, options.ExpectedHeadSHA); expectedTargetSHA != "" {
+		metadata.ExpectedTargetSHA = expectedTargetSHA
 	}
 	if options.Committer != nil {
 		if strings.TrimSpace(options.Committer.Name) == "" || strings.TrimSpace(options.Committer.Email) == "" {

@@ -167,7 +167,7 @@ describe('createCommitFromDiff', () => {
       const metadataFrame = JSON.parse(lines[0]);
       expect(metadataFrame.metadata).toEqual({
         target_branch: 'main',
-        expected_head_sha: 'abc123',
+        expected_target_sha: 'abc123',
         commit_message: 'Apply patch',
         author: {
           name: 'Author Name',
@@ -206,6 +206,7 @@ describe('createCommitFromDiff', () => {
       packBytes: 84,
       blobCount: 0,
       refUpdate: {
+        targetBranch: 'main',
         branch: 'main',
         oldSha: '0000000000000000000000000000000000000000',
         newSha: 'def456',
@@ -291,6 +292,7 @@ describe('createCommitFromDiff', () => {
       }
       expect(error.status).toBe('conflict');
       expect(error.refUpdate).toEqual({
+        targetBranch: 'main',
         branch: 'main',
         oldSha: 'abc',
         newSha: 'def',

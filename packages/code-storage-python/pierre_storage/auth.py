@@ -1,7 +1,7 @@
 """JWT authentication utilities for Pierre Git Storage SDK."""
 
 import time
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union, cast
 
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -87,7 +87,7 @@ def generate_jwt(
     try:
         token = jwt.encode(
             payload,
-            private_key,
+            cast(Any, private_key),
             algorithm=algorithm,
             headers={"alg": algorithm, "typ": "JWT"},
         )
