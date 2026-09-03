@@ -26,12 +26,14 @@
   - `moon run git-storage-sdk-go:test`
 - Package versions (repo root):
   - Edit only `.version` when you set a package version.
+  - Use `MAJOR.MINOR.PATCH`. npm, PyPI, and Go do not accept the same
+    prerelease and build metadata.
   - Set a version above the previous version. CI rejects a version that goes
     backward.
   - `python3 scripts/sync_versions.py` sets all package versions from `.version`.
   - `python3 scripts/sync_versions.py --check` detects version differences.
-  - `python3 scripts/sync_versions.py --print` reads the canonical version for
-    release workflows. Use it instead of a second parser for `.version`.
+  - `python3 scripts/sync_versions.py --print` reads the version for a release
+    tag. Use it instead of a second parser for `.version`.
   - CI runs the check with `.github/actions/check-package-versions`. Reuse that
     action in a new workflow.
 

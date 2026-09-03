@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: {}
-
+  workflow_dispatch:
+  
 permissions:
   contents: read
-
+  
 concurrency:
   group: publish-sdks-${{ github.ref }}
   cancel-in-progress: false
