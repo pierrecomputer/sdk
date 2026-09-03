@@ -82,6 +82,7 @@ import type {
   DeploymentResponse,
   DeploymentResult,
   DeploymentSettings,
+  DeployOptions,
   DiffFileState,
   FileMetadata,
   FileWithMetadata,
@@ -165,7 +166,6 @@ import type {
   UpdateRepoResponse,
   UpdateRepoResult,
   ValidAPIVersion,
-  WaitForDeploymentOptions,
 } from './types';
 
 /**
@@ -1914,39 +1914,37 @@ class RepoImpl implements Repo {
         deploymentId
       )}`,
       jwt,
-      { apiRoot: true }
+      { apiRoot: true, signal: options.signal }
     );
     return transformDeploymentResult(
       deploymentResponseSchema.parse(await response.json())
     );
   }
 
-  async waitForDeployment(
-    options: WaitForDeploymentOptions
-  ): Promise<DeploymentResult> {
-    const deploymentId = options?.deploymentId?.trim();
-    if (!deploymentId) {
-      throw new Error('waitForDeployment deploymentId is required');
+  async deploy(options: DeployOptions): Promise<DeploymentResult> {
+    if (options.target !== 'preview' && options.target !== 'production') {
+      throw new Error('deploy target must be preview or production');
     }
-
     const pollIntervalMs =
       options.pollIntervalMs ?? DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS;
-    if (!(pollIntervalMs > 0)) {
-      throw new Error(
-        'waitForDeployment pollIntervalMs must be greater than 0'
-      );
+    if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
+      throw new Error('deploy pollIntervalMs must be a positive finite number');
     }
     const timeoutMs = options.timeoutMs ?? DEFAULT_DEPLOYMENT_WAIT_TIMEOUT_MS;
-    if (!(timeoutMs > 0)) {
-      throw new Error('waitForDeployment timeoutMs must be greater than 0');
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      throw new Error('deploy timeoutMs must be a positive finite number');
     }
 
+    let deployment: DeploymentResult = await this.createDeployment(options);
+    const deploymentId = deployment.id;
     const deadline = Date.now() + timeoutMs;
+    const timeoutError = () =>
+      new Error(
+        `deploy timed out after ${timeoutMs}ms waiting for deployment ` +
+          `${deploymentId} (last status: ${deployment.status})`
+      );
+
     for (;;) {
-      const deployment = await this.getDeployment({
-        deploymentId,
-        ttl: options.ttl,
-      });
       if (deployment.status === 'ready') {
         return deployment;
       }
@@ -1964,14 +1962,29 @@ class RepoImpl implements Repo {
 
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
-        throw new Error(
-          `waitForDeployment timed out after ${timeoutMs}ms waiting for ` +
-            `deployment ${deploymentId} (last status: ${deployment.status})`
-        );
+        throw timeoutError();
       }
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(pollIntervalMs, remainingMs))
       );
+
+      const requestTimeoutMs = deadline - Date.now();
+      if (requestTimeoutMs <= 0) {
+        throw timeoutError();
+      }
+      const signal = AbortSignal.timeout(requestTimeoutMs);
+      try {
+        deployment = await this.getDeployment({
+          deploymentId,
+          ttl: options.ttl,
+          signal,
+        });
+      } catch (error) {
+        if (signal.aborted) {
+          throw timeoutError();
+        }
+        throw error;
+      }
     }
   }
 

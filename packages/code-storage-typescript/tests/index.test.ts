@@ -4478,18 +4478,23 @@ describe('GitStorage', () => {
         '0123456789abcdef0123456789abcdef01234567'
       );
     });
-    describe('waitForDeployment', () => {
-      const respondWith = (status: string, extra: Record<string, unknown> = {}) =>
+    describe('deploy', () => {
+      const respondWith = (
+        status: string,
+        extra: Record<string, unknown> = {},
+        responseStatus = 200
+      ) =>
         new Response(JSON.stringify({ ...rawDeployment, status, ...extra }), {
-          status: 200,
+          status: responseStatus,
           headers: { 'content-type': 'application/json' },
         });
 
-      it('polls queued then building until ready and returns the result', async () => {
+      it('creates, polls until ready, and returns the result', async () => {
         const store = new GitStorage({ name: 'v0', key });
         const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockResolvedValueOnce(respondWith('queued', {}, 201));
         const seen: string[] = [];
-        for (const status of ['queued', 'building', 'ready']) {
+        for (const status of ['building', 'ready']) {
           mockFetch.mockImplementationOnce((url, init) => {
             const requestUrl = new URL(url as string);
             expect(requestUrl.pathname).toBe(
@@ -4503,11 +4508,12 @@ describe('GitStorage', () => {
           });
         }
 
-        const result = await repo.waitForDeployment({
-          deploymentId: 'deployment-1',
+        const result = await repo.deploy({
+          ref: 'feature',
+          target: 'preview',
           pollIntervalMs: 1,
         });
-        expect(seen).toEqual(['queued', 'building', 'ready']);
+        expect(seen).toEqual(['building', 'ready']);
         expect(result.status).toBe('ready');
         expect(result.url).toBe('https://preview.example.test');
       });
@@ -4519,11 +4525,11 @@ describe('GitStorage', () => {
           respondWith('error', {
             error_code: 'build_failed',
             error_message: 'Build failed',
-          })
+          }, 201)
         );
 
         const failure = await repo
-          .waitForDeployment({ deploymentId: 'deployment-1', pollIntervalMs: 1 })
+          .deploy({ target: 'preview', pollIntervalMs: 1 })
           .catch((error: unknown) => error);
         expect(failure).toBeInstanceOf(DeploymentFailedError);
         const deploymentError = failure as DeploymentFailedError;
@@ -4537,10 +4543,10 @@ describe('GitStorage', () => {
       it('fails on canceled deployments with empty details when absent', async () => {
         const store = new GitStorage({ name: 'v0', key });
         const repo = store.repo({ id: 'owner/repo' });
-        mockFetch.mockResolvedValueOnce(respondWith('canceled'));
+        mockFetch.mockResolvedValueOnce(respondWith('canceled', {}, 201));
 
         const failure = await repo
-          .waitForDeployment({ deploymentId: 'deployment-1', pollIntervalMs: 1 })
+          .deploy({ target: 'preview', pollIntervalMs: 1 })
           .catch((error: unknown) => error);
         expect(failure).toBeInstanceOf(DeploymentFailedError);
         const deploymentError = failure as DeploymentFailedError;
@@ -4549,16 +4555,22 @@ describe('GitStorage', () => {
         expect(deploymentError.errorMessage).toBe('');
       });
 
-      it('times out with the deployment id and last observed status', async () => {
+      it('aborts an in-flight poll when the timeout expires', async () => {
         const store = new GitStorage({ name: 'v0', key });
         const repo = store.repo({ id: 'owner/repo' });
-        mockFetch.mockImplementation(() =>
-          Promise.resolve(respondWith('building'))
-        );
+        mockFetch.mockResolvedValueOnce(respondWith('building', {}, 201));
+        mockFetch.mockImplementationOnce((_url, init) => {
+          const signal = init?.signal as AbortSignal;
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          });
+        });
 
         await expect(
-          repo.waitForDeployment({
-            deploymentId: 'deployment-1',
+          repo.deploy({
+            target: 'preview',
             pollIntervalMs: 1,
             timeoutMs: 5,
           })
@@ -4567,29 +4579,25 @@ describe('GitStorage', () => {
         );
       });
 
-      it('validates options before any request', async () => {
+      it('validates polling options before creating a deployment', async () => {
         const store = new GitStorage({ name: 'v0', key });
         const repo = store.repo({ id: 'owner/repo' });
 
         await expect(
-          repo.waitForDeployment({ deploymentId: '   ' })
-        ).rejects.toThrow('waitForDeployment deploymentId is required');
-        await expect(
-          repo.waitForDeployment({
-            deploymentId: 'deployment-1',
+          repo.deploy({
+            target: 'preview',
             pollIntervalMs: 0,
           })
-        ).rejects.toThrow(
-          'waitForDeployment pollIntervalMs must be greater than 0'
-        );
+        ).rejects.toThrow('deploy pollIntervalMs must be a positive finite number');
         await expect(
-          repo.waitForDeployment({
-            deploymentId: 'deployment-1',
+          repo.deploy({
+            target: 'preview',
             timeoutMs: -1,
           })
-        ).rejects.toThrow(
-          'waitForDeployment timeoutMs must be greater than 0'
-        );
+        ).rejects.toThrow('deploy timeoutMs must be a positive finite number');
+        await expect(
+          repo.deploy({ target: 'preview', pollIntervalMs: Number.NaN })
+        ).rejects.toThrow('deploy pollIntervalMs must be a positive finite number');
         expect(mockFetch).not.toHaveBeenCalled();
       });
     });

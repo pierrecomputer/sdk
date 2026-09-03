@@ -328,10 +328,10 @@ Deployment fields: `id`, optional `url`, `target`, `ref`, `commit_sha`,
 `status`, optional `error_code`/`error_message`, `created_at`, and `updated_at`.
 Statuses: `queued`, `building`, `ready`, `error`, `canceled`.
 
-SDK convenience: `waitForDeployment` / `WaitForDeployment` /
-`wait_for_deployment` polls Get Deployment (2s interval, 10m timeout by
-default), resolves on `ready`, and fails with a typed `DeploymentFailedError`
-carrying `status`/`error_code`/`error_message` on `error` or `canceled`.
+SDK convenience: `deploy` / `Deploy` creates a deployment and polls Get
+Deployment (2s interval, 10m timeout by default), resolves on `ready`, and
+fails with a typed `DeploymentFailedError` carrying
+`status`/`error_code`/`error_message` on `error` or `canceled`.
 
 List query parameters: `cursor`, `limit` (default 20, maximum 100). The response
 contains `deployments`, optional `next_cursor`, and `has_more`.

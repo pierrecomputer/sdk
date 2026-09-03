@@ -148,28 +148,26 @@ most four characters and apply from the next deployment.
 Create, list, and inspect durable deployments through the repository handle:
 
 ```typescript
-const created = await repo.createDeployment({
+const ready = await repo.deploy({
   ref: 'main',
   target: 'production',
   idempotencyKey: crypto.randomUUID(),
 });
+console.log(ready.url);
 
+const created = await repo.createDeployment({
+  ref: 'feature',
+  target: 'preview',
+});
 const page = await repo.listDeployments({ limit: 20 });
 const current = await repo.getDeployment({
   deploymentId: created.id,
 });
 ```
 
-`waitForDeployment` polls until the deployment reaches a terminal state (2s
-interval, 10m timeout by default) and throws `DeploymentFailedError` when the
-deployment ends in `error` or `canceled`:
-
-```typescript
-const ready = await repo.waitForDeployment({ deploymentId: created.id });
-console.log(ready.url);
-```
-
-Creation returns `queued`, `building`, `ready`, `error`, or `canceled` state.
+`deploy` creates and polls until the deployment reaches `ready` (2s interval,
+10m timeout by default). It throws `DeploymentFailedError` on `error` or
+`canceled`. `createDeployment` returns immediately with the current state.
 Reuse the same idempotency key when retrying a create request. The SDK mints
 the required repository and deployment scopes automatically.
 
@@ -704,6 +702,7 @@ interface Repo {
   createDeployment(
     options?: CreateDeploymentOptions
   ): Promise<CreateDeploymentResult>;
+  deploy(options: DeployOptions): Promise<DeploymentResult>;
   listDeployments(
     options?: ListDeploymentsOptions
   ): Promise<ListDeploymentsResult>;

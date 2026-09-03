@@ -265,6 +265,7 @@ type DeploymentResult struct {
 type CreateDeploymentOptions struct {
 	InvocationOptions
 	Ref            string
+	// Target must be preview or production.
 	Target         DeploymentTarget
 	IdempotencyKey string
 }
@@ -275,6 +276,18 @@ type CreateDeploymentResult struct {
 	Location           string
 	IdempotencyKey     string
 	IdempotentReplayed bool
+}
+
+// DeployOptions controls deployment creation and readiness polling.
+type DeployOptions struct {
+	InvocationOptions
+	Ref            string
+	Target         DeploymentTarget
+	IdempotencyKey string
+	// PollInterval is the delay between status polls; zero defaults to 2 seconds.
+	PollInterval time.Duration
+	// Timeout bounds the overall wait; zero defaults to 10 minutes.
+	Timeout time.Duration
 }
 
 // ListDeploymentsOptions controls deployment pagination.
@@ -295,16 +308,6 @@ type ListDeploymentsResult struct {
 type GetDeploymentOptions struct {
 	InvocationOptions
 	DeploymentID string
-}
-
-// WaitForDeploymentOptions controls deployment readiness polling.
-type WaitForDeploymentOptions struct {
-	InvocationOptions
-	DeploymentID string
-	// PollInterval is the delay between status polls; zero defaults to 2 seconds.
-	PollInterval time.Duration
-	// Timeout bounds the overall wait; zero defaults to 10 minutes.
-	Timeout time.Duration
 }
 
 // DeploymentFailedError reports a deployment that reached a failed state.

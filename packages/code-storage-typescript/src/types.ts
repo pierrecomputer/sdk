@@ -150,13 +150,11 @@ export interface Repo {
   createDeployment(
     options?: CreateDeploymentOptions,
   ): Promise<CreateDeploymentResult>;
+  deploy(options: DeployOptions): Promise<DeploymentResult>;
   listDeployments(
     options?: ListDeploymentsOptions,
   ): Promise<ListDeploymentsResult>;
   getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
-  waitForDeployment(
-    options: WaitForDeploymentOptions,
-  ): Promise<DeploymentResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
@@ -349,6 +347,14 @@ export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
   idempotencyKey?: string;
 }
 
+export interface DeployOptions extends Omit<CreateDeploymentOptions, 'target'> {
+  target: DeploymentTarget;
+  /** Delay between status polls in milliseconds. Defaults to 2000. */
+  pollIntervalMs?: number;
+  /** Overall wait budget in milliseconds. Defaults to 600000 (10 minutes). */
+  timeoutMs?: number;
+}
+
 export type DeploymentResponse = DeploymentResponseRaw;
 
 export interface DeploymentResult {
@@ -385,13 +391,7 @@ export interface ListDeploymentsResult {
 
 export interface GetDeploymentOptions extends GitStorageInvocationOptions {
   deploymentId: string;
-}
-export interface WaitForDeploymentOptions extends GitStorageInvocationOptions {
-  deploymentId: string;
-  /** Delay between status polls in milliseconds. Defaults to 2000. */
-  pollIntervalMs?: number;
-  /** Overall wait budget in milliseconds. Defaults to 600000 (10 minutes). */
-  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface DeleteRepoOptions extends GitStorageInvocationOptions {

@@ -1,5 +1,6 @@
 """Tests for Repo operations."""
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
@@ -3565,8 +3566,8 @@ class TestRepositoryDeployments:
         assert result["status"] == "ready"
 
 
-class TestWaitForDeployment:
-    """Tests for wait_for_deployment polling."""
+class TestDeploy:
+    """Tests for create-and-wait deployment polling."""
 
     raw_deployment = {
         "id": "deployment-1",
@@ -3579,55 +3580,58 @@ class TestWaitForDeployment:
         "updated_at": "2026-08-27T10:00:01Z",
     }
 
-    def _response(self, status: str, **extra: object) -> MagicMock:
-        response = MagicMock(status_code=200, is_success=True)
+    def _response(self, status: str, status_code: int = 200, **extra: object) -> MagicMock:
+        response = MagicMock(status_code=status_code, is_success=True)
         response.json.return_value = {**self.raw_deployment, "status": status, **extra}
+        response.headers = {}
         return response
 
     @pytest.mark.asyncio
-    async def test_wait_for_deployment_polls_until_ready(self, git_storage_options: dict) -> None:
+    async def test_deploy_creates_and_polls_until_ready(self, git_storage_options: dict) -> None:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
 
         with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=self._response("queued", 201))
             mock_get = AsyncMock(
                 side_effect=[
-                    self._response("queued"),
                     self._response("building"),
                     self._response("ready"),
                 ]
             )
+            mock_client.return_value.__aenter__.return_value.post = mock_post
             mock_client.return_value.__aenter__.return_value.get = mock_get
-            result = await repo.wait_for_deployment(
-                deployment_id="deployment-1",
+            result = await repo.deploy(
+                ref="feature",
+                target="preview",
                 poll_interval=0.001,
                 timeout=5,
             )
 
-        assert mock_get.await_count == 3
+        assert mock_post.await_count == 1
+        assert mock_get.await_count == 2
         assert result["status"] == "ready"
         assert result["url"] == "https://preview.example.test"
 
     @pytest.mark.asyncio
-    async def test_wait_for_deployment_error_status_raises_with_details(self, git_storage_options: dict) -> None:
+    async def test_deploy_error_status_raises_with_details(self, git_storage_options: dict) -> None:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_get = AsyncMock(
+            mock_post = AsyncMock(
                 return_value=self._response(
                     "error",
+                    201,
                     error_code="build_failed",
                     error_message="Build failed",
                 )
             )
+            mock_get = AsyncMock()
+            mock_client.return_value.__aenter__.return_value.post = mock_post
             mock_client.return_value.__aenter__.return_value.get = mock_get
             with pytest.raises(DeploymentFailedError) as excinfo:
-                await repo.wait_for_deployment(
-                    deployment_id="deployment-1",
-                    poll_interval=0.001,
-                    timeout=5,
-                )
+                await repo.deploy(target="preview", poll_interval=0.001, timeout=5)
 
         err = excinfo.value
         assert err.status == "error"
@@ -3635,35 +3639,42 @@ class TestWaitForDeployment:
         assert err.error_message == "Build failed"
         assert "build_failed" in str(err)
         assert "Build failed" in str(err)
+        mock_get.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_wait_for_deployment_timeout_raises_with_last_status(self, git_storage_options: dict) -> None:
+    async def test_deploy_bounds_an_in_flight_poll_by_the_timeout(
+        self, git_storage_options: dict
+    ) -> None:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
 
+        async def never_returns(*args: object, **kwargs: object) -> MagicMock:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
         with patch("httpx.AsyncClient") as mock_client:
-            mock_get = AsyncMock(return_value=self._response("building"))
+            mock_post = AsyncMock(return_value=self._response("building", 201))
+            mock_get = AsyncMock(side_effect=never_returns)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
             mock_client.return_value.__aenter__.return_value.get = mock_get
             with pytest.raises(TimeoutError) as excinfo:
-                await repo.wait_for_deployment(
-                    deployment_id="deployment-1",
-                    poll_interval=0.001,
-                    timeout=0.01,
-                )
+                await repo.deploy(target="preview", poll_interval=0.001, timeout=0.01)
 
         assert "deployment-1" in str(excinfo.value)
         assert "building" in str(excinfo.value)
 
     @pytest.mark.asyncio
-    async def test_wait_for_deployment_validates_arguments_before_polling(self, git_storage_options: dict) -> None:
+    async def test_deploy_validates_polling_before_creation(
+        self, git_storage_options: dict
+    ) -> None:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
 
         with patch("httpx.AsyncClient") as mock_client:
-            with pytest.raises(ValueError, match="deployment_id is required"):
-                await repo.wait_for_deployment(deployment_id="   ")
-            with pytest.raises(ValueError, match="poll_interval must be positive"):
-                await repo.wait_for_deployment(deployment_id="deployment-1", poll_interval=0)
-            with pytest.raises(ValueError, match="timeout must be positive"):
-                await repo.wait_for_deployment(deployment_id="deployment-1", timeout=-1)
+            with pytest.raises(ValueError, match="poll_interval must be a positive finite"):
+                await repo.deploy(target="preview", poll_interval=0)
+            with pytest.raises(ValueError, match="timeout must be a positive finite"):
+                await repo.deploy(target="preview", timeout=-1)
+            with pytest.raises(ValueError, match="poll_interval must be a positive finite"):
+                await repo.deploy(target="preview", poll_interval=float("nan"))
             mock_client.assert_not_called()

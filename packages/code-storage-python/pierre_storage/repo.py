@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import math
 import time
 import warnings
 from datetime import datetime, timezone
@@ -2305,57 +2306,59 @@ class RepoImpl:
                 raise _deployment_api_error(response, "Failed to get deployment")
             return _deployment_result(response.json())
 
-    async def wait_for_deployment(
+    async def deploy(
         self,
         *,
-        deployment_id: str,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
         poll_interval: float = 2.0,
         timeout: float = 600.0,
         ttl: Optional[int] = None,
     ) -> DeploymentResult:
-        """Wait for a durable deployment to reach a terminal state.
+        """Create a deployment and wait for it to reach a terminal state.
 
-        Polls get_deployment until the deployment is ready, fails, or the
-        timeout expires. The first poll fires immediately.
+        Creates the deployment, then polls until it is ready, fails, or the
+        timeout expires.
 
         Args:
-            deployment_id: Deployment ID to wait on
+            target: Deployment target
+            ref: Branch, tag, or commit to deploy
+            idempotency_key: Key used to make creation idempotent
             poll_interval: Seconds between polls (default 2.0)
             timeout: Overall wait budget in seconds (default 600.0)
-            ttl: Token TTL in seconds, forwarded to every poll
+            ttl: Token TTL in seconds
 
         Returns:
             Deployment result once its status is ready
 
         Raises:
-            ValueError: If deployment_id is blank or interval/timeout are non-positive
+            ValueError: If interval or timeout is not positive and finite
             DeploymentFailedError: If the deployment ends in error or canceled
             TimeoutError: If the timeout expires before a terminal state
         """
-        deployment_id_clean = deployment_id.strip()
-        if not deployment_id_clean:
-            raise ValueError("wait_for_deployment deployment_id is required")
-        if poll_interval <= 0:
-            raise ValueError("wait_for_deployment poll_interval must be positive")
-        if timeout <= 0:
-            raise ValueError("wait_for_deployment timeout must be positive")
+        if not math.isfinite(poll_interval) or poll_interval <= 0:
+            raise ValueError("deploy poll_interval must be a positive finite number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("deploy timeout must be a positive finite number")
 
+        deployment: DeploymentResult = await self.create_deployment(
+            ref=ref,
+            target=target,
+            idempotency_key=idempotency_key,
+            ttl=ttl,
+        )
+        deployment_id = deployment["id"]
         deadline = time.monotonic() + timeout
-        last_status = "unknown"
         while True:
-            deployment = await self.get_deployment(
-                deployment_id=deployment_id_clean,
-                ttl=ttl,
-            )
             status = str(deployment["status"])
-            last_status = status
             if status == "ready":
                 return deployment
             if status in ("error", "canceled"):
                 error_code = deployment.get("error_code", "")
                 error_message = deployment.get("error_message", "")
                 raise DeploymentFailedError(
-                    f"wait_for_deployment deployment {deployment_id_clean} ended with "
+                    f"deploy deployment {deployment_id} ended with "
                     f"status {status} (error_code: {error_code}, "
                     f"error_message: {error_message})",
                     status=status,
@@ -2365,10 +2368,27 @@ class RepoImpl:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError(
-                    f"wait_for_deployment timed out after {timeout}s waiting for "
-                    f"deployment {deployment_id_clean} (last status: {last_status})"
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
                 )
             await asyncio.sleep(min(poll_interval, remaining))
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
+                )
+            try:
+                deployment = await asyncio.wait_for(
+                    self.get_deployment(deployment_id=deployment_id, ttl=ttl),
+                    timeout=remaining,
+                )
+            except asyncio.TimeoutError as error:
+                raise TimeoutError(
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
+                ) from error
 
     async def restore_commit(
         self,

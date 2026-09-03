@@ -129,26 +129,22 @@ them. Region codes are at most four characters and apply from the next
 deployment.
 
 ```python
-created = await repo.create_deployment(
+ready = await repo.deploy(
     ref="main",
     target="production",
     idempotency_key="release-2026-08-27",
 )
+print(ready["url"])
+
+created = await repo.create_deployment(ref="feature", target="preview")
 page = await repo.list_deployments(limit=20)
 current = await repo.get_deployment(deployment_id=created["id"])
 ```
 
-`wait_for_deployment` polls until the deployment reaches a terminal state (2s
-interval, 10m timeout by default) and raises `DeploymentFailedError` when the
-deployment ends in `error` or `canceled`:
-
-```python
-ready = await repo.wait_for_deployment(deployment_id=created["id"])
-print(ready["url"])
-```
-
-Reuse the same idempotency key when retrying creation. The SDK mints the
-required repository and deployment scopes automatically.
+`deploy` creates and polls until the deployment reaches `ready` (2s interval,
+10m timeout by default). It raises `DeploymentFailedError` on `error` or
+`canceled`. `create_deployment` returns immediately with the current state.
+Reuse the same idempotency key when retrying creation.
 
 ### Getting Remote URLs
 
@@ -1055,6 +1051,17 @@ class Repo:
         idempotency_key: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> CreateDeploymentResult: ...
+
+    async def deploy(
+        self,
+        *,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult: ...
 
     async def list_deployments(
         self,

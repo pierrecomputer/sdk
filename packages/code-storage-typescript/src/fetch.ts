@@ -8,6 +8,7 @@ interface RequestOptions {
   extraHeaders?: Record<string, string>;
   /** Resolve paths from `/api` instead of `/api/v{version}`. */
   apiRoot?: boolean;
+  signal?: AbortSignal;
 }
 
 export class ApiError extends Error {
@@ -91,6 +92,7 @@ export class ApiFetcher {
     const requestOptions: RequestInit = {
       method,
       headers,
+      signal: options?.signal,
     };
 
     if (

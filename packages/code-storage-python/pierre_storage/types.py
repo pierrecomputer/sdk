@@ -1174,6 +1174,19 @@ class Repo(Protocol):
         """Create a deployment for a repository revision."""
         ...
 
+    async def deploy(
+        self,
+        *,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Create a deployment and wait for it to reach a terminal state."""
+        ...
+
     async def list_deployments(
         self,
         *,
@@ -1191,17 +1204,6 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> DeploymentResult:
         """Get one durable deployment."""
-        ...
-
-    async def wait_for_deployment(
-        self,
-        *,
-        deployment_id: str,
-        poll_interval: float = 2.0,
-        timeout: float = 600.0,
-        ttl: Optional[int] = None,
-    ) -> DeploymentResult:
-        """Wait for a durable deployment to reach a terminal state."""
         ...
 
     async def restore_commit(
