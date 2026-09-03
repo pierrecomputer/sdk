@@ -38,8 +38,8 @@
   - CI runs the check with `.github/actions/check-package-versions`. Reuse that
     action in a new workflow.
   - Merging a stable version to `main` publishes it. To publish a beta, commit
-    a synced `MAJOR.MINOR.PATCH-beta.NUMBER` version and manually run the
-    `Publish SDK beta` workflow on that branch.
+    a synced `MAJOR.MINOR.PATCH-beta.NUMBER` version, manually run the
+    `Publish SDKs` workflow from `main`, and set `source_branch` to that branch.
 
 ## Coding Style & Naming Conventions
 - TypeScript: follow existing `src/` style; use `camelCase` variables and
