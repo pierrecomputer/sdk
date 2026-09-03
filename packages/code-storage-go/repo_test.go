@@ -2711,6 +2711,32 @@ func TestDeployTimeout(t *testing.T) {
 	}
 }
 
+func TestDeployCreationTimeout(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		<-release
+	}))
+	defer server.Close()
+	defer close(release)
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.Deploy(t.Context(), DeployOptions{
+		Target:  DeploymentTargetProduction,
+		Timeout: 5 * time.Millisecond,
+	})
+	want := "deploy timed out after 5ms while creating deployment"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
 func TestDeployValidation(t *testing.T) {
 	client, err := NewClient(Options{Name: "acme", Key: testKey})
 	if err != nil {

@@ -2326,7 +2326,7 @@ class RepoImpl:
             ref: Branch, tag, or commit to deploy
             idempotency_key: Key used to make creation idempotent
             poll_interval: Seconds between polls (default 2.0)
-            timeout: Overall wait budget in seconds (default 600.0)
+            timeout: Overall create-and-wait budget in seconds (default 600.0)
             ttl: Token TTL in seconds
 
         Returns:
@@ -2342,14 +2342,22 @@ class RepoImpl:
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("deploy timeout must be a positive finite number")
 
-        deployment: DeploymentResult = await self.create_deployment(
-            ref=ref,
-            target=target,
-            idempotency_key=idempotency_key,
-            ttl=ttl,
-        )
-        deployment_id = deployment["id"]
         deadline = time.monotonic() + timeout
+        try:
+            deployment: DeploymentResult = await asyncio.wait_for(
+                self.create_deployment(
+                    ref=ref,
+                    target=target,
+                    idempotency_key=idempotency_key,
+                    ttl=ttl,
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError as error:
+            raise TimeoutError(
+                f"deploy timed out after {timeout}s while creating deployment"
+            ) from error
+        deployment_id = deployment["id"]
         while True:
             status = str(deployment["status"])
             if status == "ready":

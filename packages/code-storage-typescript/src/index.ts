@@ -1849,6 +1849,7 @@ class RepoImpl implements Repo {
         extraHeaders: options.idempotencyKey
           ? { 'Idempotency-Key': options.idempotencyKey }
           : undefined,
+        signal: options.signal,
       }
     );
     const deployment = transformDeploymentResult(
@@ -1935,9 +1936,20 @@ class RepoImpl implements Repo {
       throw new Error('deploy timeoutMs must be a positive finite number');
     }
 
-    let deployment: DeploymentResult = await this.createDeployment(options);
-    const deploymentId = deployment.id;
     const deadline = Date.now() + timeoutMs;
+    const signal = AbortSignal.timeout(timeoutMs);
+    let deployment: DeploymentResult;
+    try {
+      deployment = await this.createDeployment({ ...options, signal });
+    } catch (error) {
+      if (signal.aborted) {
+        throw new Error(
+          `deploy timed out after ${timeoutMs}ms while creating deployment`
+        );
+      }
+      throw error;
+    }
+    const deploymentId = deployment.id;
     const timeoutError = () =>
       new Error(
         `deploy timed out after ${timeoutMs}ms waiting for deployment ` +
@@ -1972,7 +1984,6 @@ class RepoImpl implements Repo {
       if (requestTimeoutMs <= 0) {
         throw timeoutError();
       }
-      const signal = AbortSignal.timeout(requestTimeoutMs);
       try {
         deployment = await this.getDeployment({
           deploymentId,

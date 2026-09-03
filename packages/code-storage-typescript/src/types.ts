@@ -345,13 +345,15 @@ export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
   ref?: string;
   target?: DeploymentTarget;
   idempotencyKey?: string;
+  signal?: AbortSignal;
 }
 
-export interface DeployOptions extends Omit<CreateDeploymentOptions, 'target'> {
+export interface DeployOptions
+  extends Omit<CreateDeploymentOptions, 'target' | 'signal'> {
   target: DeploymentTarget;
   /** Delay between status polls in milliseconds. Defaults to 2000. */
   pollIntervalMs?: number;
-  /** Overall wait budget in milliseconds. Defaults to 600000 (10 minutes). */
+  /** Overall create-and-wait budget in milliseconds. Defaults to 600000. */
   timeoutMs?: number;
 }
 

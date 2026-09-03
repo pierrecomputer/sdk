@@ -102,8 +102,8 @@ current, err := repo.GetDeployment(ctx, storage.GetDeploymentOptions{
 ```
 
 `Deploy` creates and polls until the deployment reaches `ready` (2s interval,
-10m timeout by default). `CreateDeployment` returns immediately with the
-current state. Reuse the same idempotency key when retrying creation.
+10m end-to-end timeout by default). `CreateDeployment` returns immediately with
+the current state. Reuse the same idempotency key when retrying creation.
 
 ### Inspect file metadata
 

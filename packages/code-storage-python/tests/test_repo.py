@@ -3664,6 +3664,22 @@ class TestDeploy:
         assert "building" in str(excinfo.value)
 
     @pytest.mark.asyncio
+    async def test_deploy_bounds_creation_by_the_timeout(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        async def never_returns(*args: object, **kwargs: object) -> MagicMock:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=never_returns
+            )
+            with pytest.raises(TimeoutError, match="while creating deployment"):
+                await repo.deploy(target="preview", timeout=0.01)
+
+    @pytest.mark.asyncio
     async def test_deploy_validates_polling_before_creation(
         self, git_storage_options: dict
     ) -> None:

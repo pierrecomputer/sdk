@@ -264,7 +264,7 @@ type DeploymentResult struct {
 // CreateDeploymentOptions controls deployment creation.
 type CreateDeploymentOptions struct {
 	InvocationOptions
-	Ref            string
+	Ref string
 	// Target must be preview or production.
 	Target         DeploymentTarget
 	IdempotencyKey string
@@ -286,7 +286,7 @@ type DeployOptions struct {
 	IdempotencyKey string
 	// PollInterval is the delay between status polls; zero defaults to 2 seconds.
 	PollInterval time.Duration
-	// Timeout bounds the overall wait; zero defaults to 10 minutes.
+	// Timeout bounds creation and waiting; zero defaults to 10 minutes.
 	Timeout time.Duration
 }
 

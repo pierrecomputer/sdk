@@ -4611,6 +4611,23 @@ describe('GitStorage', () => {
         );
       });
 
+      it('aborts creation when the overall timeout expires', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockImplementationOnce((_url, init) => {
+          const signal = init?.signal as AbortSignal;
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          });
+        });
+
+        await expect(
+          repo.deploy({ target: 'preview', timeoutMs: 5 })
+        ).rejects.toThrow(/timed out.*while creating deployment/);
+      });
+
       it('validates polling options before creating a deployment', async () => {
         const store = new GitStorage({ name: 'v0', key });
         const repo = store.repo({ id: 'owner/repo' });

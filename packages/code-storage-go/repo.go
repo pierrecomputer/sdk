@@ -1237,19 +1237,22 @@ func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentRes
 	if timeout < 0 {
 		return DeploymentResult{}, errors.New("deploy timeout must be positive")
 	}
-	created, err := r.CreateDeployment(ctx, CreateDeploymentOptions{
+	deployCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	created, err := r.CreateDeployment(deployCtx, CreateDeploymentOptions{
 		InvocationOptions: options.InvocationOptions,
 		Ref:               options.Ref,
 		Target:            options.Target,
 		IdempotencyKey:    options.IdempotencyKey,
 	})
 	if err != nil {
+		if ctx.Err() == nil && deployCtx.Err() != nil {
+			return DeploymentResult{}, fmt.Errorf("deploy timed out after %s while creating deployment", timeout)
+		}
 		return DeploymentResult{}, err
 	}
 	deployment := created.DeploymentResult
 	deploymentID := deployment.ID
-	waitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	for {
 		switch deployment.Status {
@@ -1264,7 +1267,7 @@ func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentRes
 		}
 		timer := time.NewTimer(pollInterval)
 		select {
-		case <-waitCtx.Done():
+		case <-deployCtx.Done():
 			timer.Stop()
 			if err := ctx.Err(); err != nil {
 				return DeploymentResult{}, err
@@ -1273,12 +1276,12 @@ func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentRes
 		case <-timer.C:
 		}
 
-		nextDeployment, err := r.GetDeployment(waitCtx, GetDeploymentOptions{
+		nextDeployment, err := r.GetDeployment(deployCtx, GetDeploymentOptions{
 			InvocationOptions: options.InvocationOptions,
 			DeploymentID:      deploymentID,
 		})
 		if err != nil {
-			if ctx.Err() == nil && waitCtx.Err() != nil {
+			if ctx.Err() == nil && deployCtx.Err() != nil {
 				return DeploymentResult{}, fmt.Errorf("deploy %s timed out after %s (last status %q)", deploymentID, timeout, deployment.Status)
 			}
 			return DeploymentResult{}, err
