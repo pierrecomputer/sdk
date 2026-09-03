@@ -251,7 +251,7 @@ class TestRepoFileOperations:
             assert stream_client.stream.call_args.args[0] == "POST"
             called_url = stream_client.stream.call_args.args[1]
             parsed = urlparse(called_url)
-            assert parsed.path.endswith("/repos/archive")
+            assert parsed.path.endswith("/repos/test-repo/archive")
             payload = stream_client.stream.call_args.kwargs["json"]
             assert payload == {
                 "ref": "main",
@@ -456,7 +456,7 @@ class TestRepoFileOperations:
             assert isinstance(meta["last_modified"], datetime)
 
             called_url = client_instance.head.call_args.args[0]
-            assert urlparse(called_url).path.endswith("/repos/file")
+            assert urlparse(called_url).path.endswith("/repos/test-repo/file")
             assert parse_qs(urlparse(called_url).query).get("path") == ["README.md"]
 
     @pytest.mark.asyncio
@@ -489,7 +489,7 @@ class TestRepoFileOperations:
             assert meta["status_code"] == 200
             called_url = client_instance.head.call_args.args[0]
             parsed = urlparse(called_url)
-            assert parsed.path.endswith("/repos/file")
+            assert parsed.path.endswith("/repos/test-repo/file")
             params = parse_qs(parsed.query)
             assert params["path"] == ["README.md"]
             assert params["ref"] == ["feature/demo"]
@@ -764,7 +764,7 @@ class TestRepoFileOperations:
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
             params = parse_qs(parsed.query)
-            assert parsed.path.endswith("/repos/files/metadata")
+            assert parsed.path.endswith("/repos/test-repo/files/metadata")
             assert params.get("ephemeral") == ["true"]
             assert params.get("ref") == ["feature/demo"]
 
@@ -1111,6 +1111,30 @@ class TestRepoBranchOperations:
             assert "ephemeral=true" in called_url
 
     @pytest.mark.asyncio
+    async def test_list_branches_percent_encodes_repo_id(self, git_storage_options: dict) -> None:
+        """Repo ids containing a slash must be encoded as a single path segment."""
+        storage = GitStorage(git_storage_options)
+
+        branches_response = MagicMock()
+        branches_response.status_code = 200
+        branches_response.is_success = True
+        branches_response.json.return_value = {
+            "branches": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_get = AsyncMock(return_value=branches_response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+
+            repo = storage.repo(id="owner/repo")
+            await repo.list_branches()
+
+            called_url = mock_get.await_args.args[0]
+            assert "/api/repos/owner%2Frepo/branches" in called_url
+
+    @pytest.mark.asyncio
     async def test_create_branch_prefers_base_ref(self, git_storage_options: dict) -> None:
         """Test creating a branch prefers the new base_ref payload."""
         storage = GitStorage(git_storage_options)
@@ -1150,7 +1174,7 @@ class TestRepoBranchOperations:
 
             assert client_instance.post.await_count == 2
             branch_call = client_instance.post.await_args_list[1]
-            assert branch_call.args[0].endswith("/api/v1/repos/branches/create")
+            assert branch_call.args[0].endswith("/api/repos/test-repo/branches/create")
             payload = branch_call.kwargs["json"]
             assert payload["base_ref"] == "main"
             assert "base_branch" not in payload
@@ -1223,7 +1247,7 @@ class TestRepoBranchOperations:
             preview_call = client_instance.get.await_args
             parsed = urlparse(preview_call.args[0])
             params = parse_qs(parsed.query)
-            assert parsed.path.endswith("/api/v1/repos/merge/preview")
+            assert parsed.path.endswith("/api/repos/test-repo/merge/preview")
             assert params["source_branch"] == ["feature/preview"]
             assert params["target_branch"] == ["main"]
             assert params["include_content"] == ["true"]
@@ -1323,7 +1347,7 @@ class TestRepoBranchOperations:
 
             assert client_instance.post.await_count == 2
             merge_call = client_instance.post.await_args_list[1]
-            assert merge_call.args[0].endswith("/api/v1/repos/merge")
+            assert merge_call.args[0].endswith("/api/repos/test-repo/merge")
             assert merge_call.kwargs["json"] == {
                 "source_branch": "feature",
                 "source_is_ephemeral": True,
@@ -1666,7 +1690,7 @@ class TestRepoBranchOperations:
 
             assert client_instance.post.await_count == 2
             branch_call = client_instance.post.await_args_list[1]
-            assert branch_call.args[0].endswith("/api/v1/repos/branches/create")
+            assert branch_call.args[0].endswith("/api/repos/test-repo/branches/create")
             payload = branch_call.kwargs["json"]
             assert payload["base_ref"] == "ephemeral/demo"
             assert payload["target_branch"] == "ephemeral/demo"
@@ -1931,7 +1955,7 @@ class TestRepoCommitOperations:
 
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
-            assert parsed.path.endswith("/api/v1/repos/commit")
+            assert parsed.path.endswith("/api/repos/test-repo/commit")
             assert parse_qs(parsed.query) == {"sha": ["abc123"]}
 
             headers = client_instance.get.call_args.kwargs["headers"]
@@ -2132,7 +2156,7 @@ class TestRepoCommitOperations:
 
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
-            assert parsed.path.endswith("/api/v1/repos/blame")
+            assert parsed.path.endswith("/api/repos/test-repo/blame")
             assert parse_qs(parsed.query) == {
                 "path": ["src/x.go"],
                 "ref": ["main"],
@@ -2409,9 +2433,7 @@ class TestRepoNoteOperations:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
-            client_instance.post = AsyncMock(
-                side_effect=[create_response, create_note_response]
-            )
+            client_instance.post = AsyncMock(side_effect=[create_response, create_note_response])
             mock_get = AsyncMock(return_value=note_read_response)
             client_instance.get = mock_get
             client_instance.request = AsyncMock(return_value=delete_note_response)
@@ -2475,7 +2497,7 @@ class TestRepoNoteOperations:
             result = await repo.list_notes_refs(prefix="reviews/", limit=50)
 
             called_url = mock_get.await_args.args[0]
-            assert "/repos/notes/refs" in called_url
+            assert "/repos/test-repo/notes/refs" in called_url
             assert "prefix=reviews" in called_url
             assert "limit=50" in called_url
 
@@ -2485,9 +2507,7 @@ class TestRepoNoteOperations:
             assert result["prefix"] == "refs/notes/reviews/"
 
     @pytest.mark.asyncio
-    async def test_list_notes_refs_no_options(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_notes_refs_no_options(self, git_storage_options: dict) -> None:
         """With no options, no query string is sent and an empty page parses."""
         storage = GitStorage(git_storage_options)
 
@@ -2517,7 +2537,7 @@ class TestRepoNoteOperations:
             result = await repo.list_notes_refs()
 
             called_url = mock_get.await_args.args[0]
-            assert called_url.endswith("/repos/notes/refs")
+            assert called_url.endswith("/repos/test-repo/notes/refs")
             assert result["refs"] == []
             assert result["has_more"] is False
 
@@ -2616,7 +2636,8 @@ class TestRepoTagOperations:
 
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.args[0] == "DELETE"
-            assert delete_call.kwargs["json"] == {"name": "v1.0.0"}
+            assert delete_call.args[1].endswith("/api/repos/test-repo/tags/v1.0.0")
+            assert "json" not in delete_call.kwargs
 
     @pytest.mark.asyncio
     async def test_delete_branch(self, git_storage_options: dict) -> None:
@@ -2653,7 +2674,7 @@ class TestRepoTagOperations:
 
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.args[0] == "DELETE"
-            assert delete_call.args[1].endswith("/repos/branches")
+            assert delete_call.args[1].endswith("/repos/test-repo/branches")
             assert delete_call.kwargs["json"] == {"name": "feature/old-onboarding"}
 
     @pytest.mark.asyncio
@@ -3203,7 +3224,7 @@ class TestRepoUpstreamOperations:
             client_instance.stream.assert_called_once()
             args, _ = client_instance.stream.call_args
             assert args[0] == "POST"
-            assert args[1].endswith("/api/v1/repos/diff-commit")
+            assert args[1].endswith("/api/repos/test-repo/diff-commit")
 
     @pytest.mark.asyncio
     async def test_create_commit_from_diff_failure(self, git_storage_options: dict) -> None:

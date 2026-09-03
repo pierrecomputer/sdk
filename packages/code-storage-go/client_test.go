@@ -2,8 +2,10 @@ package storage
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +90,7 @@ func TestDefaultBaseURLs(t *testing.T) {
 func TestCreateRepoDefaultBranch(t *testing.T) {
 	var receivedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repos" {
+		if r.URL.Path != "/api/repos" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		decoder := json.NewDecoder(r.Body)
@@ -376,7 +378,7 @@ func TestListReposScopes(t *testing.T) {
 
 func TestFindOneReturnsRepo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repo" {
+		if r.URL.Path != "/api/repos/repo-1" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -736,7 +738,7 @@ func TestCreateGitCredential(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/repos/git-credentials" {
+		if r.URL.Path != "/api/repos/repo-abc/git-credentials" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		decoder := json.NewDecoder(r.Body)
@@ -763,8 +765,8 @@ func TestCreateGitCredential(t *testing.T) {
 	if cred.ID != "cred-123" {
 		t.Fatalf("expected cred id cred-123, got %s", cred.ID)
 	}
-	if receivedBody["repo_id"] != "repo-abc" {
-		t.Fatalf("expected repo_id repo-abc")
+	if _, ok := receivedBody["repo_id"]; ok {
+		t.Fatalf("expected no repo_id in body, got %v", receivedBody["repo_id"])
 	}
 	if receivedBody["username"] != "user1" {
 		t.Fatalf("expected username user1")
@@ -848,5 +850,78 @@ func TestDeleteGitCredential(t *testing.T) {
 	}
 	if receivedBody["id"] != "cred-789" {
 		t.Fatalf("expected id cred-789 in request body, got %v", receivedBody["id"])
+	}
+}
+
+func TestUpdateGitCredentialWithRepoID(t *testing.T) {
+	var receivedBody map[string]interface{}
+	var scopes []interface{}
+	var repoClaim interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/git-credentials/cred-456" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		if err := json.NewDecoder(r.Body).Decode(&receivedBody); err != nil {
+			t.Fatal(err)
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		scopes, _ = claims["scopes"].([]interface{})
+		repoClaim = claims["repo"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"cred-456","created_at":"2024-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cred, err := client.UpdateGitCredential(t.Context(), UpdateGitCredentialOptions{
+		ID:       "cred-456",
+		RepoID:   "owner/repo",
+		Username: "user2",
+		Password: "newpassword",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBody := map[string]interface{}{"username": "user2", "password": "newpassword"}
+	if !reflect.DeepEqual(receivedBody, wantBody) {
+		t.Fatalf("request body = %#v, want %#v", receivedBody, wantBody)
+	}
+	if repoClaim != "owner/repo" || !reflect.DeepEqual(scopes, []interface{}{"repo:write"}) {
+		t.Fatalf("claims repo=%v scopes=%v", repoClaim, scopes)
+	}
+	if cred.ID != "cred-456" || cred.CreatedAt != "2024-01-01T00:00:00Z" {
+		t.Fatalf("credential = %#v", cred)
+	}
+}
+
+func TestDeleteGitCredentialWithRepoID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/git-credentials/cred-789" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.EscapedPath())
+		}
+		payload, _ := io.ReadAll(r.Body)
+		if len(payload) != 0 {
+			t.Fatalf("request body = %q, want empty", payload)
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if claims["repo"] != "owner/repo" {
+			t.Fatalf("repo claim = %v", claims["repo"])
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.DeleteGitCredential(t.Context(), DeleteGitCredentialOptions{
+		ID:     "cred-789",
+		RepoID: "owner/repo",
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

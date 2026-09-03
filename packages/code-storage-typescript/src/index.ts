@@ -933,6 +933,10 @@ class RepoImpl implements Repo {
     );
   }
 
+  private repoPath(suffix: string): string {
+    return `repos/${encodeURIComponent(this.id)}/${suffix}`;
+  }
+
   async getRemoteURL(urlOptions?: GetRemoteURLOptions): Promise<string> {
     const url = new URL(
       `https://${this.options.storageBaseUrl}/${this.id}.git`
@@ -974,7 +978,7 @@ class RepoImpl implements Repo {
 
     // Allow range and conditional outcomes to surface as normal responses.
     return this.api.get(
-      { path: 'repos/file', params },
+      { path: this.repoPath('file'), params },
       jwt,
       { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
@@ -991,7 +995,7 @@ class RepoImpl implements Repo {
     const extraHeaders = buildConditionalHeaders(options.headers);
 
     const response = await this.api.head(
-      { path: 'repos/file', params },
+      { path: this.repoPath('file'), params },
       jwt,
       { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
@@ -1028,7 +1032,9 @@ class RepoImpl implements Repo {
     }
 
     const path =
-      Object.keys(body).length > 0 ? { path: 'repos/archive', body } : 'repos/archive';
+      Object.keys(body).length > 0
+        ? { path: this.repoPath('archive'), body }
+        : this.repoPath('archive');
 
     return this.api.post(path, jwt);
   }
@@ -1061,7 +1067,7 @@ class RepoImpl implements Repo {
     }
     const response = await this.api.get(
       {
-        path: 'repos/files',
+        path: this.repoPath('files'),
         params: Object.keys(params).length ? params : undefined,
       },
       jwt
@@ -1107,7 +1113,7 @@ class RepoImpl implements Repo {
     }
     const response = await this.api.get(
       {
-        path: 'repos/files/metadata',
+        path: this.repoPath('files/metadata'),
         params: Object.keys(params).length ? params : undefined,
       },
       jwt
@@ -1150,7 +1156,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/branches', params },
+      { path: this.repoPath('branches'), params },
       jwt
     );
 
@@ -1183,7 +1189,10 @@ class RepoImpl implements Repo {
       }
     }
 
-    const response = await this.api.get({ path: 'repos/tags', params }, jwt);
+    const response = await this.api.get(
+      { path: this.repoPath('tags'), params },
+      jwt
+    );
     const raw = listTagsResponseSchema.parse(await response.json());
     return transformListTagsResult({
       ...raw,
@@ -1225,7 +1234,10 @@ class RepoImpl implements Repo {
       }
     }
 
-    const response = await this.api.get({ path: 'repos/commits', params }, jwt);
+    const response = await this.api.get(
+      { path: this.repoPath('commits'), params },
+      jwt
+    );
 
     const raw = listCommitsResponseSchema.parse(await response.json());
     return transformListCommitsResult({
@@ -1247,7 +1259,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.get(
-      { path: 'repos/commit', params: { sha } },
+      { path: this.repoPath('commit'), params: { sha } },
       jwt
     );
 
@@ -1282,7 +1294,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/blame', params },
+      { path: this.repoPath('blame'), params },
       jwt
     );
 
@@ -1309,7 +1321,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/notes', params },
+      { path: this.repoPath('notes'), params },
       jwt
     );
     const raw = noteReadResponseSchema.parse(await response.json());
@@ -1340,9 +1352,11 @@ class RepoImpl implements Repo {
       ref: options.ref,
     });
 
-    const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.post(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'POST');
     if (!result.result.success) {
@@ -1387,9 +1401,11 @@ class RepoImpl implements Repo {
       ref: options.ref,
     });
 
-    const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.post(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'POST');
     if (!result.result.success) {
@@ -1451,9 +1467,11 @@ class RepoImpl implements Repo {
       };
     }
 
-    const response = await this.api.delete({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.delete(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'DELETE');
     if (!result.result.success) {
@@ -1513,7 +1531,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/notes/refs', params },
+      { path: this.repoPath('notes/refs'), params },
       jwt
     );
 
@@ -1551,7 +1569,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/branches/diff', params },
+      { path: this.repoPath('branches/diff'), params },
       jwt
     );
 
@@ -1582,7 +1600,7 @@ class RepoImpl implements Repo {
       params.path = options.paths;
     }
 
-    const response = await this.api.get({ path: 'repos/diff', params }, jwt);
+    const response = await this.api.get({ path: this.repoPath('diff'), params }, jwt);
 
     const raw = commitDiffResponseSchema.parse(await response.json());
     return transformCommitDiffResult(raw);
@@ -1664,7 +1682,7 @@ class RepoImpl implements Repo {
       };
     }
 
-    const response = await this.api.post({ path: 'repos/grep', body }, jwt);
+    const response = await this.api.post({ path: this.repoPath('grep'), body }, jwt);
     const raw = grepResponseSchema.parse(await response.json());
 
     return {
@@ -1697,7 +1715,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/pull-upstream', body },
+      { path: this.repoPath('pull-upstream'), body },
       jwt
     );
 
@@ -1747,7 +1765,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/branches/create', body },
+      { path: this.repoPath('branches/create'), body },
       jwt
     );
     const raw = createBranchResponseSchema.parse(await response.json());
@@ -1778,7 +1796,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.delete(
-      { path: 'repos/branches', body },
+      { path: this.repoPath('branches'), body },
       jwt
     );
     const raw = deleteBranchResponseSchema.parse(await response.json());
@@ -1813,7 +1831,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/merge/preview', params },
+      { path: this.repoPath('merge/preview'), params },
       jwt
     );
     const raw = previewMergeResponseSchema.parse(await response.json());
@@ -1900,7 +1918,7 @@ class RepoImpl implements Repo {
       body.squash = options.squash;
     }
 
-    const response = await this.api.post({ path: 'repos/merge', body }, jwt);
+    const response = await this.api.post({ path: this.repoPath('merge'), body }, jwt);
     const raw = mergeResponseSchema.parse(await response.json());
     return transformMergeResult(raw);
   }
@@ -1927,7 +1945,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.post(
-      { path: 'repos/tags', body: { name, target } },
+      { path: this.repoPath('tags'), body: { name, target } },
       jwt
     );
     const raw = createTagResponseSchema.parse(await response.json());
@@ -1951,7 +1969,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.delete(
-      { path: 'repos/tags', body: { name } },
+      this.repoPath(`tags/${encodeURIComponent(name)}`),
       jwt
     );
     const raw = deleteTagResponseSchema.parse(await response.json());
@@ -2023,7 +2041,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/restore-commit', body: { metadata } },
+      { path: this.repoPath('restore-commit'), body: { metadata } },
       jwt,
       {
         allowedStatus: [...RESTORE_COMMIT_ALLOWED_STATUS],
@@ -2051,11 +2069,10 @@ class RepoImpl implements Repo {
   }
 
   createCommit(options: CreateCommitOptions): CommitBuilder {
-    const version = this.options.apiVersion ?? API_VERSION;
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchCommitTransport({ baseUrl, version });
+    const transport = new FetchCommitTransport({ baseUrl, repoId: this.id });
     const ttl = resolveCommitTtlSeconds(options);
     const builderOptions: CreateCommitOptions = {
       ...options,
@@ -2078,11 +2095,13 @@ class RepoImpl implements Repo {
   async createCommitFromDiff(
     options: CreateCommitFromDiffOptions
   ): Promise<CommitResult> {
-    const version = this.options.apiVersion ?? API_VERSION;
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchDiffCommitTransport({ baseUrl, version });
+    const transport = new FetchDiffCommitTransport({
+      baseUrl,
+      repoId: this.id,
+    });
     const ttl = resolveCommitTtlSeconds(options);
     const requestOptions: CreateCommitFromDiffOptions = {
       ...options,
@@ -2297,7 +2316,11 @@ export class GitStorage {
     });
 
     // Allow 404 to indicate "not found" without throwing
-    const resp = await this.api.get('repo', jwt, { allowedStatus: [404] });
+    const resp = await this.api.get(
+      `repos/${encodeURIComponent(options.id)}`,
+      jwt,
+      { allowedStatus: [404] }
+    );
     if (resp.status === 404) {
       return null;
     }
@@ -2346,9 +2369,11 @@ export class GitStorage {
     });
 
     // Allow 404 and 409 for clearer error handling
-    const resp = await this.api.delete('repos/delete', jwt, {
-      allowedStatus: [404, 409],
-    });
+    const resp = await this.api.delete(
+      `repos/${encodeURIComponent(options.id)}`,
+      jwt,
+      { allowedStatus: [404, 409] }
+    );
     if (resp.status === 404) {
       throw new Error('Repository not found');
     }
@@ -2377,7 +2402,6 @@ export class GitStorage {
     });
 
     const body: Record<string, unknown> = {
-      repo_id: options.repoId,
       password: options.password,
     };
     if (options.username !== undefined) {
@@ -2385,7 +2409,10 @@ export class GitStorage {
     }
 
     const resp = await this.api.post(
-      { path: 'repos/git-credentials', body },
+      {
+        path: `repos/${encodeURIComponent(options.repoId)}/git-credentials`,
+        body,
+      },
       jwt,
       { allowedStatus: [409] }
     );
@@ -2404,24 +2431,29 @@ export class GitStorage {
     options: UpdateGitCredentialOptions
   ): Promise<GitCredential> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const repoId = options.repoId?.trim();
+    const jwt = await this.generateJWT(repoId || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
     const body: Record<string, unknown> = {
-      id: options.id,
       password: options.password,
     };
     if (options.username !== undefined) {
       body.username = options.username;
     }
 
-    const resp = await this.api.put(
-      { path: 'repos/git-credentials', body },
-      jwt,
-      { allowedStatus: [404] }
-    );
+    // With a repository id the canonical repo-scoped route applies. Without
+    // one, fall back to the legacy versioned route; the current backend
+    // resolves the repository from the token and rejects that fallback.
+    const path = repoId
+      ? {
+          path: `repos/${encodeURIComponent(repoId)}/git-credentials/${encodeURIComponent(options.id)}`,
+          body,
+        }
+      : { path: 'v1/repos/git-credentials', body: { ...body, id: options.id } };
+    const resp = await this.api.put(path, jwt, { allowedStatus: [404] });
     if (resp.status === 404) {
       throw new Error('Credential not found');
     }
@@ -2438,16 +2470,19 @@ export class GitStorage {
    */
   async deleteGitCredential(options: DeleteGitCredentialOptions): Promise<void> {
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const repoId = options.repoId?.trim();
+    const jwt = await this.generateJWT(repoId || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
-    const resp = await this.api.delete(
-      { path: 'repos/git-credentials', body: { id: options.id } },
-      jwt,
-      { allowedStatus: [404] }
-    );
+    // With a repository id the canonical repo-scoped route applies. Without
+    // one, fall back to the legacy versioned route; the current backend
+    // resolves the repository from the token and rejects that fallback.
+    const path = repoId
+      ? `repos/${encodeURIComponent(repoId)}/git-credentials/${encodeURIComponent(options.id)}`
+      : { path: 'v1/repos/git-credentials', body: { id: options.id } };
+    const resp = await this.api.delete(path, jwt, { allowedStatus: [404] });
     if (resp.status === 404) {
       throw new Error('Credential not found');
     }

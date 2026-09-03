@@ -11,7 +11,9 @@ import (
 )
 
 type apiFetcher struct {
-	baseURL    string
+	baseURL string
+	// version is retained for compatibility with existing constructors but no
+	// longer participates in URL construction; the API is unversioned.
 	version    int
 	httpClient *http.Client
 }
@@ -24,7 +26,7 @@ func newAPIFetcher(baseURL string, version int, client *http.Client) *apiFetcher
 }
 
 func (f *apiFetcher) basePath() string {
-	return f.baseURL + "/api/v" + itoa(f.version)
+	return f.baseURL + "/api"
 }
 
 func (f *apiFetcher) buildURL(path string, params url.Values) string {

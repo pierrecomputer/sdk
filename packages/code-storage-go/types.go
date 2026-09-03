@@ -26,9 +26,13 @@ type Options struct {
 	Token          string // pre-minted JWT, used verbatim if set
 	APIBaseURL     string
 	StorageBaseURL string
-	APIVersion     int
-	DefaultTTL     time.Duration
-	HTTPClient     *http.Client
+	// APIVersion is deprecated: the API is unversioned and this value is
+	// accepted but ignored when building request URLs.
+	//
+	// Deprecated: no longer used for URL construction.
+	APIVersion int
+	DefaultTTL time.Duration
+	HTTPClient *http.Client
 }
 
 // Op is a policy operation included in the JWT.
@@ -211,7 +215,12 @@ type CreateGitCredentialOptions struct {
 // UpdateGitCredentialOptions controls git credential updates.
 type UpdateGitCredentialOptions struct {
 	InvocationOptions
-	ID       string
+	ID string
+	// RepoID is the repository the credential belongs to. When set, the
+	// request uses the canonical repo-scoped route. The current backend
+	// resolves the repository from the token, so omitting it is not
+	// compatible with it.
+	RepoID   string
 	Username string
 	Password string
 }
@@ -220,6 +229,11 @@ type UpdateGitCredentialOptions struct {
 type DeleteGitCredentialOptions struct {
 	InvocationOptions
 	ID string
+	// RepoID is the repository the credential belongs to. When set, the
+	// request uses the canonical repo-scoped route. The current backend
+	// resolves the repository from the token, so omitting it is not
+	// compatible with it.
+	RepoID string
 }
 
 // GitCredential describes a git credential.

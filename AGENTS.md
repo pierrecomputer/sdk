@@ -74,10 +74,13 @@ compatibility and coordinate each breaking change.
 - Avoid Node built-in imports that break browser use.
 - Keep the `resolveCommitTtlSeconds` default at one hour.
 - Use `DEFAULT_TOKEN_TTL_SECONDS` for that default.
-- Keep `Repo.restoreCommit` on `repos/restore-commit`. Do not add an automatic
-  fallback to the legacy endpoints.
+- Keep `Repo.restoreCommit` on the canonical
+  `repos/{repo_name}/restore-commit` route. Do not add an automatic fallback
+  to the legacy endpoints (`/api/v1/repos/restore-commit`,
+  `/api/v1/repos/reset-commits`).
 - Preserve the `RefUpdateError` status, reason, message, and ref fields.
-- Keep `Repo.createCommitFromDiff` on `repos/diff-commit`.
+- Keep `Repo.createCommitFromDiff` on the canonical
+  `repos/{repo_name}/diff-commit` route.
 - Keep its return type as `Promise<CommitResult>`.
 - Reuse the commit-pack error helpers in `Repo.createCommitFromDiff`.
 - Keep ES256 private-key authentication compatible with the README example.

@@ -90,12 +90,14 @@ class TestGitStorage:
     async def test_token_sent_verbatim(self) -> None:
         """Test that a pre-minted token is sent verbatim in the Authorization header."""
         expected_token = "my-pre-minted-jwt-token-value"
-        storage = GitStorage({
-            "name": "test-customer",
-            "token": expected_token,
-            "api_base_url": "https://api.test.code.storage",
-            "storage_base_url": "test.code.storage",
-        })
+        storage = GitStorage(
+            {
+                "name": "test-customer",
+                "token": expected_token,
+                "api_base_url": "https://api.test.code.storage",
+                "storage_base_url": "test.code.storage",
+            }
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -527,7 +529,7 @@ class TestGitStorage:
             mock_delete.assert_called_once()
             call_args = mock_delete.call_args[0]
             api_url = call_args[0]
-            assert api_url == "https://api.test.code.storage/api/v1/repos/delete"
+            assert api_url == "https://api.test.code.storage/api/repos/test-repo"
 
             # Verify headers include Authorization with repo:write scope
             call_kwargs = mock_delete.call_args[1]
@@ -662,19 +664,17 @@ class TestGitStorage:
             mock_post.assert_called_once()
             call_args = mock_post.call_args[0]
             api_url = call_args[0]
-            assert api_url == "https://api.test.code.storage/api/v1/repos/git-credentials"
+            assert api_url == "https://api.test.code.storage/api/repos/test-repo/git-credentials"
 
             # Verify the body
             call_kwargs = mock_post.call_args[1]
             body = call_kwargs["json"]
-            assert body["repo_id"] == "test-repo"
+            assert "repo_id" not in body
             assert body["password"] == "secret-token"
             assert body["username"] == "myuser"
 
     @pytest.mark.asyncio
-    async def test_create_git_credential_without_username(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_create_git_credential_without_username(self, git_storage_options: dict) -> None:
         """Test creating a git credential without a username."""
         storage = GitStorage(git_storage_options)
 
@@ -755,6 +755,34 @@ class TestGitStorage:
             assert body["username"] == "newuser"
 
     @pytest.mark.asyncio
+    async def test_update_git_credential_with_repo_id(self, git_storage_options: dict) -> None:
+        """repo_id routes updates through the canonical repo-scoped path."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock(status_code=200, is_success=True)
+        mock_response.json.return_value = {"id": "cred-123"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_put = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.put = mock_put
+
+            await storage.update_git_credential(
+                id="cred-123",
+                repo_id="owner/repo",
+                password="new-secret",
+            )
+
+        call = mock_put.await_args
+        assert call.args[0] == (
+            "https://api.test.code.storage/api/repos/owner%2Frepo/git-credentials/cred-123"
+        )
+        assert call.kwargs["json"] == {"password": "new-secret"}
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["repo"] == "owner/repo"
+        assert claims["scopes"] == ["repo:write"]
+
+    @pytest.mark.asyncio
     async def test_update_git_credential_not_found(self, git_storage_options: dict) -> None:
         """Test updating a git credential that doesn't exist."""
         storage = GitStorage(git_storage_options)
@@ -802,6 +830,29 @@ class TestGitStorage:
             call_kwargs = mock_request.call_args[1]
             body = call_kwargs["json"]
             assert body["id"] == "cred-123"
+
+    @pytest.mark.asyncio
+    async def test_delete_git_credential_with_repo_id(self, git_storage_options: dict) -> None:
+        """repo_id routes deletion through the canonical repo-scoped path."""
+        storage = GitStorage(git_storage_options)
+
+        mock_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_request = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.request = mock_request
+
+            await storage.delete_git_credential(id="cred-123", repo_id="owner/repo")
+
+        call = mock_request.await_args
+        assert call.args[0] == "DELETE"
+        assert call.args[1] == (
+            "https://api.test.code.storage/api/repos/owner%2Frepo/git-credentials/cred-123"
+        )
+        assert call.kwargs["json"] is None
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["repo"] == "owner/repo"
 
     @pytest.mark.asyncio
     async def test_delete_git_credential_not_found(self, git_storage_options: dict) -> None:
@@ -959,9 +1010,7 @@ class TestJWTGeneration:
             assert "test-repo+import.git" in url
 
     @pytest.mark.asyncio
-    async def test_get_import_remote_url_with_permissions(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_get_import_remote_url_with_permissions(self, git_storage_options: dict) -> None:
         """Test import remote URL with custom permissions."""
         storage = GitStorage(git_storage_options)
 
@@ -1325,7 +1374,7 @@ class TestAPIURLConstruction:
             call_args = mock_post.call_args[0]
             assert len(call_args) > 0
             api_url = call_args[0]
-            assert api_url == "https://api.test.code.storage/api/v1/repos"
+            assert api_url == "https://api.test.code.storage/api/repos"
 
     @pytest.mark.asyncio
     async def test_api_requests_with_default_url_uses_org_name(self, test_key: str) -> None:
@@ -1351,7 +1400,7 @@ class TestAPIURLConstruction:
             call_args = mock_post.call_args[0]
             api_url = call_args[0]
             # Should be https://api.my-org.code.storage when using defaults
-            assert api_url == "https://api.my-org.code.storage/api/v1/repos"
+            assert api_url == "https://api.my-org.code.storage/api/repos"
 
     @pytest.mark.asyncio
     async def test_custom_api_url_overrides_default(self, test_key: str) -> None:
@@ -1376,7 +1425,7 @@ class TestAPIURLConstruction:
             mock_post.assert_called_once()
             call_args = mock_post.call_args[0]
             api_url = call_args[0]
-            assert api_url == f"{custom_url}/api/v1/repos"
+            assert api_url == f"{custom_url}/api/repos"
 
 
 class TestCodeStorageAgentHeader:

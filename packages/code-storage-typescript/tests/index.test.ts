@@ -254,7 +254,7 @@ describe('GitStorage', () => {
 
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/branches')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-list-branches-eph/branches');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
       return Promise.resolve({
         ok: true,
@@ -266,13 +266,31 @@ describe('GitStorage', () => {
     await repo.listBranches({ ephemeral: true });
   });
 
+  it('percent-encodes repo ids containing slashes into one path segment', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = store.repo({ id: 'owner/repo' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.pathname).toBe('/api/repos/owner%2Frepo/branches');
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ branches: [], has_more: false }),
+        // Minimal mock of the fetch Response surface this call reads.
+      } as unknown as Response);
+    });
+
+    await repo.listBranches();
+  });
+
   it('passes ephemeral query param on listCommits', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-list-commits-eph' });
 
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-list-commits-eph/commits');
       expect(requestUrl.searchParams.get('branch')).toBe('feature-branch');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
       return Promise.resolve({
@@ -292,7 +310,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-read/notes');
       expect(requestUrl.searchParams.get('sha')).toBe('abc123');
       return Promise.resolve({
         ok: true,
@@ -321,7 +339,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-get-commit/commit');
       expect(requestUrl.searchParams.get('sha')).toBe('abc123');
 
       const headers = (init?.headers ?? {}) as Record<string, string>;
@@ -404,7 +422,7 @@ describe('GitStorage', () => {
 
     mockFetch.mockImplementationOnce((url, init) => {
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-get-commit-ttl/commit');
       expect(requestUrl.searchParams.get('sha')).toBe('abc123');
 
       const headers = (init?.headers ?? {}) as Record<string, string>;
@@ -460,7 +478,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/blame')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-blame/blame');
       expect(requestUrl.searchParams.get('path')).toBe('src/x.go');
       expect(requestUrl.searchParams.get('ref')).toBe('main');
       expect(requestUrl.searchParams.getAll('range')).toEqual(['10,20', '/getUser/,+30']);
@@ -592,7 +610,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-write/notes');
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
@@ -623,7 +641,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-write/notes');
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
@@ -654,7 +672,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('DELETE');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-write/notes');
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({ sha: 'abc123' });
@@ -683,7 +701,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-ref/notes');
       expect(requestUrl.searchParams.get('sha')).toBe('abc123');
       expect(requestUrl.searchParams.get('ref')).toBe('reviews');
       return Promise.resolve({
@@ -758,7 +776,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes/refs')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-list/notes/refs');
       expect(requestUrl.searchParams.get('prefix')).toBe('reviews/');
       expect(requestUrl.searchParams.get('limit')).toBe('50');
 
@@ -805,7 +823,7 @@ describe('GitStorage', () => {
 
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/notes/refs')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-notes-list-empty/notes/refs');
       // No query params when no options are supplied.
       expect(requestUrl.search).toBe('');
       return Promise.resolve({
@@ -829,7 +847,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-ephemeral-file/file');
       expect(requestUrl.searchParams.get('path')).toBe('docs/readme.md');
       expect(requestUrl.searchParams.get('ref')).toBe('feature/demo');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
@@ -860,7 +878,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/archive')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-archive/archive');
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
         ref: 'main',
@@ -898,7 +916,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/files')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-ephemeral-list/files');
       expect(requestUrl.searchParams.get('ref')).toBe('feature/demo');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
       return Promise.resolve({
@@ -932,7 +950,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/files/metadata')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-ephemeral-list-meta/files/metadata');
       expect(requestUrl.searchParams.get('ref')).toBe('feature/demo');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
       return Promise.resolve({
@@ -993,7 +1011,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/files')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-files-subtree/files');
       expect(requestUrl.searchParams.get('ref')).toBe('main');
       expect(requestUrl.searchParams.get('path')).toBe('docs');
       expect(requestUrl.searchParams.get('recursive')).toBe('false');
@@ -1063,7 +1081,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/files/metadata')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-files-meta-page/files/metadata');
       expect(requestUrl.searchParams.get('path')).toBe('src');
       expect(requestUrl.searchParams.get('cursor')).toBe('src/a.ts');
       expect(requestUrl.searchParams.get('limit')).toBe('100');
@@ -1113,7 +1131,7 @@ describe('GitStorage', () => {
 
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-commits-path/commits');
       expect(requestUrl.searchParams.get('branch')).toBe('main');
       expect(requestUrl.searchParams.get('path')).toBe('docs/guide.md');
       return Promise.resolve({
@@ -1140,7 +1158,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-file-headers/file');
       const headers = init?.headers as Record<string, string>;
       expect(headers['Range']).toBe('bytes=0-15');
       expect(headers['If-None-Match']).toBe('"abc"');
@@ -1198,7 +1216,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-file-416/file');
       const headers = init?.headers as Record<string, string>;
       expect(headers['Range']).toBe('bytes=256-511');
       return Promise.resolve({
@@ -1237,7 +1255,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('HEAD');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-file-head/file');
       expect(requestUrl.searchParams.get('path')).toBe('README.md');
       return Promise.resolve({
         ok: true,
@@ -1275,7 +1293,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('HEAD');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-file-head-range/file');
       const headers = init?.headers as Record<string, string>;
       expect(headers['Range']).toBe('bytes=0-15');
       return Promise.resolve({
@@ -1311,7 +1329,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('HEAD');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-file-head-416/file');
       const headers = init?.headers as Record<string, string>;
       expect(headers['Range']).toBe('bytes=256-511');
       return Promise.resolve({
@@ -1356,7 +1374,9 @@ describe('GitStorage', () => {
       mockFetch.mockImplementationOnce((url, init) => {
         expect(init?.method).toBe('HEAD');
         const requestUrl = new URL(url as string);
-        expect(requestUrl.pathname.endsWith('/repos/file')).toBe(true);
+        expect(requestUrl.pathname).toBe(
+          `/api/repos/repo-file-head-${status}/file`
+        );
         const sentHeaders = init?.headers as Record<string, string>;
         if ('ifNoneMatch' in headers) {
           expect(sentHeaders['If-None-Match']).toBe(headers.ifNoneMatch);
@@ -1385,7 +1405,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/grep')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-grep/grep');
 
       const body = JSON.parse(String(init?.body ?? '{}'));
       expect(body).toEqual({
@@ -1454,7 +1474,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/grep')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-grep-legacy/grep');
 
       const body = JSON.parse(String(init?.body ?? '{}'));
       expect(body).toEqual({
@@ -1494,7 +1514,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('POST');
       const requestUrl = new URL(url as string);
-      expect(requestUrl.pathname.endsWith('/repos/grep')).toBe(true);
+      expect(requestUrl.pathname).toBe('/api/repos/repo-grep-eph/grep');
 
       const body = JSON.parse(String(init?.body ?? '{}'));
       expect(body.ref).toBe('feature');
@@ -1841,7 +1861,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         expect(init?.method).toBe('GET');
-        expect(url).toBe('https://api.v0.3p.pierre.rip/api/v1/repos');
+        expect(url).toBe('https://api.v0.3p.pierre.rip/api/repos');
 
         const headers = init?.headers as Record<string, string>;
         const payload = decodeJwtPayload(stripBearer(headers.Authorization));
@@ -1883,7 +1903,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url) => {
         const requestUrl = new URL(url as string);
-        expect(requestUrl.pathname.endsWith('/api/v1/repos')).toBe(true);
+        expect(requestUrl.pathname).toBe('/api/repos');
         expect(requestUrl.searchParams.get('cursor')).toBe('cursor-1');
         expect(requestUrl.searchParams.get('limit')).toBe('25');
 
@@ -2042,7 +2062,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         expect(init?.method).toBe('DELETE');
-        expect(url).toBe('https://api.v0.3p.pierre.rip/api/v1/repos/delete');
+        expect(url).toBe(`https://api.v0.3p.pierre.rip/api/repos/${repoId}`);
 
         const headers = init?.headers as Record<string, string>;
         expect(headers.Authorization).toMatch(/^Bearer /);
@@ -2124,7 +2144,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         expect(url).toBe(
-          'https://api.v0.3p.pierre.rip/api/v1/repos/branches/create'
+          'https://api.v0.3p.pierre.rip/api/repos/repo-create-branch/branches/create'
         );
 
         const requestInit = init as RequestInit;
@@ -2297,7 +2317,9 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         const requestUrl = new URL(url as string);
-        expect(requestUrl.pathname).toBe('/api/v1/repos/merge/preview');
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/repo-preview-merge/merge/preview'
+        );
         expect(requestUrl.searchParams.get('source_branch')).toBe('feature/preview');
         expect(requestUrl.searchParams.get('target_branch')).toBe('main');
         expect(requestUrl.searchParams.get('include_content')).toBe('true');
@@ -2460,7 +2482,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         const requestUrl = new URL(url as string);
-        expect(requestUrl.pathname).toBe('/api/v1/repos/merge');
+        expect(requestUrl.pathname).toBe('/api/repos/repo-merge/merge');
 
         const requestInit = init as RequestInit;
         expect(requestInit.method).toBe('POST');
@@ -2677,7 +2699,7 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url, init) => {
         const requestUrl = new URL(url as string);
-        expect(requestUrl.pathname).toBe('/api/v1/repos/tags');
+        expect(requestUrl.pathname).toBe('/api/repos/repo-list-tags/tags');
         expect(requestUrl.searchParams.get('cursor')).toBe('start');
         expect(requestUrl.searchParams.get('limit')).toBe('17');
 
@@ -2752,16 +2774,19 @@ describe('GitStorage', () => {
         message: 'tag created',
       });
 
-      mockFetch.mockImplementationOnce((_url, init) => {
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/repo-tags-write/tags/v1.0.0'
+        );
+
         const requestInit = init as RequestInit;
         expect(requestInit.method).toBe('DELETE');
+        expect(requestInit.body).toBeUndefined();
 
         const headers = requestInit.headers as Record<string, string>;
         const payload = decodeJwtPayload(stripBearer(headers.Authorization));
         expect(payload.scopes).toEqual(['git:read', 'git:write']);
-
-        const body = JSON.parse(requestInit.body as string);
-        expect(body).toEqual({ name: 'v1.0.0' });
 
         return Promise.resolve({
           ok: true,
@@ -2777,6 +2802,37 @@ describe('GitStorage', () => {
       const deleteResult = await repo.deleteTag({ name: 'v1.0.0' });
       expect(deleteResult).toEqual({
         name: 'v1.0.0',
+        message: 'tag deleted',
+      });
+    });
+
+    it('percent-encodes tag names containing slashes into one path segment', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = await store.createRepo({ id: 'repo-tags-encode' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/repo-tags-encode/tags/release%2Fv1.0.0'
+        );
+        expect((init as RequestInit).method).toBe('DELETE');
+        expect((init as RequestInit).body).toBeUndefined();
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            name: 'release/v1.0.0',
+            message: 'tag deleted',
+          }),
+          // Minimal mock of the fetch Response surface this call reads.
+        } as unknown as Response);
+      });
+
+      const deleteResult = await repo.deleteTag({ name: 'release/v1.0.0' });
+      expect(deleteResult).toEqual({
+        name: 'release/v1.0.0',
         message: 'tag deleted',
       });
     });
@@ -3038,7 +3094,7 @@ describe('GitStorage', () => {
 
       const [, restoreCall] = mockFetch.mock.calls;
       expect(restoreCall[0]).toBe(
-        'https://api.v0.3p.pierre.rip/api/v1/repos/restore-commit'
+        `https://api.v0.3p.pierre.rip/api/repos/${repo.id}/restore-commit`
       );
       const requestInit = restoreCall[1] as RequestInit;
       expect(requestInit.method).toBe('POST');
@@ -4008,7 +4064,7 @@ describe('GitStorage', () => {
   });
 
   describe('git credential methods', () => {
-    it('createGitCredential posts to repos/git-credentials', async () => {
+    it('createGitCredential posts to the repo-scoped git-credentials route', async () => {
       const store = new GitStorage({ name: 'v0', key });
 
       let capturedUrl = '';
@@ -4030,8 +4086,8 @@ describe('GitStorage', () => {
         password: 'mypassword',
       });
 
-      expect(capturedUrl).toContain('/repos/git-credentials');
-      expect(capturedBody.repo_id).toBe('repo-123');
+      expect(capturedUrl).toContain('/api/repos/repo-123/git-credentials');
+      expect(capturedBody.repo_id).toBeUndefined();
       expect(capturedBody.username).toBe('myuser');
       expect(capturedBody.password).toBe('mypassword');
       expect(result.id).toBe('cred-abc');
@@ -4098,7 +4154,7 @@ describe('GitStorage', () => {
       });
 
       expect(capturedMethod).toBe('PUT');
-      expect(capturedUrl).toContain('/repos/git-credentials');
+      expect(capturedUrl).toContain('/api/v1/repos/git-credentials');
       expect(capturedBody.id).toBe('cred-abc');
       expect(capturedBody.username).toBe('newuser');
       expect(capturedBody.password).toBe('newpassword');
@@ -4144,7 +4200,7 @@ describe('GitStorage', () => {
       await store.deleteGitCredential({ id: 'cred-abc' });
 
       expect(capturedMethod).toBe('DELETE');
-      expect(capturedUrl).toContain('/repos/git-credentials');
+      expect(capturedUrl).toContain('/api/v1/repos/git-credentials');
       expect(capturedBody.id).toBe('cred-abc');
     });
 
@@ -4163,6 +4219,62 @@ describe('GitStorage', () => {
       await expect(store.deleteGitCredential({ id: 'cred-abc' })).rejects.toThrow(
         'Credential not found'
       );
+    });
+
+    it('updateGitCredential uses the canonical route when repoId is set', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/git-credentials/cred-abc'
+        );
+        expect(init?.method).toBe('PUT');
+        expect(JSON.parse(init?.body as string)).toEqual({
+          username: 'newuser',
+          password: 'newpassword',
+        });
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        expect(payload.scopes).toEqual(['repo:write']);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ id: 'cred-abc', created_at: '2025-01-01T00:00:00Z' }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        );
+      });
+
+      const result = await store.updateGitCredential({
+        id: 'cred-abc',
+        repoId: 'owner/repo',
+        username: 'newuser',
+        password: 'newpassword',
+      });
+      expect(result).toEqual({
+        id: 'cred-abc',
+        createdAt: '2025-01-01T00:00:00Z',
+      });
+    });
+
+    it('deleteGitCredential uses the canonical route when repoId is set', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/git-credentials/cred-abc'
+        );
+        expect(init?.method).toBe('DELETE');
+        expect(init?.body).toBeUndefined();
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        return Promise.resolve(new Response(null, { status: 204 }));
+      });
+
+      await store.deleteGitCredential({ id: 'cred-abc', repoId: 'owner/repo' });
     });
   });
 });

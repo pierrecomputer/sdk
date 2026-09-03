@@ -41,6 +41,11 @@ import type {
 export interface OverrideableGitStorageOptions {
   apiBaseUrl?: string;
   storageBaseUrl?: string;
+  /**
+   * @deprecated The API is served on unversioned `/api` paths; this option is
+   * still accepted for backwards compatibility but no longer affects request
+   * URLs.
+   */
   apiVersion?: ValidAPIVersion;
   defaultTTL?: number;
 }
@@ -230,6 +235,12 @@ export interface CreateGitCredentialOptions {
 
 export interface UpdateGitCredentialOptions {
   id: string;
+  /**
+   * Repository the credential belongs to. When set, the request uses the
+   * canonical repo-scoped route. The current backend resolves the repository
+   * from the token, so omitting this is not compatible with it.
+   */
+  repoId?: string;
   username?: string;
   password: string;
   ttl?: number;
@@ -237,6 +248,12 @@ export interface UpdateGitCredentialOptions {
 
 export interface DeleteGitCredentialOptions {
   id: string;
+  /**
+   * Repository the credential belongs to. When set, the request uses the
+   * canonical repo-scoped route. The current backend resolves the repository
+   * from the token, so omitting this is not compatible with it.
+   */
+  repoId?: string;
   ttl?: number;
 }
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -212,8 +213,8 @@ func (b *CommitBuilder) Send(ctx context.Context) (CommitResult, error) {
 		}
 	}()
 
-	url := b.client.api.basePath() + "/repos/commit-pack"
-	resp, err := doStreamingRequest(ctx, b.client.api.httpClient, http.MethodPost, url, jwtToken, pipeReader)
+	requestURL := b.client.api.basePath() + "/repos/" + url.PathEscape(b.repoID) + "/commit-pack"
+	resp, err := doStreamingRequest(ctx, b.client.api.httpClient, http.MethodPost, requestURL, jwtToken, pipeReader)
 	if err != nil {
 		return CommitResult{}, err
 	}

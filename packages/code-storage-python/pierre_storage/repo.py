@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Literal, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -65,6 +65,18 @@ from pierre_storage.version import get_user_agent
 
 DEFAULT_TOKEN_TTL_SECONDS = 3600  # 1 hour
 ZERO_DATETIME_UTC = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def build_api_url(api_base_url: str, relative: str = "", *, repo_id: Optional[str] = None) -> str:
+    """Build a canonical API URL: ``{api_base_url}/api/{relative}``.
+
+    When ``repo_id`` is provided the path is scoped to ``repos/{repo_id}``,
+    with the id percent-encoded as a single path segment.
+    """
+    base = f"{api_base_url.rstrip('/')}/api"
+    if repo_id is not None:
+        base = f"{base}/repos/{quote(repo_id, safe='')}"
+    return f"{base}/{relative}" if relative else base
 
 
 def _build_jwt_options(
@@ -259,7 +271,8 @@ class RepoImpl:
             api_base_url: API base URL
             storage_base_url: Storage base URL
             name: Customer name
-            api_version: API version
+            api_version: Deprecated; accepted for backwards compatibility
+                and no longer used to build request URLs
             generate_jwt: Function to generate JWT tokens
             created_at: Repository creation timestamp
         """
@@ -286,6 +299,10 @@ class RepoImpl:
     def created_at(self) -> str:
         """Get repository creation timestamp."""
         return self._created_at
+
+    def _url(self, relative: str) -> str:
+        """Build a canonical repo-scoped API URL for this repository."""
+        return build_api_url(self.api_base_url, relative, repo_id=self._id)
 
     async def get_remote_url(
         self,
@@ -424,7 +441,7 @@ class RepoImpl:
         if ephemeral_base is not None:
             params["ephemeral_base"] = "true" if ephemeral_base else "false"
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
+        url = self._url("file")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -478,7 +495,7 @@ class RepoImpl:
         if ephemeral_base is not None:
             params["ephemeral_base"] = "true" if ephemeral_base else "false"
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/file"
+        url = self._url("file")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -536,7 +553,7 @@ class RepoImpl:
         if archive_prefix and archive_prefix.strip():
             body["archive"] = {"prefix": archive_prefix.strip()}
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/archive"
+        url = self._url("archive")
 
         client = httpx.AsyncClient()
         try:
@@ -601,7 +618,7 @@ class RepoImpl:
         if limit is not None:
             params["limit"] = str(limit)
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/files"
+        url = self._url("files")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -681,7 +698,7 @@ class RepoImpl:
         if limit is not None:
             params["limit"] = str(limit)
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/files/metadata"
+        url = self._url("files/metadata")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -765,7 +782,7 @@ class RepoImpl:
         if ephemeral is not None:
             params["ephemeral"] = "true" if ephemeral else "false"
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
+        url = self._url("branches")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -851,7 +868,7 @@ class RepoImpl:
         else:
             payload["base_branch"] = base_branch_clean
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches/create"
+        url = self._url("branches/create")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -916,7 +933,7 @@ class RepoImpl:
             _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
+        url = self._url("branches")
 
         body: dict[str, object] = {"name": name_clean}
         if ephemeral is not None:
@@ -1033,7 +1050,7 @@ class RepoImpl:
             _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge"
+        url = self._url("merge")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1111,7 +1128,7 @@ class RepoImpl:
         if include_content is not None:
             params["include_content"] = "true" if include_content else "false"
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/merge/preview"
+        url = self._url("merge/preview")
         url += f"?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
@@ -1172,7 +1189,7 @@ class RepoImpl:
         if limit is not None:
             params["limit"] = str(limit)
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
+        url = self._url("tags")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -1229,7 +1246,7 @@ class RepoImpl:
         )
 
         payload = {"name": name_clean, "target": target_clean}
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
+        url = self._url("tags")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1284,7 +1301,7 @@ class RepoImpl:
             _build_jwt_options(["git:read", "git:write"], ttl_value, ref_policies),
         )
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
+        url = self._url(f"tags/{quote(name_clean, safe='')}")
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
@@ -1292,10 +1309,8 @@ class RepoImpl:
                 url,
                 headers={
                     "Authorization": f"Bearer {jwt}",
-                    "Content-Type": "application/json",
                     "Code-Storage-Agent": get_user_agent(),
                 },
-                json={"name": name_clean},
                 timeout=30.0,
             )
 
@@ -1380,7 +1395,7 @@ class RepoImpl:
         if path:
             params["path"] = path
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/commits"
+        url = self._url("commits")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -1442,10 +1457,7 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        url = (
-            f"{self.api_base_url}/api/v{self.api_version}/repos/commit"
-            f"?{urlencode({'sha': sha_clean})}"
-        )
+        url = f"{self._url('commit')}?{urlencode({'sha': sha_clean})}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1525,7 +1537,7 @@ class RepoImpl:
         if detect_moves:
             params.append(("detect_moves", "true"))
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/blame?{urlencode(params)}"
+        url = f"{self._url('blame')}?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1600,7 +1612,7 @@ class RepoImpl:
         if ref and ref.strip():
             params["ref"] = ref.strip()
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes?{urlencode(params)}"
+        url = f"{self._url('notes')}?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1711,7 +1723,7 @@ class RepoImpl:
                 raise ValueError("delete_note author name and email are required when provided")
             payload["author"] = {"name": author_name, "email": author_email}
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes"
+        url = self._url("notes")
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
@@ -1767,7 +1779,7 @@ class RepoImpl:
         if limit is not None:
             params["limit"] = str(limit)
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes/refs"
+        url = self._url("notes/refs")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -1836,7 +1848,7 @@ class RepoImpl:
             for p in paths:
                 params.append(("path", p))
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches/diff"
+        url = self._url("branches/diff")
         url += f"?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
@@ -1921,7 +1933,7 @@ class RepoImpl:
         if paths:
             for p in paths:
                 params.append(("path", p))
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/diff"
+        url = self._url("diff")
         url += f"?{urlencode(params)}"
 
         async with httpx.AsyncClient() as client:
@@ -2043,7 +2055,7 @@ class RepoImpl:
         if pagination:
             body["pagination"] = pagination
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/grep"
+        url = self._url("grep")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -2105,7 +2117,7 @@ class RepoImpl:
         if ref:
             body["ref"] = ref
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/pull-upstream"
+        url = self._url("pull-upstream")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -2192,7 +2204,7 @@ class RepoImpl:
                 )
             metadata["committer"] = {"name": committer_name, "email": committer_email}
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/restore-commit"
+        url = self._url("restore-commit")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -2319,8 +2331,7 @@ class RepoImpl:
         return CommitBuilderImpl(
             options,
             get_auth_token,
-            self.api_base_url,
-            self.api_version,
+            self._url("commit-pack"),
         )
 
     async def create_commit_from_diff(
@@ -2371,8 +2382,7 @@ class RepoImpl:
             options,
             diff,
             get_auth_token,
-            self.api_base_url,
-            self.api_version,
+            self._url("diff-commit"),
         )
 
     async def _write_note(
@@ -2415,7 +2425,7 @@ class RepoImpl:
                 raise ValueError(f"{action_label} author name and email are required when provided")
             payload["author"] = {"name": author_name, "email": author_email}
 
-        url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes"
+        url = self._url("notes")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(

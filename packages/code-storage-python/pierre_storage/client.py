@@ -3,13 +3,13 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
 from pierre_storage.auth import generate_jwt
 from pierre_storage.errors import ApiError
-from pierre_storage.repo import DEFAULT_TOKEN_TTL_SECONDS, RepoImpl
+from pierre_storage.repo import DEFAULT_TOKEN_TTL_SECONDS, RepoImpl, build_api_url
 from pierre_storage.types import (
     BaseRepo,
     CreateGitCredentialResult,
@@ -27,7 +27,7 @@ from pierre_storage.version import get_user_agent
 
 DEFAULT_API_BASE_URL = "https://api.{{org}}.code.storage"
 DEFAULT_STORAGE_BASE_URL = "{{org}}.code.storage"
-DEFAULT_API_VERSION = 1
+DEFAULT_API_VERSION = 1  # deprecated: retained for config compatibility, unused in URLs
 
 
 class GitStorage:
@@ -156,7 +156,7 @@ class GitStorage:
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
+        url = self._api_url("repos")
         body: Dict[str, Any] = {}
 
         # Match backend priority: base_repo.default_branch > default_branch > 'main'
@@ -261,7 +261,7 @@ class GitStorage:
             if q_clean:
                 params["q"] = q_clean
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
+        url = self._api_url("repos")
         if params:
             url += f"?{urlencode(params)}"
 
@@ -316,7 +316,7 @@ class GitStorage:
             {"permissions": ["git:read"], "ttl": DEFAULT_TOKEN_TTL_SECONDS},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repo"
+        url = self._api_url(repo_id=repo_id)
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -409,7 +409,7 @@ class GitStorage:
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/delete"
+        url = self._api_url(repo_id=repo_id)
 
         async with httpx.AsyncClient() as client:
             response = await client.delete(
@@ -470,13 +470,12 @@ class GitStorage:
         )
 
         body: Dict[str, Any] = {
-            "repo_id": repo_id,
             "password": password,
         }
         if username is not None:
             body["username"] = username
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        url = self._api_url("git-credentials", repo_id=repo_id)
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -509,6 +508,7 @@ class GitStorage:
         id: str,
         password: str,
         username: Optional[str] = None,
+        repo_id: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> GitCredential:
         """Update an existing generic git credential.
@@ -517,6 +517,10 @@ class GitStorage:
             id: Credential ID to update
             password: New password or token
             username: Optional new username
+            repo_id: Repository the credential belongs to. When set, the
+                request uses the canonical repo-scoped route. The current
+                backend resolves the repository from the token, so omitting
+                it is not compatible with it.
             ttl: Token TTL in seconds
 
         Returns:
@@ -527,18 +531,25 @@ class GitStorage:
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_id or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
         body: Dict[str, Any] = {
-            "id": id,
             "password": password,
         }
         if username is not None:
             body["username"] = username
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        # With a repository id the canonical repo-scoped route applies.
+        # Without one, fall back to the legacy versioned route; the current
+        # backend resolves the repository from the token and rejects that
+        # fallback.
+        if repo_id:
+            url = self._api_url(f"git-credentials/{quote(id, safe='')}", repo_id=repo_id)
+        else:
+            body["id"] = id
+            url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.put(
@@ -572,12 +583,17 @@ class GitStorage:
         self,
         *,
         id: str,
+        repo_id: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> None:
         """Delete a generic git credential.
 
         Args:
             id: Credential ID to delete
+            repo_id: Repository the credential belongs to. When set, the
+                request uses the canonical repo-scoped route. The current
+                backend resolves the repository from the token, so omitting
+                it is not compatible with it.
             ttl: Token TTL in seconds
 
         Raises:
@@ -585,11 +601,20 @@ class GitStorage:
         """
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self._generate_jwt(
-            "org",
+            repo_id or "org",
             {"permissions": ["repo:write"], "ttl": ttl},
         )
 
-        url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos/git-credentials"
+        # With a repository id the canonical repo-scoped route applies.
+        # Without one, fall back to the legacy versioned route; the current
+        # backend resolves the repository from the token and rejects that
+        # fallback.
+        delete_body: Optional[Dict[str, Any]] = None
+        if repo_id:
+            url = self._api_url(f"git-credentials/{quote(id, safe='')}", repo_id=repo_id)
+        else:
+            delete_body = {"id": id}
+            url = f"{self.options['api_base_url']}/api/v1/repos/git-credentials"
 
         async with httpx.AsyncClient() as client:
             response = await client.request(
@@ -600,7 +625,7 @@ class GitStorage:
                     "Content-Type": "application/json",
                     "Code-Storage-Agent": get_user_agent(),
                 },
-                json={"id": id},
+                json=delete_body,
                 timeout=30.0,
             )
 
@@ -621,6 +646,11 @@ class GitStorage:
             Copy of current configuration
         """
         return {**self.options}
+
+    def _api_url(self, relative: str = "", *, repo_id: Optional[str] = None) -> str:
+        """Build a canonical API URL rooted at this client's api_base_url."""
+        api_base_url: str = self.options["api_base_url"]  # type: ignore[assignment]
+        return build_api_url(api_base_url, relative, repo_id=repo_id)
 
     def _generate_jwt(
         self,
