@@ -17,11 +17,11 @@ class TestVersion:
         assert PACKAGE_VERSION
 
     def test_package_version_format(self) -> None:
-        """Test that version follows semantic versioning."""
+        """Test that version follows the supported PEP 440 format."""
         import re
 
-        semver_pattern = r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$"
-        assert re.match(semver_pattern, PACKAGE_VERSION)
+        version_pattern = r"^\d+\.\d+\.\d+(?:b(?:0|[1-9]\d*))?$"
+        assert re.match(version_pattern, PACKAGE_VERSION)
 
     def test_get_user_agent(self) -> None:
         """Test get_user_agent function."""
@@ -40,7 +40,7 @@ class TestVersion:
 
         user_agent = get_user_agent()
         # Pattern: name/version
-        pattern = r"^[\w-]+/\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$"
+        pattern = r"^[\w-]+/\d+\.\d+\.\d+(?:b(?:0|[1-9]\d*))?$"
         assert re.match(pattern, user_agent)
 
     def test_init_version_matches_package_version(self) -> None:

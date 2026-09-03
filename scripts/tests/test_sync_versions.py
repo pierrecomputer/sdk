@@ -109,6 +109,19 @@ class SyncVersionsTest(unittest.TestCase):
         self.assertIn('name = "httpx"\nversion = "0.28.1"', lock)
         self.assertIn('name = "pytest"\nversion = "8.4.2"', lock)
 
+    def test_beta_sync_uses_each_ecosystems_version_format(self) -> None:
+        """Use SemVer for npm and Go and PEP 440 for Python."""
+        self.write(".version", "2.4.0-beta.1\n")
+
+        result = self.run_tool()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for target in (TARGETS[0], TARGETS[4]):
+            self.assertIn("2.4.0-beta.1", (self.root / target).read_text())
+        for target in TARGETS[1:4]:
+            self.assertIn("2.4.0b1", (self.root / target).read_text())
+        self.assertEqual(self.run_tool("--check").returncode, 0)
+
     def test_invalid_canonical_version_fails(self) -> None:
         """Reject a canonical version that is not a release version."""
         self.write(".version", "release-latest\n")
@@ -118,9 +131,15 @@ class SyncVersionsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("Invalid version in .version", result.stderr)
 
-    def test_prerelease_and_build_metadata_versions_fail(self) -> None:
-        """Reject a version that npm, PyPI, and Go do not accept together."""
-        for version in ("2.3.4-rc.1", "2.3.4+build.5", "v2.3.4", "2.3.4.5"):
+    def test_unsupported_versions_fail(self) -> None:
+        """Reject unsupported prereleases, metadata, and malformed versions."""
+        for version in (
+            "2.3.4-rc.1",
+            "2.3.4-beta.01",
+            "2.3.4+build.5",
+            "v2.3.4",
+            "2.3.4.5",
+        ):
             with self.subTest(version=version):
                 self.write(".version", f"{version}\n")
 
@@ -146,6 +165,36 @@ class SyncVersionsTest(unittest.TestCase):
                 # check rejects a version with exit code 2.
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertNotIn("Version goes backward", result.stderr)
+
+    def test_beta_versions_sort_before_stable(self) -> None:
+        """Allow beta progression and promotion while rejecting regressions."""
+        cases = (
+            ("2.4.0-beta.2", "2.4.0-beta.1", False),
+            ("2.4.0", "2.4.0-beta.2", False),
+            ("2.4.0-beta.1", "2.4.0-beta.2", True),
+            ("2.4.0-beta.1", "2.4.0", True),
+        )
+        for version, baseline, rejected in cases:
+            with self.subTest(version=version, baseline=baseline):
+                self.write(".version", f"{version}\n")
+                result = self.run_tool("--check", "--not-below", baseline)
+
+                self.assertEqual(result.returncode == 2, rejected, result.stderr)
+
+    def test_release_channel_must_match_version(self) -> None:
+        """Keep stable and beta workflows on their own version formats."""
+        cases = (
+            ("2.4.0", "stable", 1),
+            ("2.4.0", "beta", 2),
+            ("2.4.0-beta.1", "stable", 2),
+            ("2.4.0-beta.1", "beta", 1),
+        )
+        for version, channel, returncode in cases:
+            with self.subTest(version=version, channel=channel):
+                self.write(".version", f"{version}\n")
+                result = self.run_tool("--check", "--require-channel", channel)
+
+                self.assertEqual(result.returncode, returncode, result.stderr)
 
     def test_invalid_previous_version_fails(self) -> None:
         """Reject a previous version that the tool cannot compare."""
