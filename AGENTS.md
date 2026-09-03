@@ -26,8 +26,9 @@
   - `moon run git-storage-sdk-go:test`
 - Package versions (repo root):
   - Edit only `.version` when you set a package version.
-  - Use `MAJOR.MINOR.PATCH`. npm, PyPI, and Go do not accept the same
-    prerelease and build metadata.
+  - Use `MAJOR.MINOR.PATCH` for stable releases or
+    `MAJOR.MINOR.PATCH-beta.NUMBER` for betas. The sync tool translates beta
+    versions to Python's `MAJOR.MINOR.PATCHbNUMBER` form.
   - Set a version above the previous version. CI rejects a version that goes
     backward.
   - `python3 scripts/sync_versions.py` sets all package versions from `.version`.
@@ -36,6 +37,9 @@
     tag. Use it instead of a second parser for `.version`.
   - CI runs the check with `.github/actions/check-package-versions`. Reuse that
     action in a new workflow.
+  - Merging a stable version to `main` publishes it. To publish a beta, commit
+    a synced `MAJOR.MINOR.PATCH-beta.NUMBER` version and manually run the
+    `Publish SDK beta` workflow on that branch.
 
 ## Coding Style & Naming Conventions
 - TypeScript: follow existing `src/` style; use `camelCase` variables and

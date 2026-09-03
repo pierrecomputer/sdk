@@ -9,9 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from re import Pattern
 
-# npm, PyPI, and Go do not accept the same prerelease and build metadata, so the
-# canonical version stays MAJOR.MINOR.PATCH.
-VERSION_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+# npm and Go use SemVer prereleases while Python uses PEP 440, so .version uses
+# SemVer and Python targets translate X.Y.Z-beta.N to X.Y.ZbN.
+VERSION_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:-beta\.(0|[1-9]\d*))?")
+PYTHON_TARGET_PATHS = {
+    Path("packages/code-storage-python/pyproject.toml"),
+    Path("packages/code-storage-python/pierre_storage/version.py"),
+    Path("packages/code-storage-python/uv.lock"),
+}
 
 
 @dataclass(frozen=True)
@@ -92,11 +97,19 @@ def parse_version(value: str, source: str) -> tuple[int, ...]:
     match = VERSION_PATTERN.fullmatch(version)
     if match is None:
         raise VersionSyncError(
-            f"Invalid version in {source}: {version!r}. Use MAJOR.MINOR.PATCH. "
-            "npm, PyPI, and Go do not accept the same prerelease and build "
-            "metadata."
+            f"Invalid version in {source}: {version!r}. Use MAJOR.MINOR.PATCH "
+            "or MAJOR.MINOR.PATCH-beta.NUMBER."
         )
-    return tuple(int(part) for part in match.groups())
+    release = tuple(int(part) for part in match.groups()[:3])
+    beta = match.group(4)
+    return (*release, 1, 0) if beta is None else (*release, 0, int(beta))
+
+
+def target_version(target: VersionTarget, version: str) -> str:
+    """Render the canonical version for one package ecosystem."""
+    if target.path in PYTHON_TARGET_PATHS:
+        return re.sub(r"-beta\.(\d+)$", r"b\1", version)
+    return version
 
 
 def read_canonical_version(root: Path) -> str:
@@ -119,6 +132,17 @@ def check_not_below(version: str, baseline: str) -> None:
             f"Version goes backward: .version is {version}, "
             f"below {baseline.strip()}. Set .version to a higher version."
         )
+
+
+def check_channel(version: str, channel: str) -> None:
+    """Require a stable or beta canonical version."""
+    is_beta = "-beta." in version
+    if channel == "beta" and not is_beta:
+        raise VersionSyncError(
+            f"Beta releases require MAJOR.MINOR.PATCH-beta.NUMBER, got {version}."
+        )
+    if channel == "stable" and is_beta:
+        raise VersionSyncError(f"Stable releases require MAJOR.MINOR.PATCH, got {version}.")
 
 
 def read_target_states(root: Path) -> list[TargetState]:
@@ -172,6 +196,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Reject a canonical version below VERSION. An empty value skips it.",
     )
     parser.add_argument(
+        "--require-channel",
+        choices=("stable", "beta"),
+        help="Reject a canonical version for the other release channel.",
+    )
+    parser.add_argument(
         "--root",
         type=Path,
         default=Path(__file__).resolve().parents[1],
@@ -189,6 +218,8 @@ def main() -> int:
         version = read_canonical_version(root)
         if arguments.not_below.strip():
             check_not_below(version, arguments.not_below)
+        if arguments.require_channel:
+            check_channel(version, arguments.require_channel)
         if arguments.print_version:
             print(version)
             return 0
@@ -197,7 +228,9 @@ def main() -> int:
         print(error, file=sys.stderr)
         return 2
 
-    mismatches = [state for state in states if state.version != version]
+    mismatches = [
+        state for state in states if state.version != target_version(state.target, version)
+    ]
     if arguments.check:
         if not mismatches:
             print(f"All package versions match .version ({version}).")
@@ -214,8 +247,9 @@ def main() -> int:
 
     for state in mismatches:
         path = root / state.target.path
-        path.write_text(replace_version(state, version), encoding="utf-8")
-        print(f"Updated {state.target.path}: {state.version} -> {version}")
+        expected = target_version(state.target, version)
+        path.write_text(replace_version(state, expected), encoding="utf-8")
+        print(f"Updated {state.target.path}: {state.version} -> {expected}")
 
     if not mismatches:
         print(f"All package versions match .version ({version}).")

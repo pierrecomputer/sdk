@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-  
+  workflow_call:
+    inputs:
+      channel:
+        description: Package release channel
+        type: string
+        default: stable
+
 permissions:
   id-token: write  # Required for OIDC
   contents: read
@@ -29,6 +34,11 @@ jobs:
           python-version: '3.12'
 
       - uses: ./.github/actions/check-package-versions
+
+      - name: Check release channel
+        run: >-
+          python3 scripts/sync_versions.py --print
+          --require-channel "${{ inputs.channel || 'stable' }}"
 
   publish-typescript:
     name: Publish TypeScript SDK to npm
@@ -79,7 +89,7 @@ jobs:
       - name: Publish to npm
         if: steps.check.outputs.publish == 'true'
         working-directory: packages/code-storage-typescript
-        run: npm publish --access public
+        run: npm publish --access public --tag "${{ inputs.channel == 'beta' && 'beta' || 'latest' }}"
 
   publish-python:
     name: Publish Python SDK to PyPI
