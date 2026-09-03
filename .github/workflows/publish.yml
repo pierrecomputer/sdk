@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*.*.*-beta.*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,18 +34,12 @@ jobs:
       - name: Check release channel
         id: release
         env:
-          RELEASE_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/') && 'beta' || 'stable' }}
-          RELEASE_REF: ${{ github.ref_name }}
+          RELEASE_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && 'beta' || 'stable' }}
         run: |
           set -euo pipefail
           VERSION=$(python3 scripts/sync_versions.py \
             --print \
             --require-channel "${RELEASE_CHANNEL}")
-
-          if [ "${RELEASE_CHANNEL}" = beta ] && [ "${RELEASE_REF}" != "v${VERSION}" ]; then
-            echo "Beta tag ${RELEASE_REF} does not match .version (${VERSION})." >&2
-            exit 1
-          fi
 
           if [ "${RELEASE_CHANNEL}" = beta ]; then
             echo "npm_tag=beta" >> "$GITHUB_OUTPUT"
