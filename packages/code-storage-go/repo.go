@@ -1218,42 +1218,40 @@ func (r *Repo) GetDeployment(ctx context.Context, options GetDeploymentOptions) 
 	return deploymentResult(payload), nil
 }
 
-// WaitForDeployment polls a deployment until it is ready, fails, or the wait times out.
-func (r *Repo) WaitForDeployment(ctx context.Context, options WaitForDeploymentOptions) (DeploymentResult, error) {
-	deploymentID := strings.TrimSpace(options.DeploymentID)
-	if deploymentID == "" {
-		return DeploymentResult{}, errors.New("wait for deployment id is required")
+// Deploy creates a deployment and waits until it is ready, fails, or the wait times out.
+func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentResult, error) {
+	if options.Target != DeploymentTargetPreview && options.Target != DeploymentTargetProduction {
+		return DeploymentResult{}, errors.New("deploy target must be preview or production")
 	}
 	pollInterval := options.PollInterval
 	if pollInterval == 0 {
 		pollInterval = 2 * time.Second
 	}
 	if pollInterval < 0 {
-		return DeploymentResult{}, errors.New("wait for deployment poll interval must be positive")
+		return DeploymentResult{}, errors.New("deploy poll interval must be positive")
 	}
 	timeout := options.Timeout
 	if timeout == 0 {
 		timeout = 10 * time.Minute
 	}
 	if timeout < 0 {
-		return DeploymentResult{}, errors.New("wait for deployment timeout must be positive")
+		return DeploymentResult{}, errors.New("deploy timeout must be positive")
 	}
+	created, err := r.CreateDeployment(ctx, CreateDeploymentOptions{
+		InvocationOptions: options.InvocationOptions,
+		Ref:               options.Ref,
+		Target:            options.Target,
+		IdempotencyKey:    options.IdempotencyKey,
+	})
+	if err != nil {
+		return DeploymentResult{}, err
+	}
+	deployment := created.DeploymentResult
+	deploymentID := deployment.ID
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var lastStatus DeploymentStatus
 	for {
-		deployment, err := r.GetDeployment(waitCtx, GetDeploymentOptions{
-			InvocationOptions: options.InvocationOptions,
-			DeploymentID:      deploymentID,
-		})
-		if err != nil {
-			if ctx.Err() == nil && waitCtx.Err() != nil {
-				return DeploymentResult{}, fmt.Errorf("wait for deployment %s timed out after %s (last status %q)", deploymentID, timeout, lastStatus)
-			}
-			return DeploymentResult{}, err
-		}
-		lastStatus = deployment.Status
 		switch deployment.Status {
 		case DeploymentStatusReady:
 			return deployment, nil
@@ -1271,9 +1269,21 @@ func (r *Repo) WaitForDeployment(ctx context.Context, options WaitForDeploymentO
 			if err := ctx.Err(); err != nil {
 				return DeploymentResult{}, err
 			}
-			return DeploymentResult{}, fmt.Errorf("wait for deployment %s timed out after %s (last status %q)", deploymentID, timeout, lastStatus)
+			return DeploymentResult{}, fmt.Errorf("deploy %s timed out after %s (last status %q)", deploymentID, timeout, deployment.Status)
 		case <-timer.C:
 		}
+
+		nextDeployment, err := r.GetDeployment(waitCtx, GetDeploymentOptions{
+			InvocationOptions: options.InvocationOptions,
+			DeploymentID:      deploymentID,
+		})
+		if err != nil {
+			if ctx.Err() == nil && waitCtx.Err() != nil {
+				return DeploymentResult{}, fmt.Errorf("deploy %s timed out after %s (last status %q)", deploymentID, timeout, deployment.Status)
+			}
+			return DeploymentResult{}, err
+		}
+		deployment = nextDeployment
 	}
 }
 
