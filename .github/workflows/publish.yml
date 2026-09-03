@@ -4,12 +4,8 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      source_branch:
-        description: Branch containing a synced beta version
-        required: true
-        type: string
+    tags:
+      - 'v*.*.*-beta.*'
 
 permissions:
   contents: read
@@ -22,189 +18,71 @@ jobs:
   check-versions:
     name: Check package versions
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       npm_tag: ${{ steps.release.outputs.npm_tag }}
-      python_version: ${{ steps.release.outputs.python_version }}
-      source_sha: ${{ steps.release.outputs.source_sha }}
-      version: ${{ steps.release.outputs.version }}
     steps:
-      - name: Require the trusted workflow from main
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
-        run: |
-          echo "Run this workflow from main and set source_branch to the beta branch." >&2
-          exit 1
-
       - uses: actions/checkout@v4
         with:
-          path: trusted
-
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/heads/{0}', inputs.source_branch) || github.sha }}
           # The version check compares .version against HEAD^.
           fetch-depth: 2
-          path: source
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - uses: ./.github/actions/check-package-versions
 
       - name: Check release channel
         id: release
         env:
-          RELEASE_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && 'beta' || 'stable' }}
+          RELEASE_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/') && 'beta' || 'stable' }}
+          RELEASE_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-
-          BASELINE=$(git -C source show HEAD^:.version 2>/dev/null || true)
-          python3 trusted/scripts/sync_versions.py \
-            --root source \
-            --check \
-            --not-below "${BASELINE}" \
-            --require-channel "${RELEASE_CHANNEL}"
-
-          python3 - <<'PY'
-          import json
-          import os
-          import tomllib
-          from pathlib import Path
-
-          root = Path("source")
-          npm_name = json.loads(
-              (root / "packages/code-storage-typescript/package.json").read_text()
-          )["name"]
-          python_project = tomllib.loads(
-              (root / "packages/code-storage-python/pyproject.toml").read_text()
-          )["project"]
-          go_module = (root / "packages/code-storage-go/go.mod").read_text().splitlines()[0]
-
-          assert npm_name == "@pierre/storage", f"Unexpected npm package: {npm_name}"
-          assert python_project["name"] == "pierre-storage", (
-              f"Unexpected Python package: {python_project['name']}"
-          )
-          assert go_module == "module github.com/pierrecomputer/sdk/packages/code-storage-go"
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"python_version={python_project['version']}\n")
-          PY
-
-          VERSION=$(python3 trusted/scripts/sync_versions.py \
-            --root source \
+          VERSION=$(python3 scripts/sync_versions.py \
             --print \
             --require-channel "${RELEASE_CHANNEL}")
-          SOURCE_SHA=$(git -C source rev-parse HEAD)
 
-          echo "npm_tag=$([[ "${RELEASE_CHANNEL}" == beta ]] && echo beta || echo latest)" >> "$GITHUB_OUTPUT"
-          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [ "${RELEASE_CHANNEL}" = beta ] && [ "${RELEASE_REF}" != "v${VERSION}" ]; then
+            echo "Beta tag ${RELEASE_REF} does not match .version (${VERSION})." >&2
+            exit 1
+          fi
 
-  build-typescript:
-    name: Build TypeScript SDK package
-    needs: check-versions
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-versions.outputs.source_sha }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.14.0'
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Build package
-        working-directory: packages/code-storage-typescript
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm build
-          mkdir -p "$RUNNER_TEMP/npm"
-          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/npm"
-          mv "$RUNNER_TEMP"/npm/*.tgz "$RUNNER_TEMP/npm/pierre-storage.tgz"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: ${{ runner.temp }}/npm/pierre-storage.tgz
-          if-no-files-found: error
-
-  build-python:
-    name: Build Python SDK package
-    needs: check-versions
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check-versions.outputs.source_sha }}
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - run: python -m pip install --upgrade pip build
-
-      - name: Build package
-        working-directory: packages/code-storage-python
-        run: python -m build --outdir "$RUNNER_TEMP/python"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: python-package
-          path: ${{ runner.temp }}/python/*
-          if-no-files-found: error
+          if [ "${RELEASE_CHANNEL}" = beta ]; then
+            echo "npm_tag=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
   publish-typescript:
     name: Publish TypeScript SDK to npm
-    needs: [check-versions, build-typescript]
+    needs: check-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22.14.0'
           registry-url: 'https://registry.npmjs.org'
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@^11.5.1
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: package
-
-      - name: Verify npm artifact
-        env:
-          EXPECTED_VERSION: ${{ needs.check-versions.outputs.version }}
-        run: |
-          tar -xOf package/pierre-storage.tgz package/package.json > package/package.json
-          node <<'JS'
-          const manifest = require('./package/package.json')
-          if (manifest.name !== '@pierre/storage') {
-            throw new Error(`Unexpected npm package: ${manifest.name}`)
-          }
-          if (manifest.version !== process.env.EXPECTED_VERSION) {
-            throw new Error(
-              `Expected npm version ${process.env.EXPECTED_VERSION}, got ${manifest.version}`,
-            )
-          }
-          JS
-
       - name: Check npm for current version
         id: check
-        env:
-          NAME: '@pierre/storage'
-          VERSION: ${{ needs.check-versions.outputs.version }}
+        working-directory: packages/code-storage-typescript
         run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+
           if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
             PUBLISH=false
             echo "${NAME}@${VERSION} already exists on npm; skipping publish."
@@ -217,86 +95,79 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "publish=${PUBLISH}" >> "$GITHUB_OUTPUT"
 
+      - name: Install dependencies
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/code-storage-typescript
+        run: pnpm install --frozen-lockfile
+
       - name: Publish to npm
         if: steps.check.outputs.publish == 'true'
+        working-directory: packages/code-storage-typescript
         env:
           NPM_TAG: ${{ needs.check-versions.outputs.npm_tag }}
-        run: npm publish package/pierre-storage.tgz --access public --tag "$NPM_TAG" --ignore-scripts
+        run: npm publish --access public --tag "$NPM_TAG"
 
   publish-python:
     name: Publish Python SDK to PyPI
-    needs: [check-versions, build-python]
+    needs: check-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip twine
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: python-package
-          path: dist
-
-      - name: Verify Python artifacts
-        env:
-          EXPECTED_VERSION: ${{ needs.check-versions.outputs.python_version }}
+      - name: Check PyPI for current version
+        id: check
         run: |
           python - <<'PY'
-          from email.parser import Parser
+          import json
           import os
+          import tomllib
+          import urllib.error
+          import urllib.request
           from pathlib import Path
-          import re
-          import tarfile
-          import zipfile
 
-          artifacts = [
-              artifact
-              for artifact in Path("dist").iterdir()
-              if not artifact.name.startswith(".")
-          ]
-          if not artifacts:
-              raise SystemExit("No Python artifacts found")
+          pyproject = Path('packages/code-storage-python/pyproject.toml')
+          data = tomllib.loads(pyproject.read_text())
+          name = data['project']['name']
+          version = data['project']['version']
 
-          for artifact in artifacts:
-              if artifact.suffix == ".whl":
-                  with zipfile.ZipFile(artifact) as archive:
-                      names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
-                      if len(names) != 1:
-                          raise SystemExit(f"Expected one METADATA file in {artifact}")
-                      content = archive.read(names[0]).decode()
-              elif artifact.name.endswith(".tar.gz"):
-                  with tarfile.open(artifact, "r:gz") as archive:
-                      members = [
-                          member
-                          for member in archive.getmembers()
-                          if member.name.count("/") == 1
-                          and member.name.endswith("/PKG-INFO")
-                      ]
-                      if len(members) != 1:
-                          raise SystemExit(f"Expected one PKG-INFO file in {artifact}")
-                      content = archive.extractfile(members[0]).read().decode()
-              else:
-                  raise SystemExit(f"Unexpected Python artifact: {artifact}")
+          publish = True
+          url = f'https://pypi.org/pypi/{name}/json'
 
-              metadata = Parser().parsestr(content)
-              name = re.sub(r"[-_.]+", "-", metadata["Name"]).lower()
-              if name != "pierre-storage":
-                  raise SystemExit(f"Unexpected Python package in {artifact}: {name}")
-              if metadata["Version"] != os.environ["EXPECTED_VERSION"]:
-                  raise SystemExit(
-                      f"Expected Python version {os.environ['EXPECTED_VERSION']}, "
-                      f"got {metadata['Version']} in {artifact}"
-                  )
+          try:
+              with urllib.request.urlopen(url) as response:
+                  payload = json.load(response)
+              publish = version not in payload.get('releases', {})
+          except urllib.error.HTTPError as exc:
+              if exc.code != 404:
+                  raise
+              publish = True
+
+          print(f'{name}=={version} publish={publish}')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'name={name}\n')
+              output.write(f'version={version}\n')
+              output.write(f"publish={'true' if publish else 'false'}\n")
           PY
 
-      - run: python -m twine check dist/*
+      - name: Install build tooling
+        if: steps.check.outputs.publish == 'true'
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build distribution
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/code-storage-python
+        run: python -m build
 
       - name: Publish to PyPI
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/code-storage-python
         run: python -m twine upload --skip-existing dist/*
         env:
           TWINE_USERNAME: __token__
@@ -311,15 +182,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.check-versions.outputs.source_sha }}
           fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Determine release tag
         id: tag
-        env:
-          VERSION: ${{ needs.check-versions.outputs.version }}
         run: |
           set -euo pipefail
+          VERSION=$(python3 scripts/sync_versions.py --print)
           TAG="packages/code-storage-go/v${VERSION}"
           SOURCE_SHA=$(git rev-parse HEAD)
           REMOTE_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | cut -f1)
