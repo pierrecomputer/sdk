@@ -17,6 +17,7 @@ export class ApiError extends Error {
   public readonly method: ValidMethod;
   public readonly url: string;
   public readonly body?: unknown;
+  public readonly headers: Headers;
 
   constructor(params: {
     message: string;
@@ -25,6 +26,7 @@ export class ApiError extends Error {
     method: ValidMethod;
     url: string;
     body?: unknown;
+    headers?: Headers;
   }) {
     super(params.message);
     this.name = 'ApiError';
@@ -33,6 +35,7 @@ export class ApiError extends Error {
     this.method = params.method;
     this.url = params.url;
     this.body = params.body;
+    this.headers = new Headers(params.headers);
   }
 }
 
@@ -156,6 +159,7 @@ export class ApiFetcher {
         method,
         url: requestUrl,
         body: errorBody,
+        headers: response.headers,
       });
     }
     return response;

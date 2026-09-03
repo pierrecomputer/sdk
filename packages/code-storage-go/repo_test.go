@@ -2442,6 +2442,53 @@ func TestCreateDeployment(t *testing.T) {
 	}
 }
 
+func TestCreateDeploymentErrorPreservesRecoveryHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Idempotency-Key", "generated-key")
+		w.Header().Set("Location", "/api/repos/owner%2Frepo/deployments/deployment-1")
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":"retry the same request"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.CreateDeployment(t.Context(), CreateDeploymentOptions{Target: DeploymentTargetPreview})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %T, want *APIError", err)
+	}
+	got := struct {
+		IdempotencyKey string
+		Location       string
+		RetryAfter     string
+	}{
+		IdempotencyKey: apiErr.Header.Get("Idempotency-Key"),
+		Location:       apiErr.Header.Get("Location"),
+		RetryAfter:     apiErr.Header.Get("Retry-After"),
+	}
+	want := struct {
+		IdempotencyKey string
+		Location       string
+		RetryAfter     string
+	}{
+		IdempotencyKey: "generated-key",
+		Location:       "/api/repos/owner%2Frepo/deployments/deployment-1",
+		RetryAfter:     "1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("recovery headers = %#v, want %#v", got, want)
+	}
+}
+
 func TestListDeployments(t *testing.T) {
 	var scopes []interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

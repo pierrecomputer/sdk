@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"net/http"
 	"strings"
 )
 
@@ -12,6 +13,7 @@ type APIError struct {
 	Method     string
 	URL        string
 	Body       interface{}
+	Header     http.Header
 }
 
 func (e *APIError) Error() string {

@@ -2,6 +2,7 @@ import { importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ApiError,
   CodeStorage,
   DeploymentFailedError,
   GitStorage,
@@ -4380,6 +4381,37 @@ describe('GitStorage', () => {
         location: '/api/repos/owner%2Frepo/deployments/deployment-1',
         idempotencyKey: 'request-1',
         idempotentReplayed: false,
+      });
+    });
+
+    it('preserves recovery headers when creation fails after persistence', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'retry the same request' }), {
+          status: 503,
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'generated-key',
+            location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+            'retry-after': '1',
+          },
+        })
+      );
+
+      const error = await repo
+        .createDeployment({ target: 'preview' })
+        .catch((cause: unknown) => cause as ApiError);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect({
+        idempotencyKey: error.headers.get('Idempotency-Key'),
+        location: error.headers.get('Location'),
+        retryAfter: error.headers.get('Retry-After'),
+      }).toEqual({
+        idempotencyKey: 'generated-key',
+        location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+        retryAfter: '1',
       });
     });
 
