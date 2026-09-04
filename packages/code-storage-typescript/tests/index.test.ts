@@ -3296,6 +3296,14 @@ describe('GitStorage', () => {
       expect(decodeProtectedHeader(jwt).kid).toBe('tp-read-only');
     });
 
+    it('defaults the JWT lifetime to one hour with a key ID', async () => {
+      const store = new GitStorage({ name: 'v0', key, keyId: 'tp-read-only' });
+      const repo = await store.createRepo({});
+      const payload = decodeJwtPayload(extractJWT(await repo.getRemoteURL()));
+
+      expect(payload.exp - payload.iat).toBe(3600);
+    });
+
     it('respects ttl option for getRemoteURL', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = await store.createRepo({});

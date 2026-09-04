@@ -557,7 +557,7 @@ class GitStorage {
 interface GitStorageOptions {
   name: string; // Your identifier
   key?: string; // Your ES256 private key, used to mint a JWT per call (required unless `token` is set)
-  keyId?: string; // JWT kid supplied when Pierre registers a restricted signing key
+  keyId?: string; // JWT kid for a restricted signing key; generated JWTs then default to a one-hour TTL
   token?: string; // A pre-minted JWT sent on every request instead of signing one from `key`
   defaultTTL?: number; // Default TTL for generated JWTs (seconds)
 }

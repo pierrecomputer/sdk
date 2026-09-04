@@ -2483,11 +2483,14 @@ export class GitStorage {
       );
     }
 
-    // Default permissions and TTL
+    // Default permissions and TTL. The gateway caps tokens from a restricted
+    // signing key at one hour, so a configured key ID defaults to that instead
+    // of one year.
     const permissions = options?.permissions || ['git:write', 'git:read'];
     const ttl = resolveInvocationTtlSeconds(
       options,
-      this.options.defaultTTL ?? 365 * 24 * 60 * 60
+      this.options.defaultTTL ??
+        (this.options.keyId ? DEFAULT_TOKEN_TTL_SECONDS : 365 * 24 * 60 * 60)
     );
 
     // Create the JWT payload

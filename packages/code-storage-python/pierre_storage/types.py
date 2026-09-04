@@ -35,7 +35,7 @@ class GitStorageOptions(TypedDict, total=False):
 
     name: str  # required
     key: str  # required unless token is set
-    key_id: str  # JWT kid for restricted signing keys
+    key_id: str  # JWT kid for restricted signing keys; tokens then default to a one-hour TTL
     token: str  # pre-minted JWT, used verbatim if set
     api_base_url: Optional[str]
     storage_base_url: Optional[str]
