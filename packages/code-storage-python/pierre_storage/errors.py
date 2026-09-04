@@ -20,11 +20,18 @@ class ApiError(Exception):
         Args:
             message: Error message
             status_code: HTTP status code
-            response: Raw response object
+            response: Raw response object; request authorization is removed
         """
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        if response is not None:
+            try:
+                request = response.request
+            except (AttributeError, RuntimeError):
+                request = None
+            if request is not None:
+                request.headers.pop("Authorization", None)
         self.response = response
 
 
