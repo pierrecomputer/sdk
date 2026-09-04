@@ -53,7 +53,9 @@ Every request requires a JWT signed with your private key. Tokens are per-reposi
 }
 ```
 
-JWT header: `{ "alg": "ES256", "typ": "JWT" }` (RS256 and EdDSA also supported)
+JWT header: `{ "alg": "ES256", "typ": "JWT", "kid": "your-key-id" }` (RS256 and
+EdDSA also supported). `kid` is required for restricted signing keys; configure it as
+`keyId` in TypeScript or `key_id` in Python.
 
 ### Policy Operations
 

@@ -95,6 +95,9 @@ class GitStorage:
         if has_key:
             self.options["key"] = options["key"]
 
+        if "key_id" in options:
+            self.options["key_id"] = options["key_id"]
+
         if has_token:
             self.options["token"] = options["token"]
 
@@ -673,6 +676,7 @@ class GitStorage:
             ttl,
             ops,
             refs,
+            key_id=self.options.get("key_id"),
         )
 
 

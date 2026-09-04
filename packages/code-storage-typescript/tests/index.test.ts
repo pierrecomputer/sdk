@@ -1,4 +1,4 @@
-import { importPKCS8, jwtVerify } from 'jose';
+import { decodeProtectedHeader, importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -3286,6 +3286,14 @@ describe('GitStorage', () => {
 
       expect(payload.scopes).toEqual(customPermissions);
       expect(payload.exp - payload.iat).toBe(customTTL);
+    });
+
+    it('includes the configured key ID in the JWT header', async () => {
+      const store = new GitStorage({ name: 'v0', key, keyId: 'tp-read-only' });
+      const repo = await store.createRepo({});
+      const jwt = extractJWT(await repo.getRemoteURL());
+
+      expect(decodeProtectedHeader(jwt).kid).toBe('tp-read-only');
     });
 
     it('respects ttl option for getRemoteURL', async () => {

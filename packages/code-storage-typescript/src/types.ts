@@ -51,6 +51,8 @@ export interface GitStorageOptions extends OverrideableGitStorageOptions {
    * Required unless `token` is supplied.
    */
   key?: string;
+  /** Key ID added to the JWT protected header for restricted signing keys. */
+  keyId?: string;
   name: string;
   /**
    * A pre-minted JWT to send on every authenticated request instead of signing

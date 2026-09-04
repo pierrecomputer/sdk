@@ -28,6 +28,7 @@ import { GitStorage } from '@pierre/storage';
 const store = new GitStorage({
   name: 'your-name', // e.g., 'v0'
   key: 'your-key', // Your API key
+  keyId: 'your-key-id', // Required when using a restricted signing key
 });
 ```
 
@@ -556,6 +557,7 @@ class GitStorage {
 interface GitStorageOptions {
   name: string; // Your identifier
   key?: string; // Your ES256 private key, used to mint a JWT per call (required unless `token` is set)
+  keyId?: string; // JWT kid supplied when Pierre registers a restricted signing key
   token?: string; // A pre-minted JWT sent on every request instead of signing one from `key`
   defaultTTL?: number; // Default TTL for generated JWTs (seconds)
 }

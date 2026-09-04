@@ -917,6 +917,14 @@ class TestJWTGeneration:
             assert payload["scopes"] == ["git:read"]
             assert payload["exp"] - payload["iat"] == 3600
 
+    def test_jwt_includes_configured_key_id(self, git_storage_options: dict) -> None:
+        """Test JWT includes the configured key ID."""
+        git_storage_options["key_id"] = "tp-read-only"
+        storage = GitStorage(git_storage_options)
+        token = storage._generate_jwt("test-repo")
+
+        assert jwt.get_unverified_header(token)["kid"] == "tp-read-only"
+
     @pytest.mark.asyncio
     async def test_get_ephemeral_remote_url(self, git_storage_options: dict) -> None:
         """Test getting ephemeral remote URL."""
