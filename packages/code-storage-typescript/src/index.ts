@@ -698,24 +698,10 @@ function buildDeploymentSettingsBody(
     body.output_directory = settings.outputDirectory;
   }
   if (settings.serverlessFunctionRegion !== undefined) {
-    if (
-      typeof settings.serverlessFunctionRegion === 'string' &&
-      Array.from(settings.serverlessFunctionRegion).length > 4
-    ) {
-      throw new Error(
-        'deployment.serverlessFunctionRegion must not exceed 4 characters'
-      );
-    }
     body.serverless_function_region = settings.serverlessFunctionRegion;
   }
   if (settings.env !== undefined) {
-    if (Object.keys(settings.env).length === 0) {
-      throw new Error('deployment.env must include at least one variable');
-    }
     body.env = { ...settings.env };
-  }
-  if (Object.keys(body).length === 0) {
-    throw new Error('deployment must include at least one setting');
   }
   return body;
 }
@@ -724,7 +710,6 @@ function transformUpdateRepoResult(
   raw: UpdateRepoResponse
 ): UpdateRepoResult {
   return {
-    repoId: raw.repo_id,
     repoName: raw.repo_name,
     defaultBranch: raw.default_branch,
   };
@@ -1819,18 +1804,13 @@ class RepoImpl implements Repo {
   async createDeployment(
     options: CreateDeploymentOptions = {}
   ): Promise<CreateDeploymentResult> {
-    const target = options.target;
-    if (target !== undefined && target !== 'preview' && target !== 'production') {
-      throw new Error('createDeployment target must be preview or production');
-    }
-
     const body: Record<string, unknown> = {};
     const ref = options.ref?.trim();
     if (ref) {
       body.ref = ref;
     }
-    if (target !== undefined) {
-      body.target = target;
+    if (options.target !== undefined) {
+      body.target = options.target;
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1863,8 +1843,7 @@ class RepoImpl implements Repo {
         options.idempotencyKey ??
         '',
       idempotentReplayed:
-        response.headers.get('idempotent-replayed') === 'true' ||
-        response.status === 200,
+        response.headers.get('idempotent-replayed') === 'true',
     };
   }
 
@@ -1890,7 +1869,7 @@ class RepoImpl implements Repo {
         params,
       },
       jwt,
-      { apiRoot: true }
+      { apiRoot: true, signal: options.signal }
     );
     return transformListDeploymentsResult(
       listDeploymentsResponseSchema.parse(await response.json())
@@ -1923,9 +1902,6 @@ class RepoImpl implements Repo {
   }
 
   async deploy(options: DeployOptions): Promise<DeploymentResult> {
-    if (options.target !== 'preview' && options.target !== 'production') {
-      throw new Error('deploy target must be preview or production');
-    }
     const pollIntervalMs =
       options.pollIntervalMs ?? DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS;
     if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
@@ -1943,17 +1919,19 @@ class RepoImpl implements Repo {
       deployment = await this.createDeployment({ ...options, signal });
     } catch (error) {
       if (signal.aborted) {
-        throw new Error(
-          `deploy timed out after ${timeoutMs}ms while creating deployment`
+        throw new DOMException(
+          `deploy timed out after ${timeoutMs}ms while creating deployment`,
+          'TimeoutError'
         );
       }
       throw error;
     }
     const deploymentId = deployment.id;
     const timeoutError = () =>
-      new Error(
+      new DOMException(
         `deploy timed out after ${timeoutMs}ms waiting for deployment ` +
-          `${deploymentId} (last status: ${deployment.status})`
+          `${deploymentId} (last status: ${deployment.status})`,
+        'TimeoutError'
       );
 
     for (;;) {
@@ -2532,14 +2510,29 @@ export class GitStorage {
           }
         : 'repos';
 
-    // Preserve the established conflict message for calls without deployment settings.
-    const resp = await this.api.post(
-      createRepoPath,
-      jwt,
-      deployment ? undefined : { allowedStatus: [409] }
-    );
+    // Allow 409 so we can surface the server reason with a stable fallback.
+    const resp = await this.api.post(createRepoPath, jwt, {
+      allowedStatus: [409],
+    });
     if (resp.status === 409) {
-      throw new Error('Repository already exists');
+      let body: unknown;
+      try {
+        body = await resp.json();
+      } catch {
+        body = undefined;
+      }
+      const envelope = errorEnvelopeSchema.safeParse(body);
+      throw new ApiError({
+        message: envelope.success
+          ? envelope.data.error
+          : 'Repository already exists',
+        status: resp.status,
+        statusText: resp.statusText,
+        method: 'POST',
+        url: resp.url ?? '',
+        body,
+        headers: resp.headers,
+      });
     }
 
     return this.repo({

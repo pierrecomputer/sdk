@@ -223,7 +223,6 @@ type UpdateRepoOptions struct {
 
 // UpdateRepoResult describes updated repository metadata.
 type UpdateRepoResult struct {
-	RepoID        string
 	RepoName      string
 	DefaultBranch string
 }
@@ -265,7 +264,7 @@ type DeploymentResult struct {
 type CreateDeploymentOptions struct {
 	InvocationOptions
 	Ref string
-	// Target must be preview or production.
+	// Target is preview or production. Empty uses the server default (production).
 	Target         DeploymentTarget
 	IdempotencyKey string
 }
@@ -281,7 +280,8 @@ type CreateDeploymentResult struct {
 // DeployOptions controls deployment creation and readiness polling.
 type DeployOptions struct {
 	InvocationOptions
-	Ref            string
+	Ref string
+	// Target is preview or production. Empty uses the server default (production).
 	Target         DeploymentTarget
 	IdempotencyKey string
 	// PollInterval is the delay between status polls; zero defaults to 2 seconds.

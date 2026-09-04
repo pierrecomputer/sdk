@@ -296,7 +296,7 @@ curl "$CODE_STORAGE_BASE_URL/repo" -X PATCH \
   -d '{"deployment":{"serverless_function_region":null}}'
 ```
 
-Response `200` includes `repo_id`, `repo_name`, and `default_branch`.
+Response `200` includes `repo_name` and `default_branch`.
 
 ## Deployment Lifecycle
 
@@ -320,9 +320,19 @@ curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/deployments/DEPLOYMENT_ID"
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
+`target` defaults to `production`; the first deployment of a repository is
+always production. `ref` defaults to the repository default branch.
+
 Create returns `201` for a new deployment and `200` for an idempotent replay.
-The response headers include `Idempotency-Key`, `Location`, and
-`Idempotent-Replayed` for a replay. Reuse the same key when retrying.
+The response headers include `Idempotency-Key` (server-generated when omitted),
+`Location`, and `Idempotent-Replayed: true` on a replay. Reuse the same key
+when retrying.
+
+Create errors: `400` invalid body or key, `403` `hosting_not_enabled`, `404`
+repository or revision not found, `422` same `Idempotency-Key` reused with a
+different `ref`/`target`, `501` deployments unavailable on this cluster, `503`
+with `Retry-After` when the deployment failed to start (retry the same request).
+List/Get errors: `404` repository or deployment not found.
 
 Deployment fields: `id`, optional `url`, `target`, `ref`, `commit_sha`,
 `status`, optional `error_code`/`error_message`, `created_at`, and `updated_at`.
@@ -331,7 +341,12 @@ Statuses: `queued`, `building`, `ready`, `error`, `canceled`.
 SDK convenience: `deploy` / `Deploy` creates a deployment and polls Get
 Deployment (2s interval, 10m timeout by default), resolves on `ready`, and
 fails with a typed `DeploymentFailedError` carrying
-`status`/`error_code`/`error_message` on `error` or `canceled`.
+`status`/`error_code`/`error_message` on `error` or `canceled`. On timeout the
+TypeScript SDK throws a `DOMException` named `TimeoutError`, Python raises
+`TimeoutError`, and Go returns the context error. Unknown future statuses are
+passed through unchanged; only `ready`, `error`, and `canceled` are terminal.
+Settings validation (region length, env keys, project name) happens
+server-side and surfaces as `400` with the reason in `error`.
 
 List query parameters: `cursor`, `limit` (default 20, maximum 100). The response
 contains `deployments`, optional `next_cursor`, and `has_more`.

@@ -328,18 +328,19 @@ export interface UpdateRepoOptions extends GitStorageInvocationOptions {
 export type UpdateRepoResponse = UpdateRepoResponseRaw;
 
 export interface UpdateRepoResult {
-  repoId: string;
   repoName: string;
   defaultBranch: string;
 }
 
 export type DeploymentTarget = 'preview' | 'production';
+/** Known statuses plus any newer value the server may return. */
 export type DeploymentStatus =
   | 'queued'
   | 'building'
   | 'ready'
   | 'error'
-  | 'canceled';
+  | 'canceled'
+  | (string & {});
 
 export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
   ref?: string;
@@ -381,6 +382,7 @@ export interface CreateDeploymentResult extends DeploymentResult {
 export interface ListDeploymentsOptions extends GitStorageInvocationOptions {
   cursor?: string;
   limit?: number;
+  signal?: AbortSignal;
 }
 
 export type ListDeploymentsResponse = ListDeploymentsResponseRaw;

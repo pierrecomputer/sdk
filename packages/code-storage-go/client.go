@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -185,17 +187,30 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 		}
 	}
 
-	requestOpts := &requestOptions{allowedStatus: map[int]bool{409: true}}
-	if deployment != nil {
-		requestOpts = nil
-	}
-	resp, err := c.api.post(ctx, "repos", nil, body, jwtToken, requestOpts)
+	resp, err := c.api.post(ctx, "repos", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 409 {
-		return nil, errors.New("repository already exists")
+		// Surface the server reason (project name in use, upstream configured, ...)
+		// with a stable fallback for the plain duplicate-repo case.
+		message := "repository already exists"
+		var payload map[string]interface{}
+		if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr == nil {
+			if serverMessage, ok := payload["error"].(string); ok && strings.TrimSpace(serverMessage) != "" {
+				message = strings.TrimSpace(serverMessage)
+			}
+		}
+		return nil, &APIError{
+			Message:    message,
+			Status:     resp.StatusCode,
+			StatusText: resp.Status,
+			Method:     http.MethodPost,
+			URL:        resp.Request.URL.String(),
+			Body:       payload,
+			Header:     resp.Header.Clone(),
+		}
 	}
 
 	if resolvedDefaultBranch == "" {
@@ -246,7 +261,6 @@ func (c *Client) UpdateRepo(ctx context.Context, options UpdateRepoOptions) (Upd
 		return UpdateRepoResult{}, err
 	}
 	return UpdateRepoResult{
-		RepoID:        payload.RepoID,
 		RepoName:      payload.RepoName,
 		DefaultBranch: payload.DefaultBranch,
 	}, nil

@@ -167,7 +167,8 @@ const current = await repo.getDeployment({
 
 `deploy` creates and polls until the deployment reaches `ready` (2s interval,
 10m end-to-end timeout by default). It throws `DeploymentFailedError` on
-`error` or `canceled`. `createDeployment` returns immediately with the current
+`error` or `canceled`, and a `DOMException` named `TimeoutError` when the
+budget expires. `createDeployment` returns immediately with the current
 state. Reuse the same idempotency key when retrying a create request. The SDK
 mints the required repository and deployment scopes automatically.
 

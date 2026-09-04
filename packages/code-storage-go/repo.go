@@ -1103,11 +1103,6 @@ func deploymentResult(payload deploymentResponse) DeploymentResult {
 
 // CreateDeployment creates a deployment for a repository revision.
 func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOptions) (CreateDeploymentResult, error) {
-	if options.Target != "" &&
-		options.Target != DeploymentTargetPreview &&
-		options.Target != DeploymentTargetProduction {
-		return CreateDeploymentResult{}, errors.New("create deployment target must be preview or production")
-	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
 	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
 		Permissions: []Permission{PermissionDeploymentWrite},
@@ -1144,7 +1139,7 @@ func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOpt
 		DeploymentResult:   deploymentResult(payload),
 		Location:           resp.Header.Get("Location"),
 		IdempotencyKey:     idempotencyKey,
-		IdempotentReplayed: resp.Header.Get("Idempotent-Replayed") == "true" || resp.StatusCode == http.StatusOK,
+		IdempotentReplayed: resp.Header.Get("Idempotent-Replayed") == "true",
 	}, nil
 }
 
@@ -1220,8 +1215,8 @@ func (r *Repo) GetDeployment(ctx context.Context, options GetDeploymentOptions) 
 
 // Deploy creates a deployment and waits until it is ready, fails, or the wait times out.
 func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentResult, error) {
-	if options.Target != DeploymentTargetPreview && options.Target != DeploymentTargetProduction {
-		return DeploymentResult{}, errors.New("deploy target must be preview or production")
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	pollInterval := options.PollInterval
 	if pollInterval == 0 {

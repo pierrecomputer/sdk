@@ -4271,27 +4271,9 @@ describe('GitStorage', () => {
           },
         })
       ).resolves.toEqual({
-        repoId: 'internal-id',
         repoName: 'owner/repo',
         defaultBranch: 'release',
       });
-    });
-
-    it('validates region length and non-empty settings', async () => {
-      const store = new GitStorage({ name: 'v0', key });
-
-      await expect(
-        store.updateRepo({
-          id: 'owner/repo',
-          deployment: { serverlessFunctionRegion: 'iad12' },
-        })
-      ).rejects.toThrow(
-        'deployment.serverlessFunctionRegion must not exceed 4 characters'
-      );
-      await expect(
-        store.updateRepo({ id: 'owner/repo', deployment: {} })
-      ).rejects.toThrow('deployment must include at least one setting');
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('preserves deployment project conflicts from create', async () => {

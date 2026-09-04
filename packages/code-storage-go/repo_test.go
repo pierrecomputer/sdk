@@ -2746,10 +2746,6 @@ func TestDeployValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Deploy(t.Context(), DeployOptions{}); err == nil ||
-		err.Error() != "deploy target must be preview or production" {
-		t.Fatalf("error = %v", err)
-	}
 	if _, err := repo.Deploy(t.Context(), DeployOptions{
 		Target:       DeploymentTargetPreview,
 		PollInterval: -time.Second,

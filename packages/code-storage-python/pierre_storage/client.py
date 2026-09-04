@@ -32,18 +32,6 @@ DEFAULT_STORAGE_BASE_URL = "{{org}}.code.storage"
 DEFAULT_API_VERSION = 1
 
 
-def _deployment_settings_payload(settings: DeploymentSettings) -> Dict[str, Any]:
-    """Validate and copy deployment settings without rewriting environment keys."""
-    if not settings:
-        raise ValueError("deployment must include at least one setting")
-    region = settings.get("serverless_function_region")
-    if isinstance(region, str) and len(region) > 4:
-        raise ValueError("deployment.serverless_function_region must not exceed 4 characters")
-    if "env" in settings and not settings["env"]:
-        raise ValueError("deployment.env must include at least one variable")
-    return dict(settings)
-
-
 class GitStorage:
     """Pierre Git Storage client."""
 
@@ -165,9 +153,6 @@ class GitStorage:
         """
         repo_id = id or str(uuid.uuid4())
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
-        deployment_payload = (
-            _deployment_settings_payload(deployment) if deployment is not None else None
-        )
         permissions = ["repo:write"]
         if deployment is not None and "env" in deployment:
             permissions.append("deployment:write")
@@ -178,8 +163,8 @@ class GitStorage:
 
         url = f"{self.options['api_base_url']}/api/v{self.options['api_version']}/repos"
         body: Dict[str, Any] = {}
-        if deployment_payload is not None:
-            body["deployment"] = deployment_payload
+        if deployment is not None:
+            body["deployment"] = dict(deployment)
 
         # Match backend priority: base_repo.default_branch > default_branch > 'main'
         explicit_default_branch = default_branch is not None
@@ -238,12 +223,12 @@ class GitStorage:
                 timeout=30.0,
             )
 
-            if response.status_code == 409 and deployment is None:
-                raise ApiError("Repository already exists", status_code=409)
-
             if not response.is_success:
+                # Surface the server reason with a stable fallback for a duplicate repo.
                 message = (
-                    f"Failed to create repository: {response.status_code} {response.reason_phrase}"
+                    "Repository already exists"
+                    if response.status_code == 409
+                    else f"Failed to create repository: {response.status_code} {response.reason_phrase}"
                 )
                 try:
                     error_data = response.json()
@@ -280,7 +265,7 @@ class GitStorage:
         if default_branch is not None and default_branch.strip():
             body["default_branch"] = default_branch.strip()
         if deployment is not None:
-            body["deployment"] = _deployment_settings_payload(deployment)
+            body["deployment"] = dict(deployment)
         if not body:
             raise ValueError("update_repo requires default_branch or deployment settings")
 
@@ -320,7 +305,6 @@ class GitStorage:
             data = response.json()
 
         return {
-            "repo_id": str(data["repo_id"]),
             "repo_name": str(data["repo_name"]),
             "default_branch": str(data["default_branch"]),
         }

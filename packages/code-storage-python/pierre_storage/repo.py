@@ -175,21 +175,17 @@ def normalize_optional_string(value: Optional[str]) -> Optional[str]:
 
 
 def _deployment_result(data: Dict[str, Any]) -> DeploymentResult:
-    """Normalize one deployment response."""
-    target_raw = str(data["target"])
-    if target_raw not in ("preview", "production"):
-        raise ValueError(f"unsupported deployment target: {target_raw}")
-    target = cast(DeploymentTarget, target_raw)
-    status_raw = str(data["status"])
-    if status_raw not in ("queued", "building", "ready", "error", "canceled"):
-        raise ValueError(f"unsupported deployment status: {status_raw}")
-    status = cast(DeploymentStatus, status_raw)
+    """Normalize one deployment response.
+
+    Unknown ``status`` values pass through so newer server states do not break
+    list/get/poll callers.
+    """
     result: DeploymentResult = {
         "id": str(data["id"]),
-        "target": target,
+        "target": cast(DeploymentTarget, str(data["target"])),
         "ref": str(data["ref"]),
         "commit_sha": str(data["commit_sha"]),
-        "status": status,
+        "status": cast(DeploymentStatus, str(data["status"])),
         "created_at": str(data["created_at"]),
         "updated_at": str(data["updated_at"]),
     }
@@ -2188,9 +2184,6 @@ class RepoImpl:
         ttl: Optional[int] = None,
     ) -> CreateDeploymentResult:
         """Create a deployment for a repository revision."""
-        if target is not None and target not in ("preview", "production"):
-            raise ValueError("create_deployment target must be preview or production")
-
         body: Dict[str, Any] = {}
         ref_clean = normalize_optional_ref(ref)
         if ref_clean is not None:
@@ -2225,7 +2218,6 @@ class RepoImpl:
             "idempotency_key": response.headers.get("Idempotency-Key", idempotency_key or ""),
             "idempotent_replayed": (
                 response.headers.get("Idempotent-Replayed", "").lower() == "true"
-                or response.status_code == 200
             ),
         }
         return result

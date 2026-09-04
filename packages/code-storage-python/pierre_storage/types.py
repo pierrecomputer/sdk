@@ -173,7 +173,6 @@ class DeploymentSettings(TypedDict, total=False):
 class UpdateRepoResult(TypedDict):
     """Result from updating repository metadata or deployment settings."""
 
-    repo_id: str
     repo_name: str
     default_branch: str
 
