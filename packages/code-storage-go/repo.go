@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var restoreCommitAllowedStatus = map[int]bool{
@@ -1083,6 +1084,205 @@ func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) er
 		return errors.New("pull upstream failed: " + resp.Status)
 	}
 	return nil
+}
+
+func deploymentResult(payload deploymentResponse) DeploymentResult {
+	return DeploymentResult{
+		ID:           payload.ID,
+		URL:          payload.URL,
+		Target:       payload.Target,
+		Ref:          payload.Ref,
+		CommitSHA:    payload.CommitSHA,
+		Status:       payload.Status,
+		ErrorCode:    payload.ErrorCode,
+		ErrorMessage: payload.ErrorMessage,
+		CreatedAt:    payload.CreatedAt,
+		UpdatedAt:    payload.UpdatedAt,
+	}
+}
+
+// CreateDeployment creates a deployment for a repository revision.
+func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOptions) (CreateDeploymentResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
+		Permissions: []Permission{PermissionDeploymentWrite},
+		TTL:         ttl,
+	})
+	if err != nil {
+		return CreateDeploymentResult{}, err
+	}
+	requestOpts := &requestOptions{
+		apiRoot: true,
+		extraHeaders: map[string]string{
+			"Idempotency-Key": options.IdempotencyKey,
+		},
+	}
+	path := "repos/" + url.PathEscape(r.ID) + "/deployments"
+	resp, err := r.client.api.post(ctx, path, nil, &createDeploymentRequest{
+		Ref:    strings.TrimSpace(options.Ref),
+		Target: options.Target,
+	}, jwtToken, requestOpts)
+	if err != nil {
+		return CreateDeploymentResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload deploymentResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return CreateDeploymentResult{}, err
+	}
+	idempotencyKey := resp.Header.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		idempotencyKey = options.IdempotencyKey
+	}
+	return CreateDeploymentResult{
+		DeploymentResult:   deploymentResult(payload),
+		Location:           resp.Header.Get("Location"),
+		IdempotencyKey:     idempotencyKey,
+		IdempotentReplayed: resp.Header.Get("Idempotent-Replayed") == "true",
+	}, nil
+}
+
+// ListDeployments lists durable deployments for the repository.
+func (r *Repo) ListDeployments(ctx context.Context, options ListDeploymentsOptions) (ListDeploymentsResult, error) {
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
+		Permissions: []Permission{PermissionDeploymentRead},
+		TTL:         ttl,
+	})
+	if err != nil {
+		return ListDeploymentsResult{}, err
+	}
+	params := url.Values{}
+	if options.Cursor != "" {
+		params.Set("cursor", options.Cursor)
+	}
+	if options.Limit != 0 {
+		params.Set("limit", strconv.Itoa(options.Limit))
+	}
+	if len(params) == 0 {
+		params = nil
+	}
+	path := "repos/" + url.PathEscape(r.ID) + "/deployments"
+	resp, err := r.client.api.get(ctx, path, params, jwtToken, &requestOptions{apiRoot: true})
+	if err != nil {
+		return ListDeploymentsResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload listDeploymentsResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return ListDeploymentsResult{}, err
+	}
+	result := ListDeploymentsResult{
+		Deployments: make([]DeploymentResult, len(payload.Deployments)),
+		NextCursor:  payload.NextCursor,
+		HasMore:     payload.HasMore,
+	}
+	for i := range payload.Deployments {
+		result.Deployments[i] = deploymentResult(payload.Deployments[i])
+	}
+	return result, nil
+}
+
+// GetDeployment gets one durable deployment.
+func (r *Repo) GetDeployment(ctx context.Context, options GetDeploymentOptions) (DeploymentResult, error) {
+	deploymentID := strings.TrimSpace(options.DeploymentID)
+	if deploymentID == "" {
+		return DeploymentResult{}, errors.New("get deployment id is required")
+	}
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
+		Permissions: []Permission{PermissionDeploymentRead},
+		TTL:         ttl,
+	})
+	if err != nil {
+		return DeploymentResult{}, err
+	}
+	path := "repos/" + url.PathEscape(r.ID) + "/deployments/" + url.PathEscape(deploymentID)
+	resp, err := r.client.api.get(ctx, path, nil, jwtToken, &requestOptions{apiRoot: true})
+	if err != nil {
+		return DeploymentResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload deploymentResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return DeploymentResult{}, err
+	}
+	return deploymentResult(payload), nil
+}
+
+// Deploy creates a deployment and waits until it is ready, fails, or the wait times out.
+func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	pollInterval := options.PollInterval
+	if pollInterval == 0 {
+		pollInterval = 2 * time.Second
+	}
+	if pollInterval < 0 {
+		return DeploymentResult{}, errors.New("deploy poll interval must be positive")
+	}
+	timeout := options.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Minute
+	}
+	if timeout < 0 {
+		return DeploymentResult{}, errors.New("deploy timeout must be positive")
+	}
+	deployCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	created, err := r.CreateDeployment(deployCtx, CreateDeploymentOptions{
+		InvocationOptions: options.InvocationOptions,
+		Ref:               options.Ref,
+		Target:            options.Target,
+		IdempotencyKey:    options.IdempotencyKey,
+	})
+	if err != nil {
+		if ctx.Err() == nil && deployCtx.Err() != nil {
+			return DeploymentResult{}, fmt.Errorf("deploy timed out after %s while creating deployment", timeout)
+		}
+		return DeploymentResult{}, err
+	}
+	deployment := created.DeploymentResult
+	deploymentID := deployment.ID
+
+	for {
+		switch deployment.Status {
+		case DeploymentStatusReady:
+			return deployment, nil
+		case DeploymentStatusError, DeploymentStatusCanceled:
+			return DeploymentResult{}, &DeploymentFailedError{
+				Status:       deployment.Status,
+				ErrorCode:    deployment.ErrorCode,
+				ErrorMessage: deployment.ErrorMessage,
+			}
+		}
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-deployCtx.Done():
+			timer.Stop()
+			if err := ctx.Err(); err != nil {
+				return DeploymentResult{}, err
+			}
+			return DeploymentResult{}, fmt.Errorf("deploy %s timed out after %s (last status %q)", deploymentID, timeout, deployment.Status)
+		case <-timer.C:
+		}
+
+		nextDeployment, err := r.GetDeployment(deployCtx, GetDeploymentOptions{
+			InvocationOptions: options.InvocationOptions,
+			DeploymentID:      deploymentID,
+		})
+		if err != nil {
+			if ctx.Err() == nil && deployCtx.Err() != nil {
+				return DeploymentResult{}, fmt.Errorf("deploy %s timed out after %s (last status %q)", deploymentID, timeout, deployment.Status)
+			}
+			return DeploymentResult{}, err
+		}
+		deployment = nextDeployment
+	}
 }
 
 // CreateBranch creates a new branch.

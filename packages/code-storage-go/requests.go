@@ -1,9 +1,67 @@
 package storage
 
+import "errors"
+
 // createRepoRequest is the JSON body for CreateRepo.
 type createRepoRequest struct {
-	BaseRepo      *baseRepoPayload `json:"base_repo,omitempty"`
-	DefaultBranch string           `json:"default_branch,omitempty"`
+	BaseRepo      *baseRepoPayload       `json:"base_repo,omitempty"`
+	DefaultBranch string                 `json:"default_branch,omitempty"`
+	Deployment    map[string]interface{} `json:"deployment,omitempty"`
+}
+
+// updateRepoRequest is the JSON body for UpdateRepo.
+type updateRepoRequest struct {
+	DefaultBranch string                 `json:"default_branch,omitempty"`
+	Deployment    map[string]interface{} `json:"deployment,omitempty"`
+}
+
+// createDeploymentRequest is the JSON body for CreateDeployment.
+type createDeploymentRequest struct {
+	Ref    string           `json:"ref,omitempty"`
+	Target DeploymentTarget `json:"target,omitempty"`
+}
+
+// buildDeploymentSettingsRequest validates settings and builds the wire
+// deployment object, preserving omitted/null semantics and env key names.
+func buildDeploymentSettingsRequest(settings *DeploymentSettings) (map[string]interface{}, error) {
+	if settings == nil {
+		return nil, nil
+	}
+	body := make(map[string]interface{})
+	if settings.DeployOnPush != nil {
+		body["deploy_on_push"] = *settings.DeployOnPush
+	}
+	if settings.ProductionBranch != nil {
+		body["production_branch"] = *settings.ProductionBranch
+	}
+	if settings.ProjectName != nil {
+		body["project_name"] = *settings.ProjectName
+	}
+	stringSettings := []struct {
+		name    string
+		setting DeploymentStringSetting
+	}{
+		{"framework", settings.Framework},
+		{"root_directory", settings.RootDirectory},
+		{"build_command", settings.BuildCommand},
+		{"install_command", settings.InstallCommand},
+		{"output_directory", settings.OutputDirectory},
+		{"serverless_function_region", settings.ServerlessFunctionRegion},
+	}
+	for _, item := range stringSettings {
+		if item.setting.set {
+			body[item.name] = item.setting.value
+		}
+	}
+	if settings.Env != nil {
+		body["env"] = settings.Env
+	}
+	// The server validates settings; this check only exists because omitempty
+	// would drop an empty map and silently send no deployment object.
+	if len(body) == 0 {
+		return nil, errors.New("deployment must include at least one setting")
+	}
+	return body, nil
 }
 
 type baseRepoPayload struct {

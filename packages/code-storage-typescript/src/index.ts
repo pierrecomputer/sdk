@@ -13,7 +13,7 @@ import {
   resolveCommitTtlSeconds,
 } from './commit';
 import { FetchDiffCommitTransport, sendCommitFromDiff } from './diff-commit';
-import { RefUpdateError } from './errors';
+import { DeploymentFailedError, RefUpdateError } from './errors';
 import { ApiError, ApiFetcher } from './fetch';
 import type {
   MergeResponseRaw,
@@ -27,6 +27,7 @@ import {
   createTagResponseSchema,
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
+  deploymentResponseSchema,
   errorEnvelopeSchema,
   blameResponseSchema,
   getCommitResponseSchema,
@@ -36,6 +37,7 @@ import {
   listFilesResponseSchema,
   listFilesWithMetadataResponseSchema,
   listReposResponseSchema,
+  listDeploymentsResponseSchema,
   mergeResponseSchema,
   previewMergeResponseSchema,
   listTagsResponseSchema,
@@ -44,6 +46,7 @@ import {
   noteWriteResponseSchema,
   restoreCommitAckSchema,
   restoreCommitResponseSchema,
+  updateRepoResponseSchema,
 } from './schemas';
 import type {
   AppendNoteOptions,
@@ -58,6 +61,8 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateDeploymentOptions,
+  CreateDeploymentResult,
   CreateTagOptions,
   CreateTagResponse,
   CreateTagResult,
@@ -74,6 +79,10 @@ import type {
   DeleteNoteOptions,
   DeleteRepoOptions,
   DeleteRepoResult,
+  DeploymentResponse,
+  DeploymentResult,
+  DeploymentSettings,
+  DeployOptions,
   DiffFileState,
   FileMetadata,
   FileWithMetadata,
@@ -95,6 +104,7 @@ import type {
   GetCommitResult,
   GetFileOptions,
   HeadFileOptions,
+  GetDeploymentOptions,
   GetNoteOptions,
   GetNoteResult,
   GetRemoteURLOptions,
@@ -108,6 +118,9 @@ import type {
   ListBranchesOptions,
   ListBranchesResponse,
   ListBranchesResult,
+  ListDeploymentsOptions,
+  ListDeploymentsResponse,
+  ListDeploymentsResult,
   ListCommitsOptions,
   ListCommitsResponse,
   ListCommitsResult,
@@ -149,6 +162,9 @@ import type {
   TagInfo,
   TreeEntry,
   UpdateGitCredentialOptions,
+  UpdateRepoOptions,
+  UpdateRepoResponse,
+  UpdateRepoResult,
   ValidAPIVersion,
 } from './types';
 
@@ -156,7 +172,7 @@ import type {
  * Type definitions for Pierre Git Storage SDK
  */
 
-export { RefUpdateError } from './errors';
+export { DeploymentFailedError, RefUpdateError } from './errors';
 export { ApiError } from './fetch';
 // Import additional types from types.ts
 export * from './types';
@@ -182,6 +198,8 @@ const API_VERSION: ValidAPIVersion = 1;
 
 const apiInstanceMap = new Map<string, ApiFetcher>();
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
+const DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_DEPLOYMENT_WAIT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const RESTORE_COMMIT_ALLOWED_STATUS = [
   400, // Bad Request - validation errors
   401, // Unauthorized - missing/invalid auth header
@@ -646,6 +664,79 @@ function transformListReposResult(raw: ListReposResponse): ListReposResult {
           }
         : undefined,
     })),
+    nextCursor: raw.next_cursor ?? undefined,
+    hasMore: raw.has_more,
+  };
+}
+
+function buildDeploymentSettingsBody(
+  settings: DeploymentSettings
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (settings.deployOnPush !== undefined) {
+    body.deploy_on_push = settings.deployOnPush;
+  }
+  if (settings.productionBranch !== undefined) {
+    body.production_branch = settings.productionBranch;
+  }
+  if (settings.projectName !== undefined) {
+    body.project_name = settings.projectName;
+  }
+  if (settings.framework !== undefined) {
+    body.framework = settings.framework;
+  }
+  if (settings.rootDirectory !== undefined) {
+    body.root_directory = settings.rootDirectory;
+  }
+  if (settings.buildCommand !== undefined) {
+    body.build_command = settings.buildCommand;
+  }
+  if (settings.installCommand !== undefined) {
+    body.install_command = settings.installCommand;
+  }
+  if (settings.outputDirectory !== undefined) {
+    body.output_directory = settings.outputDirectory;
+  }
+  if (settings.serverlessFunctionRegion !== undefined) {
+    body.serverless_function_region = settings.serverlessFunctionRegion;
+  }
+  if (settings.env !== undefined) {
+    body.env = { ...settings.env };
+  }
+  return body;
+}
+
+function transformUpdateRepoResult(
+  raw: UpdateRepoResponse
+): UpdateRepoResult {
+  return {
+    repoName: raw.repo_name,
+    defaultBranch: raw.default_branch,
+  };
+}
+
+function transformDeploymentResult(
+  raw: DeploymentResponse
+): DeploymentResult {
+  return {
+    id: raw.id,
+    url: raw.url,
+    target: raw.target,
+    ref: raw.ref,
+    commitSha: raw.commit_sha,
+    status: raw.status,
+    errorCode: raw.error_code,
+    errorMessage: raw.error_message,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+function transformListDeploymentsResult(
+  raw: ListDeploymentsResponse
+): ListDeploymentsResult {
+  return {
+    deployments: raw.deployments.map(transformDeploymentResult),
     nextCursor: raw.next_cursor ?? undefined,
     hasMore: raw.has_more,
   };
@@ -1710,6 +1801,182 @@ class RepoImpl implements Repo {
     return;
   }
 
+  async createDeployment(
+    options: CreateDeploymentOptions = {}
+  ): Promise<CreateDeploymentResult> {
+    const body: Record<string, unknown> = {};
+    const ref = options.ref?.trim();
+    if (ref) {
+      body.ref = ref;
+    }
+    if (options.target !== undefined) {
+      body.target = options.target;
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:write'],
+      ttl,
+    });
+    const response = await this.api.post(
+      {
+        path: `repos/${encodeURIComponent(this.id)}/deployments`,
+        body,
+      },
+      jwt,
+      {
+        apiRoot: true,
+        extraHeaders: options.idempotencyKey
+          ? { 'Idempotency-Key': options.idempotencyKey }
+          : undefined,
+        signal: options.signal,
+      }
+    );
+    const deployment = transformDeploymentResult(
+      deploymentResponseSchema.parse(await response.json())
+    );
+    return {
+      ...deployment,
+      location: response.headers.get('location') ?? '',
+      idempotencyKey:
+        response.headers.get('idempotency-key') ??
+        options.idempotencyKey ??
+        '',
+      idempotentReplayed:
+        response.headers.get('idempotent-replayed') === 'true',
+    };
+  }
+
+  async listDeployments(
+    options: ListDeploymentsOptions = {}
+  ): Promise<ListDeploymentsResult> {
+    const params: Record<string, string> = {};
+    if (options.cursor !== undefined) {
+      params.cursor = options.cursor;
+    }
+    if (options.limit !== undefined) {
+      params.limit = String(options.limit);
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:read'],
+      ttl,
+    });
+    const response = await this.api.get(
+      {
+        path: `repos/${encodeURIComponent(this.id)}/deployments`,
+        params,
+      },
+      jwt,
+      { apiRoot: true, signal: options.signal }
+    );
+    return transformListDeploymentsResult(
+      listDeploymentsResponseSchema.parse(await response.json())
+    );
+  }
+
+  async getDeployment(
+    options: GetDeploymentOptions
+  ): Promise<DeploymentResult> {
+    const deploymentId = options?.deploymentId?.trim();
+    if (!deploymentId) {
+      throw new Error('getDeployment deploymentId is required');
+    }
+
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(this.id, {
+      permissions: ['deployment:read'],
+      ttl,
+    });
+    const response = await this.api.get(
+      `repos/${encodeURIComponent(this.id)}/deployments/${encodeURIComponent(
+        deploymentId
+      )}`,
+      jwt,
+      { apiRoot: true, signal: options.signal }
+    );
+    return transformDeploymentResult(
+      deploymentResponseSchema.parse(await response.json())
+    );
+  }
+
+  async deploy(options: DeployOptions): Promise<DeploymentResult> {
+    const pollIntervalMs =
+      options.pollIntervalMs ?? DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS;
+    if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
+      throw new Error('deploy pollIntervalMs must be a positive finite number');
+    }
+    const timeoutMs = options.timeoutMs ?? DEFAULT_DEPLOYMENT_WAIT_TIMEOUT_MS;
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      throw new Error('deploy timeoutMs must be a positive finite number');
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    const signal = AbortSignal.timeout(timeoutMs);
+    let deployment: DeploymentResult;
+    try {
+      deployment = await this.createDeployment({ ...options, signal });
+    } catch (error) {
+      if (signal.aborted) {
+        throw new DOMException(
+          `deploy timed out after ${timeoutMs}ms while creating deployment`,
+          'TimeoutError'
+        );
+      }
+      throw error;
+    }
+    const deploymentId = deployment.id;
+    const timeoutError = () =>
+      new DOMException(
+        `deploy timed out after ${timeoutMs}ms waiting for deployment ` +
+          `${deploymentId} (last status: ${deployment.status})`,
+        'TimeoutError'
+      );
+
+    for (;;) {
+      if (deployment.status === 'ready') {
+        return deployment;
+      }
+      if (deployment.status === 'error' || deployment.status === 'canceled') {
+        throw new DeploymentFailedError(
+          `Deployment ${deploymentId} failed with status ${deployment.status}: ` +
+            `${deployment.errorCode ?? ''} ${deployment.errorMessage ?? ''}`.trimEnd(),
+          {
+            status: deployment.status,
+            errorCode: deployment.errorCode,
+            errorMessage: deployment.errorMessage,
+          }
+        );
+      }
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw timeoutError();
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(pollIntervalMs, remainingMs))
+      );
+
+      const requestTimeoutMs = deadline - Date.now();
+      if (requestTimeoutMs <= 0) {
+        throw timeoutError();
+      }
+      try {
+        deployment = await this.getDeployment({
+          deploymentId,
+          ttl: options.ttl,
+          signal,
+        });
+      } catch (error) {
+        if (signal.aborted) {
+          throw timeoutError();
+        }
+        throw error;
+      }
+    }
+  }
+
   async createBranch(
     options: CreateBranchOptions
   ): Promise<CreateBranchResult> {
@@ -2175,10 +2442,16 @@ export class GitStorage {
   async createRepo(options?: CreateRepoOptions): Promise<Repo> {
     const repoId = options?.id || crypto.randomUUID();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(repoId, {
-      permissions: ['repo:write'],
-      ttl,
-    });
+    const deployment = options?.deployment
+      ? buildDeploymentSettingsBody(options.deployment)
+      : undefined;
+    const permissions: NonNullable<GetRemoteURLOptions['permissions']> = [
+      'repo:write',
+    ];
+    if (options?.deployment?.env !== undefined) {
+      permissions.push('deployment:write');
+    }
+    const jwt = await this.generateJWT(repoId, { permissions, ttl });
 
     const baseRepo = options?.baseRepo;
     const isFork = baseRepo ? 'id' in baseRepo : false;
@@ -2224,7 +2497,7 @@ export class GitStorage {
     }
 
     const createRepoPath =
-      baseRepoOptions || resolvedDefaultBranch
+      baseRepoOptions || resolvedDefaultBranch || deployment
         ? {
             path: 'repos',
             body: {
@@ -2232,16 +2505,34 @@ export class GitStorage {
               ...(resolvedDefaultBranch && {
                 default_branch: resolvedDefaultBranch,
               }),
+              ...(deployment && { deployment }),
             },
           }
         : 'repos';
 
-    // Allow 409 so we can map it to a clearer error message
+    // Allow 409 so we can surface the server reason with a stable fallback.
     const resp = await this.api.post(createRepoPath, jwt, {
       allowedStatus: [409],
     });
     if (resp.status === 409) {
-      throw new Error('Repository already exists');
+      let body: unknown;
+      try {
+        body = await resp.json();
+      } catch {
+        body = undefined;
+      }
+      const envelope = errorEnvelopeSchema.safeParse(body);
+      throw new ApiError({
+        message: envelope.success
+          ? envelope.data.error
+          : 'Repository already exists',
+        status: resp.status,
+        statusText: resp.statusText,
+        method: 'POST',
+        url: resp.url ?? '',
+        body,
+        headers: resp.headers,
+      });
     }
 
     return this.repo({
@@ -2249,6 +2540,43 @@ export class GitStorage {
       defaultBranch: resolvedDefaultBranch ?? 'main',
       createdAt: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Update repository metadata or deployment settings.
+   */
+  async updateRepo(options: UpdateRepoOptions): Promise<UpdateRepoResult> {
+    const repoId = options?.id?.trim();
+    if (!repoId) {
+      throw new Error('updateRepo id is required');
+    }
+
+    const body: Record<string, unknown> = {};
+    const defaultBranch = options.defaultBranch?.trim();
+    if (defaultBranch) {
+      body.default_branch = defaultBranch;
+    }
+    if (options.deployment) {
+      body.deployment = buildDeploymentSettingsBody(options.deployment);
+    }
+    if (Object.keys(body).length === 0) {
+      throw new Error(
+        'updateRepo requires defaultBranch or deployment settings'
+      );
+    }
+
+    const permissions: NonNullable<GetRemoteURLOptions['permissions']> = [
+      'repo:write',
+    ];
+    if (options.deployment?.env !== undefined) {
+      permissions.push('deployment:write');
+    }
+    const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
+    const jwt = await this.generateJWT(repoId, { permissions, ttl });
+    const response = await this.api.patch({ path: 'repo', body }, jwt);
+    return transformUpdateRepoResult(
+      updateRepoResponseSchema.parse(await response.json())
+    );
   }
 
   /**

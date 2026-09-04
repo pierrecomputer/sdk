@@ -1,12 +1,15 @@
 """Repository implementation for Pierre Git Storage SDK."""
 
+import asyncio
 import contextlib
+import math
+import time
 import warnings
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Literal, Optional
-from urllib.parse import urlencode
+from typing import Any, Callable, Dict, List, Literal, Optional, cast
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -15,7 +18,12 @@ from pierre_storage.commit import (
     resolve_commit_ttl_seconds,
     send_diff_commit_request,
 )
-from pierre_storage.errors import ApiError, RefUpdateError, infer_ref_update_reason
+from pierre_storage.errors import (
+    ApiError,
+    DeploymentFailedError,
+    RefUpdateError,
+    infer_ref_update_reason,
+)
 from pierre_storage.types import (
     BlameLine,
     BlameResult,
@@ -27,9 +35,13 @@ from pierre_storage.types import (
     CommitSignature,
     CreateBranchResult,
     CreateCommitOptions,
+    CreateDeploymentResult,
     CreateTagResult,
     DeleteBranchResult,
     DeleteTagResult,
+    DeploymentResult,
+    DeploymentStatus,
+    DeploymentTarget,
     DiffFileState,
     FileDiff,
     FileMetadata,
@@ -45,6 +57,7 @@ from pierre_storage.types import (
     GrepResult,
     ListBranchesResult,
     ListCommitsResult,
+    ListDeploymentsResult,
     ListFilesResult,
     ListFilesWithMetadataResult,
     ListNotesRefsResult,
@@ -86,7 +99,7 @@ class StreamingResponse:
         self,
         response: httpx.Response,
         client: httpx.AsyncClient,
-        stream_context: Optional[contextlib.AbstractAsyncContextManager] = None,
+        stream_context: Optional[contextlib.AbstractAsyncContextManager[Any]] = None,
     ) -> None:
         self._response = response
         self._client = client
@@ -161,6 +174,45 @@ def normalize_optional_string(value: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
+def _deployment_result(data: Dict[str, Any]) -> DeploymentResult:
+    """Normalize one deployment response.
+
+    Unknown ``status`` values pass through so newer server states do not break
+    list/get/poll callers.
+    """
+    result: DeploymentResult = {
+        "id": str(data["id"]),
+        "target": cast(DeploymentTarget, str(data["target"])),
+        "ref": str(data["ref"]),
+        "commit_sha": str(data["commit_sha"]),
+        "status": cast(DeploymentStatus, str(data["status"])),
+        "created_at": str(data["created_at"]),
+        "updated_at": str(data["updated_at"]),
+    }
+    url = data.get("url")
+    if isinstance(url, str):
+        result["url"] = url
+    error_code = data.get("error_code")
+    if isinstance(error_code, str):
+        result["error_code"] = error_code
+    error_message = data.get("error_message")
+    if isinstance(error_message, str):
+        result["error_message"] = error_message
+    return result
+
+
+def _deployment_api_error(response: httpx.Response, fallback: str) -> ApiError:
+    """Build an SDK API error from a deployment response."""
+    message = fallback
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and isinstance(payload.get("error"), str):
+            message = payload["error"]
+    except ValueError:
+        pass
+    return ApiError(message, status_code=response.status_code, response=response)
+
+
 _CONDITIONAL_HEADER_NAMES = {
     "range": "Range",
     "if_match": "If-Match",
@@ -181,7 +233,7 @@ def build_conditional_headers(
         return {}
     out: Dict[str, str] = {}
     for key, http_name in _CONDITIONAL_HEADER_NAMES.items():
-        value = headers.get(key)  # type: ignore[call-overload]
+        value = headers.get(key)
         if isinstance(value, str) and value:
             out[http_name] = value
     return out
@@ -2122,6 +2174,221 @@ class RepoImpl:
             if response.status_code != 202:
                 text = await response.aread()
                 raise Exception(f"Pull Upstream failed: {response.status_code} {text.decode()}")
+
+    async def create_deployment(
+        self,
+        *,
+        ref: Optional[str] = None,
+        target: Optional[DeploymentTarget] = None,
+        idempotency_key: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateDeploymentResult:
+        """Create a deployment for a repository revision."""
+        body: Dict[str, Any] = {}
+        ref_clean = normalize_optional_ref(ref)
+        if ref_clean is not None:
+            body["ref"] = ref_clean
+        if target is not None:
+            body["target"] = target
+
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(
+            self._id,
+            {"permissions": ["deployment:write"], "ttl": ttl},
+        )
+        headers = {
+            "Authorization": f"Bearer {jwt}",
+            "Content-Type": "application/json",
+            "Code-Storage-Agent": get_user_agent(),
+        }
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        repo_name = quote(self._id, safe="")
+        url = f"{self.api_base_url}/api/repos/{repo_name}/deployments"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=body, timeout=30.0)
+            if not response.is_success:
+                raise _deployment_api_error(response, "Failed to create deployment")
+            deployment = _deployment_result(response.json())
+
+        result: CreateDeploymentResult = {
+            **deployment,
+            "location": response.headers.get("Location", ""),
+            "idempotency_key": response.headers.get("Idempotency-Key", idempotency_key or ""),
+            "idempotent_replayed": (
+                response.headers.get("Idempotent-Replayed", "").lower() == "true"
+            ),
+        }
+        return result
+
+    async def list_deployments(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListDeploymentsResult:
+        """List durable deployments for the repository."""
+        params: Dict[str, str] = {}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = str(limit)
+
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(
+            self._id,
+            {"permissions": ["deployment:read"], "ttl": ttl},
+        )
+        repo_name = quote(self._id, safe="")
+        url = f"{self.api_base_url}/api/repos/{repo_name}/deployments"
+        if params:
+            url += f"?{urlencode(params)}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            if not response.is_success:
+                raise _deployment_api_error(response, "Failed to list deployments")
+            data = response.json()
+
+        return {
+            "deployments": [_deployment_result(item) for item in data["deployments"]],
+            "next_cursor": data.get("next_cursor"),
+            "has_more": bool(data["has_more"]),
+        }
+
+    async def get_deployment(
+        self,
+        *,
+        deployment_id: str,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Get one durable deployment."""
+        deployment_id_clean = deployment_id.strip()
+        if not deployment_id_clean:
+            raise ValueError("get_deployment deployment_id is required")
+
+        ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
+        jwt = self.generate_jwt(
+            self._id,
+            {"permissions": ["deployment:read"], "ttl": ttl},
+        )
+        repo_name = quote(self._id, safe="")
+        encoded_deployment_id = quote(deployment_id_clean, safe="")
+        url = f"{self.api_base_url}/api/repos/{repo_name}/deployments/{encoded_deployment_id}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                timeout=30.0,
+            )
+            if not response.is_success:
+                raise _deployment_api_error(response, "Failed to get deployment")
+            return _deployment_result(response.json())
+
+    async def deploy(
+        self,
+        *,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Create a deployment and wait for it to reach a terminal state.
+
+        Creates the deployment, then polls until it is ready, fails, or the
+        timeout expires.
+
+        Args:
+            target: Deployment target
+            ref: Branch, tag, or commit to deploy
+            idempotency_key: Key used to make creation idempotent
+            poll_interval: Seconds between polls (default 2.0)
+            timeout: Overall create-and-wait budget in seconds (default 600.0)
+            ttl: Token TTL in seconds
+
+        Returns:
+            Deployment result once its status is ready
+
+        Raises:
+            ValueError: If interval or timeout is not positive and finite
+            DeploymentFailedError: If the deployment ends in error or canceled
+            TimeoutError: If the timeout expires before a terminal state
+        """
+        if not math.isfinite(poll_interval) or poll_interval <= 0:
+            raise ValueError("deploy poll_interval must be a positive finite number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("deploy timeout must be a positive finite number")
+
+        deadline = time.monotonic() + timeout
+        try:
+            deployment: DeploymentResult = await asyncio.wait_for(
+                self.create_deployment(
+                    ref=ref,
+                    target=target,
+                    idempotency_key=idempotency_key,
+                    ttl=ttl,
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError as error:
+            raise TimeoutError(
+                f"deploy timed out after {timeout}s while creating deployment"
+            ) from error
+        deployment_id = deployment["id"]
+        while True:
+            status = str(deployment["status"])
+            if status == "ready":
+                return deployment
+            if status in ("error", "canceled"):
+                error_code = deployment.get("error_code", "")
+                error_message = deployment.get("error_message", "")
+                raise DeploymentFailedError(
+                    f"deploy deployment {deployment_id} ended with "
+                    f"status {status} (error_code: {error_code}, "
+                    f"error_message: {error_message})",
+                    status=status,
+                    error_code=error_code,
+                    error_message=error_message,
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
+                )
+            await asyncio.sleep(min(poll_interval, remaining))
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
+                )
+            try:
+                deployment = await asyncio.wait_for(
+                    self.get_deployment(deployment_id=deployment_id, ttl=ttl),
+                    timeout=remaining,
+                )
+            except asyncio.TimeoutError as error:
+                raise TimeoutError(
+                    f"deploy timed out after {timeout}s waiting for "
+                    f"deployment {deployment_id} (last status: {status})"
+                ) from error
 
     async def restore_commit(
         self,

@@ -151,6 +151,63 @@ class ListReposResult(TypedDict):
     has_more: bool
 
 
+DeploymentTarget = Literal["preview", "production"]
+DeploymentStatus = Literal["queued", "building", "ready", "error", "canceled"]
+
+
+class DeploymentSettings(TypedDict, total=False):
+    """Repository deployment settings."""
+
+    deploy_on_push: bool
+    production_branch: str
+    project_name: str
+    framework: Optional[str]
+    root_directory: Optional[str]
+    build_command: Optional[str]
+    install_command: Optional[str]
+    output_directory: Optional[str]
+    serverless_function_region: Optional[str]
+    env: Dict[str, Optional[str]]
+
+
+class UpdateRepoResult(TypedDict):
+    """Result from updating repository metadata or deployment settings."""
+
+    repo_name: str
+    default_branch: str
+
+
+class DeploymentResult(TypedDict):
+    """A durable repository deployment."""
+
+    id: str
+    target: DeploymentTarget
+    ref: str
+    commit_sha: str
+    status: DeploymentStatus
+    created_at: str
+    updated_at: str
+    url: NotRequired[str]
+    error_code: NotRequired[str]
+    error_message: NotRequired[str]
+
+
+class CreateDeploymentResult(DeploymentResult):
+    """Deployment creation result with response metadata."""
+
+    location: str
+    idempotency_key: str
+    idempotent_replayed: bool
+
+
+class ListDeploymentsResult(TypedDict):
+    """Paginated repository deployments."""
+
+    deployments: List[DeploymentResult]
+    next_cursor: Optional[str]
+    has_more: bool
+
+
 # Removed: GetRemoteURLOptions - now uses **kwargs
 # Removed: CreateRepoOptions - now uses **kwargs
 # Removed: FindOneOptions - now uses **kwargs
@@ -1103,6 +1160,49 @@ class Repo(Protocol):
         ref_policies: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository."""
+        ...
+
+    async def create_deployment(
+        self,
+        *,
+        ref: Optional[str] = None,
+        target: Optional[DeploymentTarget] = None,
+        idempotency_key: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateDeploymentResult:
+        """Create a deployment for a repository revision."""
+        ...
+
+    async def deploy(
+        self,
+        *,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Create a deployment and wait for it to reach a terminal state."""
+        ...
+
+    async def list_deployments(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListDeploymentsResult:
+        """List durable deployments for the repository."""
+        ...
+
+    async def get_deployment(
+        self,
+        *,
+        deployment_id: str,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Get one durable deployment."""
         ...
 
     async def restore_commit(

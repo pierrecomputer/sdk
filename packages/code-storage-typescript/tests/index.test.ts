@@ -2,7 +2,9 @@ import { importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ApiError,
   CodeStorage,
+  DeploymentFailedError,
   GitStorage,
   OP_VERIFY_SIG,
   createClient,
@@ -4163,6 +4165,472 @@ describe('GitStorage', () => {
       await expect(store.deleteGitCredential({ id: 'cred-abc' })).rejects.toThrow(
         'Credential not found'
       );
+    });
+  });
+
+  describe('repository deployment settings', () => {
+    it('serializes create settings and adds the environment scope', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe('/api/v1/repos');
+        expect(init?.method).toBe('POST');
+        const body = JSON.parse(init?.body as string);
+        expect(body.deployment).toEqual({
+          deploy_on_push: true,
+          production_branch: 'main',
+          project_name: 'website',
+          framework: 'nextjs',
+          root_directory: 'apps/web',
+          build_command: null,
+          install_command: 'pnpm install',
+          output_directory: '.next',
+          serverless_function_region: 'fra1',
+          env: {
+            API_URL: 'https://example.com',
+            DELETE_ME: null,
+          },
+        });
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual([
+          'repo:write',
+          'deployment:write',
+        ]);
+        return Promise.resolve(
+          new Response(JSON.stringify({ repo_id: 'internal-id' }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          })
+        );
+      });
+
+      await store.createRepo({
+        id: 'owner/repo',
+        deployment: {
+          deployOnPush: true,
+          productionBranch: 'main',
+          projectName: 'website',
+          framework: 'nextjs',
+          rootDirectory: 'apps/web',
+          buildCommand: null,
+          installCommand: 'pnpm install',
+          outputDirectory: '.next',
+          serverlessFunctionRegion: 'fra1',
+          env: {
+            API_URL: 'https://example.com',
+            DELETE_ME: null,
+          },
+        },
+      });
+    });
+
+    it('patches settings without adding the environment scope', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe('/api/v1/repo');
+        expect(init?.method).toBe('PATCH');
+        expect(JSON.parse(init?.body as string)).toEqual({
+          default_branch: 'release',
+          deployment: {
+            framework: null,
+            serverless_function_region: null,
+          },
+        });
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        expect(payload.scopes).toEqual(['repo:write']);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              repo_id: 'internal-id',
+              id: 'internal-id',
+              repo_name: 'owner/repo',
+              url: 'owner/repo',
+              default_branch: 'release',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        );
+      });
+
+      await expect(
+        store.updateRepo({
+          id: 'owner/repo',
+          defaultBranch: 'release',
+          deployment: {
+            framework: null,
+            serverlessFunctionRegion: null,
+          },
+        })
+      ).resolves.toEqual({
+        repoName: 'owner/repo',
+        defaultBranch: 'release',
+      });
+    });
+
+    it('preserves deployment project conflicts from create', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: 'deployment.project_name is already in use',
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      );
+
+      await expect(
+        store.createRepo({
+          id: 'owner/repo',
+          deployment: { projectName: 'website' },
+        })
+      ).rejects.toThrow('deployment.project_name is already in use');
+    });
+  });
+
+  describe('repository deployments', () => {
+    const rawDeployment = {
+      id: 'deployment-1',
+      url: 'https://preview.example.test',
+      target: 'preview',
+      ref: 'feature',
+      commit_sha: '0123456789abcdef0123456789abcdef01234567',
+      status: 'queued',
+      created_at: '2026-08-27T10:00:00Z',
+      updated_at: '2026-08-27T10:00:01Z',
+    };
+
+    it('creates through the canonical route with the write scope', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/deployments'
+        );
+        expect(requestUrl.pathname).not.toContain('/api/v1/');
+        expect(init?.method).toBe('POST');
+        expect(JSON.parse(init?.body as string)).toEqual({
+          ref: 'feature',
+          target: 'preview',
+        });
+        const headers = init?.headers as Record<string, string>;
+        expect(headers['Idempotency-Key']).toBe('request-1');
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.repo).toBe('owner/repo');
+        expect(payload.scopes).toEqual(['deployment:write']);
+        return Promise.resolve(
+          new Response(JSON.stringify(rawDeployment), {
+            status: 201,
+            headers: {
+              'content-type': 'application/json',
+              location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+              'idempotency-key': 'request-1',
+            },
+          })
+        );
+      });
+
+      await expect(
+        repo.createDeployment({
+          ref: 'feature',
+          target: 'preview',
+          idempotencyKey: 'request-1',
+        })
+      ).resolves.toEqual({
+        id: 'deployment-1',
+        url: 'https://preview.example.test',
+        target: 'preview',
+        ref: 'feature',
+        commitSha: '0123456789abcdef0123456789abcdef01234567',
+        status: 'queued',
+        errorCode: undefined,
+        errorMessage: undefined,
+        createdAt: '2026-08-27T10:00:00Z',
+        updatedAt: '2026-08-27T10:00:01Z',
+        location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+        idempotencyKey: 'request-1',
+        idempotentReplayed: false,
+      });
+    });
+
+    it('preserves recovery headers when creation fails after persistence', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'retry the same request' }), {
+          status: 503,
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'generated-key',
+            location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+            'retry-after': '1',
+          },
+        })
+      );
+
+      const error = await repo
+        .createDeployment({ target: 'preview' })
+        .catch((cause: unknown) => cause as ApiError);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect({
+        idempotencyKey: error.headers.get('Idempotency-Key'),
+        location: error.headers.get('Location'),
+        retryAfter: error.headers.get('Retry-After'),
+      }).toEqual({
+        idempotencyKey: 'generated-key',
+        location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+        retryAfter: '1',
+      });
+    });
+
+    it('reports an idempotent replay', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(rawDeployment), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            location: '/api/repos/owner%2Frepo/deployments/deployment-1',
+            'idempotency-key': 'request-1',
+            'idempotent-replayed': 'true',
+          },
+        })
+      );
+
+      const result = await repo.createDeployment({
+        idempotencyKey: 'request-1',
+      });
+      expect(result.idempotentReplayed).toBe(true);
+    });
+
+    it('lists canonical deployment pages with the read scope', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/deployments'
+        );
+        expect(requestUrl.searchParams.get('cursor')).toBe('page-2');
+        expect(requestUrl.searchParams.get('limit')).toBe('10');
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['deployment:read']);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              deployments: [
+                {
+                  ...rawDeployment,
+                  status: 'error',
+                  error_code: 'build_failed',
+                  error_message: 'Build failed',
+                },
+              ],
+              next_cursor: 'page-3',
+              has_more: true,
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        );
+      });
+
+      const result = await repo.listDeployments({
+        cursor: 'page-2',
+        limit: 10,
+      });
+      expect(result.nextCursor).toBe('page-3');
+      expect(result.hasMore).toBe(true);
+      expect(result.deployments[0].errorCode).toBe('build_failed');
+      expect(result.deployments[0].errorMessage).toBe('Build failed');
+    });
+
+    it('gets a deployment through encoded path segments', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'owner/repo' });
+
+      mockFetch.mockImplementationOnce((url, init) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.pathname).toBe(
+          '/api/repos/owner%2Frepo/deployments/deployment%2F1'
+        );
+        const headers = init?.headers as Record<string, string>;
+        const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(payload.scopes).toEqual(['deployment:read']);
+        return Promise.resolve(
+          new Response(JSON.stringify({ ...rawDeployment, status: 'ready' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        );
+      });
+
+      const result = await repo.getDeployment({
+        deploymentId: 'deployment/1',
+      });
+      expect(result.status).toBe('ready');
+      expect(result.commitSha).toBe(
+        '0123456789abcdef0123456789abcdef01234567'
+      );
+    });
+    describe('deploy', () => {
+      const respondWith = (
+        status: string,
+        extra: Record<string, unknown> = {},
+        responseStatus = 200
+      ) =>
+        new Response(JSON.stringify({ ...rawDeployment, status, ...extra }), {
+          status: responseStatus,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      it('creates, polls until ready, and returns the result', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockResolvedValueOnce(respondWith('queued', {}, 201));
+        const seen: string[] = [];
+        for (const status of ['building', 'ready']) {
+          mockFetch.mockImplementationOnce((url, init) => {
+            const requestUrl = new URL(url as string);
+            expect(requestUrl.pathname).toBe(
+              '/api/repos/owner%2Frepo/deployments/deployment-1'
+            );
+            const headers = init?.headers as Record<string, string>;
+            const payload = decodeJwtPayload(stripBearer(headers.Authorization));
+            expect(payload.scopes).toEqual(['deployment:read']);
+            seen.push(status);
+            return Promise.resolve(respondWith(status));
+          });
+        }
+
+        const result = await repo.deploy({
+          ref: 'feature',
+          target: 'preview',
+          pollIntervalMs: 1,
+        });
+        expect(seen).toEqual(['building', 'ready']);
+        expect(result.status).toBe('ready');
+        expect(result.url).toBe('https://preview.example.test');
+      });
+
+      it('fails with a DeploymentFailedError carrying the failure details', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockResolvedValueOnce(
+          respondWith('error', {
+            error_code: 'build_failed',
+            error_message: 'Build failed',
+          }, 201)
+        );
+
+        const failure = await repo
+          .deploy({ target: 'preview', pollIntervalMs: 1 })
+          .catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(DeploymentFailedError);
+        const deploymentError = failure as DeploymentFailedError;
+        expect(deploymentError.status).toBe('error');
+        expect(deploymentError.errorCode).toBe('build_failed');
+        expect(deploymentError.errorMessage).toBe('Build failed');
+        expect(deploymentError.message).toContain('build_failed');
+        expect(deploymentError.message).toContain('Build failed');
+      });
+
+      it('fails on canceled deployments with empty details when absent', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockResolvedValueOnce(respondWith('canceled', {}, 201));
+
+        const failure = await repo
+          .deploy({ target: 'preview', pollIntervalMs: 1 })
+          .catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(DeploymentFailedError);
+        const deploymentError = failure as DeploymentFailedError;
+        expect(deploymentError.status).toBe('canceled');
+        expect(deploymentError.errorCode).toBe('');
+        expect(deploymentError.errorMessage).toBe('');
+      });
+
+      it('aborts an in-flight poll when the timeout expires', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockResolvedValueOnce(respondWith('building', {}, 201));
+        mockFetch.mockImplementationOnce((_url, init) => {
+          const signal = init?.signal as AbortSignal;
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          });
+        });
+
+        await expect(
+          repo.deploy({
+            target: 'preview',
+            pollIntervalMs: 1,
+            timeoutMs: 5,
+          })
+        ).rejects.toThrow(
+          /timed out.*deployment-1.*last status: building/
+        );
+      });
+
+      it('aborts creation when the overall timeout expires', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+        mockFetch.mockImplementationOnce((_url, init) => {
+          const signal = init?.signal as AbortSignal;
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          });
+        });
+
+        await expect(
+          repo.deploy({ target: 'preview', timeoutMs: 5 })
+        ).rejects.toThrow(/timed out.*while creating deployment/);
+      });
+
+      it('validates polling options before creating a deployment', async () => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = store.repo({ id: 'owner/repo' });
+
+        await expect(
+          repo.deploy({
+            target: 'preview',
+            pollIntervalMs: 0,
+          })
+        ).rejects.toThrow('deploy pollIntervalMs must be a positive finite number');
+        await expect(
+          repo.deploy({
+            target: 'preview',
+            timeoutMs: -1,
+          })
+        ).rejects.toThrow('deploy timeoutMs must be a positive finite number');
+        await expect(
+          repo.deploy({ target: 'preview', pollIntervalMs: Number.NaN })
+        ).rejects.toThrow('deploy pollIntervalMs must be a positive finite number');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
     });
   });
 });

@@ -1,5 +1,6 @@
 """Tests for Repo operations."""
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
@@ -8,7 +9,7 @@ import jwt
 import pytest
 
 from pierre_storage import GitStorage
-from pierre_storage.errors import ApiError, RefUpdateError
+from pierre_storage.errors import ApiError, DeploymentFailedError, RefUpdateError
 from pierre_storage.version import get_user_agent
 
 
@@ -1409,6 +1410,10 @@ class TestRepoBranchOperations:
         merge_response.status_code = 409
         merge_response.is_success = False
         merge_response.json.return_value = conflict_body
+        merge_response.request.headers = {
+            "Authorization": "Bearer secret",
+            "X-Request-ID": "request-1",
+        }
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
@@ -1422,6 +1427,7 @@ class TestRepoBranchOperations:
             assert exc_info.value.status_code == 409
             assert exc_info.value.response is merge_response
             assert exc_info.value.response.json() == conflict_body
+            assert exc_info.value.response.request.headers == {"X-Request-ID": "request-1"}
 
     @pytest.mark.asyncio
     async def test_merge_validation(self, git_storage_options: dict) -> None:
@@ -2409,9 +2415,7 @@ class TestRepoNoteOperations:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
-            client_instance.post = AsyncMock(
-                side_effect=[create_response, create_note_response]
-            )
+            client_instance.post = AsyncMock(side_effect=[create_response, create_note_response])
             mock_get = AsyncMock(return_value=note_read_response)
             client_instance.get = mock_get
             client_instance.request = AsyncMock(return_value=delete_note_response)
@@ -2485,9 +2489,7 @@ class TestRepoNoteOperations:
             assert result["prefix"] == "refs/notes/reviews/"
 
     @pytest.mark.asyncio
-    async def test_list_notes_refs_no_options(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_list_notes_refs_no_options(self, git_storage_options: dict) -> None:
         """With no options, no query string is sent and an empty page parses."""
         storage = GitStorage(git_storage_options)
 
@@ -3469,3 +3471,231 @@ class TestCodeStorageAgentHeaderInRepo:
             assert captured_headers is not None
             assert "Code-Storage-Agent" in captured_headers
             assert captured_headers["Code-Storage-Agent"] == get_user_agent()
+
+
+class TestRepositoryDeployments:
+    """Tests for repository deployment operations."""
+
+    raw_deployment = {
+        "id": "deployment-1",
+        "url": "https://preview.example.test",
+        "target": "preview",
+        "ref": "feature",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+        "status": "queued",
+        "created_at": "2026-08-27T10:00:00Z",
+        "updated_at": "2026-08-27T10:00:01Z",
+    }
+
+    @pytest.mark.asyncio
+    async def test_create_uses_canonical_path_and_write_scope(
+        self, git_storage_options: dict
+    ) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+        response = MagicMock(status_code=201, is_success=True)
+        response.json.return_value = self.raw_deployment
+        response.headers = {
+            "Location": "/api/repos/owner%2Frepo/deployments/deployment-1",
+            "Idempotency-Key": "request-1",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            result = await repo.create_deployment(
+                ref="feature",
+                target="preview",
+                idempotency_key="request-1",
+            )
+
+        call = mock_post.await_args
+        assert urlparse(call.args[0]).path == "/api/repos/owner%2Frepo/deployments"
+        assert "/api/v1/" not in call.args[0]
+        assert call.kwargs["json"] == {"ref": "feature", "target": "preview"}
+        assert call.kwargs["headers"]["Idempotency-Key"] == "request-1"
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["scopes"] == ["deployment:write"]
+        assert result["commit_sha"] == self.raw_deployment["commit_sha"]
+        assert result["idempotency_key"] == "request-1"
+        assert result["idempotent_replayed"] is False
+
+    @pytest.mark.asyncio
+    async def test_list_maps_pagination_and_read_scope(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+        response = MagicMock(status_code=200, is_success=True)
+        response.json.return_value = {
+            "deployments": [
+                {
+                    **self.raw_deployment,
+                    "status": "error",
+                    "error_code": "build_failed",
+                    "error_message": "Build failed",
+                }
+            ],
+            "next_cursor": "page-3",
+            "has_more": True,
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_get = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+            result = await repo.list_deployments(cursor="page-2", limit=10)
+
+        call = mock_get.await_args
+        parsed = urlparse(call.args[0])
+        assert parsed.path == "/api/repos/owner%2Frepo/deployments"
+        assert parse_qs(parsed.query) == {"cursor": ["page-2"], "limit": ["10"]}
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["scopes"] == ["deployment:read"]
+        assert result["next_cursor"] == "page-3"
+        assert result["deployments"][0]["error_code"] == "build_failed"
+
+    @pytest.mark.asyncio
+    async def test_get_encodes_path_segments(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+        response = MagicMock(status_code=200, is_success=True)
+        response.json.return_value = {**self.raw_deployment, "status": "ready"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_get = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+            result = await repo.get_deployment(deployment_id="deployment/1")
+
+        call = mock_get.await_args
+        assert urlparse(call.args[0]).path == "/api/repos/owner%2Frepo/deployments/deployment%2F1"
+        assert result["status"] == "ready"
+
+
+class TestDeploy:
+    """Tests for create-and-wait deployment polling."""
+
+    raw_deployment = {
+        "id": "deployment-1",
+        "url": "https://preview.example.test",
+        "target": "preview",
+        "ref": "feature",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+        "status": "queued",
+        "created_at": "2026-08-27T10:00:00Z",
+        "updated_at": "2026-08-27T10:00:01Z",
+    }
+
+    def _response(self, status: str, status_code: int = 200, **extra: object) -> MagicMock:
+        response = MagicMock(status_code=status_code, is_success=True)
+        response.json.return_value = {**self.raw_deployment, "status": status, **extra}
+        response.headers = {}
+        return response
+
+    @pytest.mark.asyncio
+    async def test_deploy_creates_and_polls_until_ready(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=self._response("queued", 201))
+            mock_get = AsyncMock(
+                side_effect=[
+                    self._response("building"),
+                    self._response("ready"),
+                ]
+            )
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+            result = await repo.deploy(
+                ref="feature",
+                target="preview",
+                poll_interval=0.001,
+                timeout=5,
+            )
+
+        assert mock_post.await_count == 1
+        assert mock_get.await_count == 2
+        assert result["status"] == "ready"
+        assert result["url"] == "https://preview.example.test"
+
+    @pytest.mark.asyncio
+    async def test_deploy_error_status_raises_with_details(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(
+                return_value=self._response(
+                    "error",
+                    201,
+                    error_code="build_failed",
+                    error_message="Build failed",
+                )
+            )
+            mock_get = AsyncMock()
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+            with pytest.raises(DeploymentFailedError) as excinfo:
+                await repo.deploy(target="preview", poll_interval=0.001, timeout=5)
+
+        err = excinfo.value
+        assert err.status == "error"
+        assert err.error_code == "build_failed"
+        assert err.error_message == "Build failed"
+        assert "build_failed" in str(err)
+        assert "Build failed" in str(err)
+        mock_get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_deploy_bounds_an_in_flight_poll_by_the_timeout(
+        self, git_storage_options: dict
+    ) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        async def never_returns(*args: object, **kwargs: object) -> MagicMock:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=self._response("building", 201))
+            mock_get = AsyncMock(side_effect=never_returns)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            mock_client.return_value.__aenter__.return_value.get = mock_get
+            with pytest.raises(TimeoutError) as excinfo:
+                await repo.deploy(target="preview", poll_interval=0.001, timeout=0.01)
+
+        assert "deployment-1" in str(excinfo.value)
+        assert "building" in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_deploy_bounds_creation_by_the_timeout(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        async def never_returns(*args: object, **kwargs: object) -> MagicMock:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=never_returns
+            )
+            with pytest.raises(TimeoutError, match="while creating deployment"):
+                await repo.deploy(target="preview", timeout=0.01)
+
+    @pytest.mark.asyncio
+    async def test_deploy_validates_polling_before_creation(
+        self, git_storage_options: dict
+    ) -> None:
+        storage = GitStorage(git_storage_options)
+        repo = storage.repo(id="owner/repo")
+
+        with patch("httpx.AsyncClient") as mock_client:
+            with pytest.raises(ValueError, match="poll_interval must be a positive finite"):
+                await repo.deploy(target="preview", poll_interval=0)
+            with pytest.raises(ValueError, match="timeout must be a positive finite"):
+                await repo.deploy(target="preview", timeout=-1)
+            with pytest.raises(ValueError, match="poll_interval must be a positive finite"):
+                await repo.deploy(target="preview", poll_interval=float("nan"))
+            mock_client.assert_not_called()

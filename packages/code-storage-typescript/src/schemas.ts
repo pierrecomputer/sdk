@@ -124,6 +124,33 @@ export const listReposResponseSchema = z.object({
   has_more: z.boolean(),
 });
 
+export const updateRepoResponseSchema = z.object({
+  repo_name: z.string(),
+  default_branch: z.string(),
+});
+
+export const deploymentTargetSchema = z.enum(['preview', 'production']);
+
+export const deploymentResponseSchema = z.object({
+  id: z.string(),
+  url: z.string().optional(),
+  target: deploymentTargetSchema,
+  ref: z.string(),
+  commit_sha: z.string(),
+  // Tolerate statuses this SDK version does not know about yet.
+  status: z.string(),
+  error_code: z.string().optional(),
+  error_message: z.string().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const listDeploymentsResponseSchema = z.object({
+  deployments: z.array(deploymentResponseSchema),
+  next_cursor: z.string().optional(),
+  has_more: z.boolean(),
+});
+
 export const noteReadResponseSchema = z.object({
   sha: z.string(),
   note: z.string(),
@@ -392,6 +419,11 @@ export type BlameResponseRaw = z.infer<typeof blameResponseSchema>;
 export type RawRepoBaseInfo = z.infer<typeof repoBaseInfoSchema>;
 export type RawRepoInfo = z.infer<typeof repoInfoSchema>;
 export type ListReposResponseRaw = z.infer<typeof listReposResponseSchema>;
+export type UpdateRepoResponseRaw = z.infer<typeof updateRepoResponseSchema>;
+export type DeploymentResponseRaw = z.infer<typeof deploymentResponseSchema>;
+export type ListDeploymentsResponseRaw = z.infer<
+  typeof listDeploymentsResponseSchema
+>;
 export type NoteReadResponseRaw = z.infer<typeof noteReadResponseSchema>;
 export type NoteWriteResponseRaw = z.infer<typeof noteWriteResponseSchema>;
 export type RawNotesRefInfo = z.infer<typeof notesRefInfoSchema>;
