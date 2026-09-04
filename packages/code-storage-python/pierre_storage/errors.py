@@ -53,7 +53,6 @@ class RefUpdateError(Exception):
         self.ref_update: Dict[str, str] = ref_update or {}  # type: ignore[assignment]
 
 
-
 class DeploymentFailedError(Exception):
     """Exception raised when a deployment ends in a failed state."""
 

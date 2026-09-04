@@ -960,27 +960,10 @@ func TestUpdateRepoDeploymentSettings(t *testing.T) {
 		t.Fatalf("scopes = %#v, want repo:write", scopes)
 	}
 	wantResult := UpdateRepoResult{
-		RepoID:        "internal-id",
 		RepoName:      "owner/repo",
 		DefaultBranch: "release",
 	}
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Fatalf("result = %#v, want %#v", result, wantResult)
-	}
-}
-
-func TestDeploymentRegionValidation(t *testing.T) {
-	client, err := NewClient(Options{Name: "acme", Key: testKey})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = client.UpdateRepo(t.Context(), UpdateRepoOptions{
-		ID: "owner/repo",
-		Deployment: &DeploymentSettings{
-			ServerlessFunctionRegion: SetDeploymentString("iad12"),
-		},
-	})
-	if err == nil || err.Error() != "deployment.serverless_function_region must not exceed 4 characters" {
-		t.Fatalf("error = %v", err)
 	}
 }

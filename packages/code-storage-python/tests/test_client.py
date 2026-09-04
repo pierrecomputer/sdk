@@ -1508,22 +1508,7 @@ class TestRepositoryDeploymentSettings:
         claims = jwt.decode(token, options={"verify_signature": False})
         assert claims["scopes"] == ["repo:write"]
         assert result == {
-            "repo_id": "internal-id",
             "repo_name": "owner/repo",
             "default_branch": "release",
         }
 
-    @pytest.mark.asyncio
-    async def test_settings_validation_prevents_requests(self, git_storage_options: dict) -> None:
-        storage = GitStorage(git_storage_options)
-
-        with pytest.raises(
-            ValueError,
-            match="deployment.serverless_function_region must not exceed 4 characters",
-        ):
-            await storage.update_repo(
-                id="owner/repo",
-                deployment={"serverless_function_region": "iad12"},
-            )
-        with pytest.raises(ValueError, match="deployment must include at least one setting"):
-            await storage.update_repo(id="owner/repo", deployment={})

@@ -116,7 +116,6 @@ type repoInfoRaw struct {
 }
 
 type updateRepoResponse struct {
-	RepoID        string `json:"repo_id"`
 	RepoName      string `json:"repo_name"`
 	DefaultBranch string `json:"default_branch"`
 }

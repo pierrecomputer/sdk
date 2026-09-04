@@ -125,22 +125,11 @@ export const listReposResponseSchema = z.object({
 });
 
 export const updateRepoResponseSchema = z.object({
-  repo_id: z.string(),
-  id: z.string(),
   repo_name: z.string(),
-  url: z.string(),
   default_branch: z.string(),
 });
 
 export const deploymentTargetSchema = z.enum(['preview', 'production']);
-
-export const deploymentStatusSchema = z.enum([
-  'queued',
-  'building',
-  'ready',
-  'error',
-  'canceled',
-]);
 
 export const deploymentResponseSchema = z.object({
   id: z.string(),
@@ -148,7 +137,8 @@ export const deploymentResponseSchema = z.object({
   target: deploymentTargetSchema,
   ref: z.string(),
   commit_sha: z.string(),
-  status: deploymentStatusSchema,
+  // Tolerate statuses this SDK version does not know about yet.
+  status: z.string(),
   error_code: z.string().optional(),
   error_message: z.string().optional(),
   created_at: z.string(),

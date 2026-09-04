@@ -1,9 +1,6 @@
 package storage
 
-import (
-	"errors"
-	"unicode/utf8"
-)
+import "errors"
 
 // createRepoRequest is the JSON body for CreateRepo.
 type createRepoRequest struct {
@@ -52,22 +49,15 @@ func buildDeploymentSettingsRequest(settings *DeploymentSettings) (map[string]in
 		{"serverless_function_region", settings.ServerlessFunctionRegion},
 	}
 	for _, item := range stringSettings {
-		if !item.setting.set {
-			continue
+		if item.setting.set {
+			body[item.name] = item.setting.value
 		}
-		if item.name == "serverless_function_region" &&
-			item.setting.value != nil &&
-			utf8.RuneCountInString(*item.setting.value) > 4 {
-			return nil, errors.New("deployment.serverless_function_region must not exceed 4 characters")
-		}
-		body[item.name] = item.setting.value
 	}
 	if settings.Env != nil {
-		if len(settings.Env) == 0 {
-			return nil, errors.New("deployment.env must include at least one variable")
-		}
 		body["env"] = settings.Env
 	}
+	// The server validates settings; this check only exists because omitempty
+	// would drop an empty map and silently send no deployment object.
 	if len(body) == 0 {
 		return nil, errors.New("deployment must include at least one setting")
 	}
