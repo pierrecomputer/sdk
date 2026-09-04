@@ -101,6 +101,8 @@ current, err := repo.GetDeployment(ctx, storage.GetDeploymentOptions{
 })
 ```
 
+An empty `Target` uses the server default, `production`.
+
 `Deploy` creates and polls until the deployment reaches `ready` (2s interval,
 10m end-to-end timeout by default). `CreateDeployment` returns immediately with
 the current state. Reuse the same idempotency key when retrying creation.
