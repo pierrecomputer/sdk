@@ -1410,6 +1410,10 @@ class TestRepoBranchOperations:
         merge_response.status_code = 409
         merge_response.is_success = False
         merge_response.json.return_value = conflict_body
+        merge_response.request.headers = {
+            "Authorization": "Bearer secret",
+            "X-Request-ID": "request-1",
+        }
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
@@ -1423,6 +1427,7 @@ class TestRepoBranchOperations:
             assert exc_info.value.status_code == 409
             assert exc_info.value.response is merge_response
             assert exc_info.value.response.json() == conflict_body
+            assert exc_info.value.response.request.headers == {"X-Request-ID": "request-1"}
 
     @pytest.mark.asyncio
     async def test_merge_validation(self, git_storage_options: dict) -> None:
