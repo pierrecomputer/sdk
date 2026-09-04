@@ -27,6 +27,7 @@ def generate_jwt(
     ttl: int = 31536000,  # 1 year default
     ops: Optional[List[str]] = None,
     refs: Optional[Refs] = None,
+    key_id: Optional[str] = None,
 ) -> str:
     """Generate a JWT token for Git storage authentication.
 
@@ -38,6 +39,7 @@ def generate_jwt(
         ttl: Time-to-live in seconds (defaults to 1 year)
         ops: List of policy operations (e.g., ['no-force-push'])
         refs: Ordered per-ref policy rules (first match wins)
+        key_id: Key ID added to the JWT protected header
 
     Returns:
         Signed JWT token string
@@ -83,13 +85,17 @@ def generate_jwt(
         # Try ES256 as default (most common for Pierre)
         algorithm = "ES256"
 
+    headers = {"alg": algorithm, "typ": "JWT"}
+    if key_id:
+        headers["kid"] = key_id
+
     # Sign the JWT
     try:
         token = jwt.encode(
             payload,
             private_key,
             algorithm=algorithm,
-            headers={"alg": algorithm, "typ": "JWT"},
+            headers=headers,
         )
     except Exception as e:
         raise ValueError(f"Failed to sign JWT: {e}") from e
