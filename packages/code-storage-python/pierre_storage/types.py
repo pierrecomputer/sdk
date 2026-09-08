@@ -264,6 +264,14 @@ class ListBranchesResult(TypedDict):
     has_more: bool
 
 
+class GetBranchResult(TypedDict):
+    """Exact branch lookup result."""
+
+    name: str
+    head_sha: str
+    created_at: str
+
+
 class CreateBranchResult(TypedDict):
     """Result from creating a branch."""
 
@@ -287,6 +295,13 @@ class ListTagsResult(TypedDict):
     tags: List[TagInfo]
     next_cursor: Optional[str]
     has_more: bool
+
+
+class GetTagResult(TypedDict):
+    """Exact tag lookup result."""
+
+    name: str
+    sha: str
 
 
 class CreateTagResult(TypedDict):
@@ -873,6 +888,16 @@ class Repo(Protocol):
         """List branches in the repository."""
         ...
 
+    async def get_branch(
+        self,
+        *,
+        name: str,
+        ephemeral: Optional[bool] = None,
+        ttl: Optional[int] = None,
+    ) -> GetBranchResult:
+        """Get one branch by its exact name."""
+        ...
+
     async def create_branch(
         self,
         *,
@@ -942,6 +967,15 @@ class Repo(Protocol):
         ttl: Optional[int] = None,
     ) -> ListTagsResult:
         """List tags in the repository."""
+        ...
+
+    async def get_tag(
+        self,
+        *,
+        name: str,
+        ttl: Optional[int] = None,
+    ) -> GetTagResult:
+        """Get one tag by its exact name."""
         ...
 
     async def create_tag(

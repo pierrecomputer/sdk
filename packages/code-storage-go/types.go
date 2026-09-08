@@ -398,6 +398,20 @@ type ListBranchesResult struct {
 	HasMore    bool
 }
 
+// GetBranchOptions configures an exact branch lookup.
+type GetBranchOptions struct {
+	InvocationOptions
+	Name      string
+	Ephemeral *bool
+}
+
+// GetBranchResult describes one branch.
+type GetBranchResult struct {
+	Name      string
+	HeadSHA   string
+	CreatedAt string
+}
+
 // CreateBranchOptions configures branch creation.
 type CreateBranchOptions struct {
 	InvocationOptions
@@ -591,6 +605,18 @@ type ListTagsResult struct {
 	Tags       []TagInfo
 	NextCursor string
 	HasMore    bool
+}
+
+// GetTagOptions configures an exact tag lookup.
+type GetTagOptions struct {
+	InvocationOptions
+	Name string
+}
+
+// GetTagResult describes one tag.
+type GetTagResult struct {
+	Name string
+	SHA  string
 }
 
 // CreateTagOptions configures tag creation.

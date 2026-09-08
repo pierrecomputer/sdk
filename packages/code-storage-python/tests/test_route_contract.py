@@ -159,7 +159,21 @@ async def test_preferred_rest_route_contract(monkeypatch: pytest.MonkeyPatch) ->
             repo.list_files_with_metadata,
         ),
         _RouteCase("list_branches", "GET", "/api/repos/owner%2Fname/branches", repo.list_branches),
+        _RouteCase(
+            "get_branch",
+            "GET",
+            "/api/repos/owner%2Fname/branch",
+            lambda: repo.get_branch(name="feature/one", ephemeral=False),
+            query={"name": "feature/one", "ephemeral": "false"},
+        ),
         _RouteCase("list_tags", "GET", "/api/repos/owner%2Fname/tags", repo.list_tags),
+        _RouteCase(
+            "get_tag",
+            "GET",
+            "/api/repos/owner%2Fname/tag",
+            lambda: repo.get_tag(name="release/v1"),
+            query={"name": "release/v1"},
+        ),
         _RouteCase("list_commits", "GET", "/api/repos/owner%2Fname/commits", repo.list_commits),
         _RouteCase(
             "get_commit",

@@ -56,6 +56,14 @@ export const listBranchesResponseSchema = z.object({
   has_more: z.boolean(),
 });
 
+export const getBranchResponseSchema = z.object({
+  branch: z.object({
+    name: z.string(),
+    head_sha: z.string(),
+    created_at: z.string(),
+  }),
+});
+
 export const commitInfoRawSchema = z.object({
   sha: z.string(),
   parent_shas: z.array(z.string()),
@@ -277,6 +285,13 @@ export const listTagsResponseSchema = z.object({
   has_more: z.boolean(),
 });
 
+export const getTagResponseSchema = z.object({
+  tag: z.object({
+    name: z.string(),
+    sha: z.string(),
+  }),
+});
+
 export const createTagResponseSchema = z.object({
   name: z.string(),
   sha: z.string(),
@@ -388,6 +403,7 @@ export type RawBranchInfo = z.infer<typeof branchInfoSchema>;
 export type ListBranchesResponseRaw = z.infer<
   typeof listBranchesResponseSchema
 >;
+export type GetBranchResponseRaw = z.infer<typeof getBranchResponseSchema>;
 export type RawCommitInfo = z.infer<typeof commitInfoRawSchema>;
 export type RawCommitInfoWithSignature = z.infer<
   typeof commitInfoWithSignatureRawSchema
@@ -425,6 +441,7 @@ export type PreviewMergeResponseRaw = z.infer<
 >;
 export type RawTagInfo = z.infer<typeof tagInfoSchema>;
 export type ListTagsResponseRaw = z.infer<typeof listTagsResponseSchema>;
+export type GetTagResponseRaw = z.infer<typeof getTagResponseSchema>;
 export type CreateTagResponseRaw = z.infer<typeof createTagResponseSchema>;
 export type DeleteTagResponseRaw = z.infer<typeof deleteTagResponseSchema>;
 export type DeleteBranchResponseRaw = z.infer<
