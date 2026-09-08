@@ -522,6 +522,8 @@ export interface ListCommitsOptions extends GitStorageInvocationOptions {
   limit?: number;
   ephemeral?: boolean;
   path?: string;
+  /** Notes refs to return with each commit. Sends one notes_ref key per value. */
+  notesRefs?: string[];
 }
 
 export type RawCommitInfo = SchemaRawCommitInfo;
@@ -537,6 +539,8 @@ export interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+  /** Notes keyed by full ref. A null value marks content over an inline limit. */
+  notes?: Record<string, string | null>;
   /**
    * Armored OpenPGP/SSH signature from the commit's gpgsig header. Only set by
    * `getCommit` for signed commits. Always undefined for list-commits entries

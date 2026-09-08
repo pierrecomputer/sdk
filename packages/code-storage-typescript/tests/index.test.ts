@@ -285,6 +285,63 @@ describe('GitStorage', () => {
     await repo.listCommits({ branch: 'feature-branch', ephemeral: true });
   });
 
+  it('returns inline notes from listCommits', async () => {
+    const store = new GitStorage({ name: 'v0', key });
+    const repo = await store.createRepo({ id: 'repo-list-commits-notes' });
+
+    mockFetch.mockImplementationOnce((url) => {
+      const requestUrl = new URL(url as string);
+      expect(requestUrl.searchParams.getAll('notes_ref')).toEqual([
+        'reviews',
+        'approvals',
+      ]);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          commits: [
+            {
+              sha: 'abc123',
+              parent_shas: [],
+              message: 'initial',
+              author_name: 'Test',
+              author_email: 'test@example.com',
+              committer_name: 'Test',
+              committer_email: 'test@example.com',
+              date: '2026-08-30T12:00:00Z',
+              notes: {
+                'refs/notes/reviews': 'approved\n',
+                'refs/notes/approvals': null,
+              },
+            },
+            {
+              sha: 'def456',
+              parent_shas: ['abc123'],
+              message: 'second',
+              author_name: 'Test',
+              author_email: 'test@example.com',
+              committer_name: 'Test',
+              committer_email: 'test@example.com',
+              date: '2026-08-30T12:01:00Z',
+              notes: {},
+            },
+          ],
+          has_more: false,
+        }),
+      } as any);
+    });
+
+    const result = await repo.listCommits({
+      notesRefs: ['reviews', 'approvals'],
+    });
+
+    expect(result.commits[0].notes).toEqual({
+      'refs/notes/reviews': 'approved\n',
+      'refs/notes/approvals': null,
+    });
+    expect(result.commits[1].notes).toEqual({});
+  });
+
   it('fetches git notes with getNote', async () => {
     const store = new GitStorage({ name: 'v0', key });
     const repo = await store.createRepo({ id: 'repo-notes-read' });

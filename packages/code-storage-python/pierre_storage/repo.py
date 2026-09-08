@@ -1349,6 +1349,7 @@ class RepoImpl:
         limit: Optional[int] = None,
         ephemeral: Optional[bool] = None,
         path: Optional[str] = None,
+        notes_refs: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in repository.
@@ -1360,6 +1361,8 @@ class RepoImpl:
             ephemeral: When true, resolve `branch` under the ephemeral namespace
             path: Optional repository-relative path to scope the history to
                 commits that touched that file or subtree.
+            notes_refs: Notes refs to return with each commit. The request sends
+                one ``notes_ref`` query key per value.
             ttl: Token TTL in seconds
 
         Returns:
@@ -1368,17 +1371,19 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params = {}
+        params: List[tuple[str, str]] = []
         if branch:
-            params["branch"] = branch
+            params.append(("branch", branch))
         if cursor:
-            params["cursor"] = cursor
+            params.append(("cursor", cursor))
         if limit is not None:
-            params["limit"] = str(limit)
+            params.append(("limit", str(limit)))
         if ephemeral is not None:
-            params["ephemeral"] = "true" if ephemeral else "false"
+            params.append(("ephemeral", "true" if ephemeral else "false"))
         if path:
-            params["path"] = path
+            params.append(("path", path))
+        if notes_refs:
+            params.extend(("notes_ref", notes_ref) for notes_ref in notes_refs)
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/commits"
         if params:
@@ -1399,19 +1404,20 @@ class RepoImpl:
             commits: List[CommitInfo] = []
             for c in data["commits"]:
                 date = datetime.fromisoformat(c["date"].replace("Z", "+00:00"))
-                commits.append(
-                    {
-                        "sha": c["sha"],
-                        "parent_shas": c["parent_shas"],
-                        "message": c["message"],
-                        "author_name": c["author_name"],
-                        "author_email": c["author_email"],
-                        "committer_name": c["committer_name"],
-                        "committer_email": c["committer_email"],
-                        "date": date,
-                        "raw_date": c["date"],
-                    }
-                )
+                commit: CommitInfo = {
+                    "sha": c["sha"],
+                    "parent_shas": c["parent_shas"],
+                    "message": c["message"],
+                    "author_name": c["author_name"],
+                    "author_email": c["author_email"],
+                    "committer_name": c["committer_name"],
+                    "committer_email": c["committer_email"],
+                    "date": date,
+                    "raw_date": c["date"],
+                }
+                if "notes" in c:
+                    commit["notes"] = dict(c["notes"])
+                commits.append(commit)
 
             return {
                 "commits": commits,

@@ -82,14 +82,15 @@ type blameLineRaw struct {
 }
 
 type commitInfoRaw struct {
-	SHA            string   `json:"sha"`
-	ParentSHAs     []string `json:"parent_shas"`
-	Message        string   `json:"message"`
-	AuthorName     string   `json:"author_name"`
-	AuthorEmail    string   `json:"author_email"`
-	CommitterName  string   `json:"committer_name"`
-	CommitterEmail string   `json:"committer_email"`
-	Date           string   `json:"date"`
+	SHA            string             `json:"sha"`
+	ParentSHAs     []string           `json:"parent_shas"`
+	Message        string             `json:"message"`
+	AuthorName     string             `json:"author_name"`
+	AuthorEmail    string             `json:"author_email"`
+	CommitterName  string             `json:"committer_name"`
+	CommitterEmail string             `json:"committer_email"`
+	Date           string             `json:"date"`
+	Notes          map[string]*string `json:"notes"`
 }
 
 // commitInfoWithSignatureRaw extends commitInfoRaw with the signature details

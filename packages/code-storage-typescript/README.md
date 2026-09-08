@@ -260,9 +260,11 @@ const commits = await repo.listCommits({
   branch: 'main', // optional
   limit: 20,
   cursor: undefined, // for pagination
+  notesRefs: ['reviews', 'approvals'], // optional; at most four distinct refs
 });
 console.log(commits.commits);
 console.log(commits.commits[0]?.parentShas); // Git parent order; [] for a root commit
+console.log(commits.commits[0]?.notes); // Full ref keys; values can be null when over a limit
 
 // Get a single commit's metadata (no diff)
 const { commit } = await repo.getCommit({ sha: 'abc123...' });
@@ -848,6 +850,7 @@ interface ListCommitsOptions {
   limit?: number;
   ephemeral?: boolean;
   path?: string;
+  notesRefs?: string[];
   ttl?: number;
 }
 
@@ -874,6 +877,8 @@ interface CommitInfo {
   committerEmail: string;
   date: Date;
   rawDate: string;
+  // Present only when listCommits requests notes. Null marks content over a limit.
+  notes?: Record<string, string | null>;
   // Populated only by getCommit for signed commits; undefined otherwise.
   signature?: string;
   payload?: string;

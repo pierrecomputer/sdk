@@ -329,6 +329,7 @@ class CommitInfo(TypedDict):
     raw_date: str
     signature: NotRequired[str]
     payload: NotRequired[str]
+    notes: NotRequired[Dict[str, Optional[str]]]
 
 
 class ListCommitsResult(TypedDict):
@@ -957,6 +958,7 @@ class Repo(Protocol):
         limit: Optional[int] = None,
         ephemeral: Optional[bool] = None,
         path: Optional[str] = None,
+        notes_refs: Optional[List[str]] = None,
         ttl: Optional[int] = None,
     ) -> ListCommitsResult:
         """List commits in the repository."""
