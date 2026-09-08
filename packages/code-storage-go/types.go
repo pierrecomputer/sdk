@@ -133,6 +133,35 @@ type ForkBaseRepo struct {
 
 func (ForkBaseRepo) isBaseRepo() {}
 
+// BaseRepoOperation identifies a source-based repository create mode.
+type BaseRepoOperation string
+
+const (
+	// SnapshotOperation creates one root commit from a source tree.
+	SnapshotOperation BaseRepoOperation = "snapshot"
+)
+
+// SnapshotBaseRepo references a source for a one-commit history-free snapshot.
+type SnapshotBaseRepo struct {
+	ID        string
+	Operation BaseRepoOperation
+	Ref       string
+}
+
+func (SnapshotBaseRepo) isBaseRepo() {}
+
+// CommitIdentity identifies the author of a root commit.
+type CommitIdentity struct {
+	Name  string
+	Email string
+}
+
+// InitialCommit describes the root commit for a history-free snapshot.
+type InitialCommit struct {
+	Message string
+	Author  CommitIdentity
+}
+
 // GenericGitBaseRepo references a repository on a generic git host
 // (GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sr.ht, etc.)
 type GenericGitBaseRepo struct {
@@ -188,6 +217,7 @@ type CreateRepoOptions struct {
 	ID            string
 	BaseRepo      BaseRepo
 	DefaultBranch string
+	InitialCommit *InitialCommit
 }
 
 // DeleteRepoOptions controls repo deletion.

@@ -19,9 +19,11 @@ from pierre_storage.types import (
     GitCredential,
     GitHubBaseRepo,
     GitStorageOptions,
+    InitialCommit,
     ListReposResult,
     Repo,
     RepoInfo,
+    SnapshotBaseRepo,
 )
 from pierre_storage.version import get_user_agent
 
@@ -131,6 +133,7 @@ class GitStorage:
         id: Optional[str] = None,
         default_branch: Optional[str] = None,
         base_repo: Optional[BaseRepo] = None,
+        initial_commit: Optional[InitialCommit] = None,
         ttl: Optional[int] = None,
     ) -> Repo:
         """Create a new repository.
@@ -138,9 +141,11 @@ class GitStorage:
         Args:
             id: Repository ID (auto-generated if not provided)
             default_branch: Default branch name (default: "main" for non-forks)
-            base_repo: Optional base repository for GitHub sync or fork
+            base_repo: Optional base repository for GitHub sync, fork, or snapshot
                        GitHub: owner, name, default_branch, auth.auth_type="public"
                        Fork: id, ref, sha
+                       Snapshot: id, operation="snapshot", ref
+            initial_commit: Required root commit metadata for a snapshot
             ttl: Token TTL in seconds
 
         Returns:
@@ -165,27 +170,41 @@ class GitStorage:
 
         if base_repo:
             if "id" in base_repo:
-                fork_repo = cast(ForkBaseRepo, base_repo)
+                source_repo = cast(Union[ForkBaseRepo, SnapshotBaseRepo], base_repo)
+                source_values = cast(Dict[str, Any], source_repo)
+                is_snapshot = source_values.get("operation") == "snapshot"
                 base_repo_token = self._generate_jwt(
-                    fork_repo["id"],
+                    source_repo["id"],
                     {"permissions": ["git:read"], "ttl": ttl},
                 )
                 base_repo_payload: Dict[str, Any] = {
-                    "provider": "code",
+                    "provider": "code.storage" if is_snapshot else "code",
                     "owner": self.options["name"],
-                    "name": fork_repo["id"],
-                    "operation": "fork",
+                    "name": source_repo["id"],
+                    "operation": "snapshot" if is_snapshot else "fork",
                     "auth": {"token": base_repo_token},
                 }
-                if fork_repo.get("ref"):
-                    base_repo_payload["ref"] = fork_repo["ref"]
-                if fork_repo.get("sha"):
-                    base_repo_payload["sha"] = fork_repo["sha"]
+                if source_values.get("ref"):
+                    base_repo_payload["ref"] = source_values["ref"]
+                if not is_snapshot and source_values.get("sha"):
+                    base_repo_payload["sha"] = source_values["sha"]
                 body["base_repo"] = base_repo_payload
                 if explicit_default_branch:
                     resolved_default_branch = default_branch
                     body["default_branch"] = default_branch
+                elif is_snapshot:
+                    resolved_default_branch = "main"
+                    body["default_branch"] = resolved_default_branch
+
+                if is_snapshot:
+                    if initial_commit is None:
+                        raise ValueError("snapshot create requires initial_commit")
+                    body["initial_commit"] = initial_commit
+                elif initial_commit is not None:
+                    raise ValueError("initial_commit is valid only for snapshot create")
             else:
+                if initial_commit is not None:
+                    raise ValueError("initial_commit is valid only for snapshot create")
                 # Sync base repo: GitHub or generic git provider (gitlab, bitbucket, etc.)
                 sync_repo = cast(Union[GitHubBaseRepo, GenericGitBaseRepo], base_repo)
                 # Use the provider from base_repo if set, defaulting to "github"
@@ -201,6 +220,8 @@ class GitStorage:
                     resolved_default_branch = "main"
                 body["default_branch"] = resolved_default_branch
         else:
+            if initial_commit is not None:
+                raise ValueError("initial_commit is valid only for snapshot create")
             resolved_default_branch = default_branch if explicit_default_branch else "main"
             body["default_branch"] = resolved_default_branch
 

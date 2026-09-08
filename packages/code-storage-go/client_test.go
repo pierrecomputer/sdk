@@ -308,6 +308,68 @@ func TestCreateRepoForkBaseRepoTokenScopes(t *testing.T) {
 	}
 }
 
+func TestCreateRepoHistoryFreeSnapshot(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		_ = decoder.Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"repo_id":"shared-copy","url":"https://repo.git"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+
+	_, err = client.CreateRepo(nil, CreateRepoOptions{
+		ID:            "shared-copy",
+		DefaultBranch: "main",
+		BaseRepo: SnapshotBaseRepo{
+			ID:        "source-repo",
+			Operation: SnapshotOperation,
+			Ref:       "main~2",
+		},
+		InitialCommit: &InitialCommit{
+			Message: "Create project from share link",
+			Author:  CommitIdentity{Name: "Bitrig", Email: "commits@bitrig.com"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create repo error: %v", err)
+	}
+
+	baseRepo, ok := receivedBody["base_repo"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected base_repo payload")
+	}
+	if baseRepo["provider"] != "code.storage" || baseRepo["operation"] != "snapshot" || baseRepo["ref"] != "main~2" {
+		t.Fatalf("unexpected snapshot base_repo: %#v", baseRepo)
+	}
+	auth, ok := baseRepo["auth"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected source auth payload")
+	}
+	claims := parseJWTFromToken(t, auth["token"].(string))
+	if claims["repo"] != "source-repo" {
+		t.Fatalf("source token repo=%v", claims["repo"])
+	}
+
+	initialCommit, ok := receivedBody["initial_commit"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected initial_commit payload")
+	}
+	if initialCommit["message"] != "Create project from share link" {
+		t.Fatalf("initial_commit message=%v", initialCommit["message"])
+	}
+	author, ok := initialCommit["author"].(map[string]interface{})
+	if !ok || author["name"] != "Bitrig" || author["email"] != "commits@bitrig.com" {
+		t.Fatalf("initial_commit author=%#v", author)
+	}
+}
+
 func TestCreateRepoConflict(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)

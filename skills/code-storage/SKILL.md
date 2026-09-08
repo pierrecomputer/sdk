@@ -3,7 +3,7 @@ name: code-storage
 description: >
   Agent skill for interacting with code.storage, a managed Git
   infrastructure layer. Provides repository creation, branching, commits, file access,
-  diffs, search, notes, GitHub sync, ephemeral branches, and forking through a RESTful
+  diffs, search, notes, GitHub sync, ephemeral branches, forking, and history-free snapshots through a RESTful
   HTTP API authenticated with customer-signed JWTs. Every repo operation scoped per-JWT.
 ---
 
@@ -242,6 +242,69 @@ After creating a generic Git Sync repository, store upstream credentials with `/
 `provider` for forks is the literal string `"code"`. Forking also supports `sha`
 to pin an exact source commit; `sha` overrides `ref`. `owner` is the
 organization name (the same value used as the JWT `iss`).
+
+**Create a history-free snapshot from an existing Code Storage repo:**
+```json
+{
+  "default_branch": "main",
+  "base_repo": {
+    "provider": "code.storage",
+    "name": "source-repo-id",
+    "operation": "snapshot",
+    "ref": "main~2",
+    "auth": { "token": "JWT_WITH_GIT_READ_ON_SOURCE" }
+  },
+  "initial_commit": {
+    "message": "Create project from share link",
+    "author": { "name": "Bitrig", "email": "commits@bitrig.com" }
+  }
+}
+```
+
+The request JWT needs `repo:write` on the target. The nested source token needs `git:read` on the
+source. Snapshot mode creates one new root commit with the selected source tree and copies no source
+history. `base_repo.ref` is required and uses the standard restricted revision syntax. Git LFS
+pointer files are copied, but their external LFS objects are not.
+
+Use the same contract through each SDK:
+
+```typescript
+await store.createRepo({
+  id: 'shared-copy',
+  defaultBranch: 'main',
+  baseRepo: { id: 'source-repo-id', operation: 'snapshot', ref: 'main~2' },
+  initialCommit: {
+    message: 'Create project from share link',
+    author: { name: 'Bitrig', email: 'commits@bitrig.com' },
+  },
+});
+```
+
+```python
+await storage.create_repo(
+    id="shared-copy",
+    default_branch="main",
+    base_repo={"id": "source-repo-id", "operation": "snapshot", "ref": "main~2"},
+    initial_commit={
+        "message": "Create project from share link",
+        "author": {"name": "Bitrig", "email": "commits@bitrig.com"},
+    },
+)
+```
+
+```go
+_, err := client.CreateRepo(ctx, storage.CreateRepoOptions{
+	ID:            "shared-copy",
+	DefaultBranch: "main",
+	BaseRepo: storage.SnapshotBaseRepo{
+		ID: "source-repo-id", Operation: storage.SnapshotOperation, Ref: "main~2",
+	},
+	InitialCommit: &storage.InitialCommit{
+		Message: "Create project from share link",
+		Author: storage.CommitIdentity{Name: "Bitrig", Email: "commits@bitrig.com"},
+	},
+})
+```
 
 Response `201`: `{ "repo_id": "...", "message": "..." }`
 Errors: `401` bad JWT/scope, `409` repo already exists or upstream already configured, `412` GitHub App config required for authenticated GitHub sync

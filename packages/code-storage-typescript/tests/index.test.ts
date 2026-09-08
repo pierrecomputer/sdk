@@ -1787,6 +1787,47 @@ describe('GitStorage', () => {
       expect(payload.scopes).toEqual(['git:read']);
     });
 
+    it('should send history-free snapshot configuration with auth token', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+
+      await store.createRepo({
+        id: 'shared-copy',
+        defaultBranch: 'main',
+        baseRepo: {
+          id: 'source-repo',
+          operation: 'snapshot',
+          ref: 'main~2',
+        },
+        initialCommit: {
+          message: 'Create project from share link',
+          author: { name: 'Bitrig', email: 'commits@bitrig.com' },
+        },
+      });
+
+      const requestBody = JSON.parse(
+        (mockFetch.mock.calls[0][1] as RequestInit).body as string
+      );
+      expect(requestBody).toEqual(
+        expect.objectContaining({
+          default_branch: 'main',
+          base_repo: expect.objectContaining({
+            provider: 'code.storage',
+            owner: 'v0',
+            name: 'source-repo',
+            operation: 'snapshot',
+            ref: 'main~2',
+          }),
+          initial_commit: {
+            message: 'Create project from share link',
+            author: { name: 'Bitrig', email: 'commits@bitrig.com' },
+          },
+        })
+      );
+      const payload = decodeJwtPayload(requestBody.base_repo.auth.token);
+      expect(payload.repo).toBe('source-repo');
+      expect(payload.scopes).toEqual(['git:read']);
+    });
+
     it('should default defaultBranch to "main" when not provided', async () => {
       const store = new GitStorage({ name: 'v0', key });
 

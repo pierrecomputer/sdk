@@ -66,6 +66,22 @@ forked_repo = await storage.create_repo(
         "ref": "main",  # optional
     },
 )
+
+# Create one new root commit from a source tree without copying source history
+shared_copy = await storage.create_repo(
+    id="shared-copy",
+    default_branch="main",
+    base_repo={
+        "id": "source-repo",
+        "operation": "snapshot",
+        "ref": "main~2",
+    },
+    initial_commit={
+        "message": "Create project from share link",
+        "author": {"name": "Bitrig", "email": "commits@bitrig.com"},
+    },
+)
+# Git LFS pointer files are copied, but their external LFS objects are not.
 ```
 
 ### Finding a Repository
@@ -699,6 +715,7 @@ class GitStorage:
         id: Optional[str] = None,
         default_branch: Optional[str] = None,  # defaults to "main"
         base_repo: Optional[BaseRepo] = None,
+        initial_commit: Optional[InitialCommit] = None,  # required for snapshots
         ttl: Optional[int] = None,
     ) -> Repo: ...
     async def find_one(self, *, id: str) -> Optional[Repo]: ...
@@ -1063,6 +1080,8 @@ from pierre_storage.types import (
     PublicGitHubBaseRepoAuth,
     GitHubBaseRepo,
     ForkBaseRepo,
+    SnapshotBaseRepo,
+    InitialCommit,
     CommitSignature,
     CreateCommitOptions,
     ListFilesResult,
@@ -1086,7 +1105,7 @@ from pierre_storage.types import (
     # ... and more
 )
 
-# BaseRepo type for GitHub sync or forks
+# BaseRepo type for GitHub sync, forks, or history-free snapshots
 class PublicGitHubBaseRepoAuth(TypedDict):
     auth_type: Literal["public"]
 
@@ -1102,7 +1121,20 @@ class ForkBaseRepo(TypedDict, total=False):
     ref: Optional[str]            # Optional ref name
     sha: Optional[str]            # Optional commit SHA
 
-BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo]
+class SnapshotBaseRepo(TypedDict):
+    id: str
+    operation: Literal["snapshot"]
+    ref: str
+
+class CommitIdentity(TypedDict):
+    name: str
+    email: str
+
+class InitialCommit(TypedDict):
+    message: str
+    author: CommitIdentity
+
+BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo, SnapshotBaseRepo]
 ```
 
 ## Webhook Validation

@@ -14,6 +14,7 @@ from pierre_storage.types import (
     BlameLine,
     BlameResult,
     BranchInfo,
+    CommitIdentity,
     CommitInfo,
     CommitMetadata,
     CommitResult,
@@ -35,6 +36,7 @@ from pierre_storage.types import (
     GrepFileMatch,
     GrepLine,
     GrepResult,
+    InitialCommit,
     ListBranchesResult,
     ListCommitsResult,
     ListFilesResult,
@@ -57,6 +59,7 @@ from pierre_storage.types import (
     Repo,
     RepoInfo,
     RestoreCommitResult,
+    SnapshotBaseRepo,
     TagInfo,
 )
 from pierre_storage.version import PACKAGE_VERSION
@@ -88,6 +91,7 @@ __all__ = [
     "CreateBranchResult",
     "CreateTagResult",
     "CommitInfo",
+    "CommitIdentity",
     "CommitResult",
     "CommitSignature",
     "DeleteBranchResult",
@@ -105,6 +109,7 @@ __all__ = [
     "GrepLine",
     "GrepResult",
     "GitStorageOptions",
+    "InitialCommit",
     "Op",
     "OP_NO_FORCE_PUSH",
     "OP_NO_PUSH",
@@ -130,6 +135,7 @@ __all__ = [
     "RepoInfo",
     "Repo",
     "RestoreCommitResult",
+    "SnapshotBaseRepo",
     "TagInfo",
     # Webhook
     "WebhookPushEvent",

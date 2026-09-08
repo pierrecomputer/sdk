@@ -219,7 +219,27 @@ export interface ForkBaseRepo {
   sha?: string;
 }
 
-export type BaseRepo = GitHubBaseRepo | ForkBaseRepo | GenericGitBaseRepo;
+export interface SnapshotBaseRepo {
+  id: string;
+  operation: "snapshot";
+  ref: string;
+}
+
+export interface CommitIdentity {
+  name: string;
+  email: string;
+}
+
+export interface InitialCommit {
+  message: string;
+  author: CommitIdentity;
+}
+
+export type BaseRepo =
+  | GitHubBaseRepo
+  | ForkBaseRepo
+  | SnapshotBaseRepo
+  | GenericGitBaseRepo;
 
 export interface CreateGitCredentialOptions {
   repoId: string;
@@ -283,11 +303,24 @@ export interface ListReposResult {
   hasMore: boolean;
 }
 
-export interface CreateRepoOptions extends GitStorageInvocationOptions {
+interface CommonCreateRepoOptions extends GitStorageInvocationOptions {
   id?: string;
-  baseRepo?: BaseRepo;
   defaultBranch?: string;
 }
+
+export interface StandardCreateRepoOptions extends CommonCreateRepoOptions {
+  baseRepo?: GitHubBaseRepo | ForkBaseRepo | GenericGitBaseRepo;
+  initialCommit?: never;
+}
+
+export interface SnapshotCreateRepoOptions extends CommonCreateRepoOptions {
+  baseRepo: SnapshotBaseRepo;
+  initialCommit: InitialCommit;
+}
+
+export type CreateRepoOptions =
+  | StandardCreateRepoOptions
+  | SnapshotCreateRepoOptions;
 
 export interface DeleteRepoOptions extends GitStorageInvocationOptions {
   id: string;

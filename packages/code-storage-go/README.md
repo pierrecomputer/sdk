@@ -365,6 +365,35 @@ if err != nil {
 fmt.Println(repo.ID)
 ```
 
+### Create a history-free snapshot
+
+This operation creates one new root commit from a selected source tree. It does not copy source
+history. Git LFS pointer files are copied, but their external LFS objects are not.
+
+```go
+repo, err := client.CreateRepo(context.Background(), storage.CreateRepoOptions{
+	ID:            "shared-copy",
+	DefaultBranch: "main",
+	BaseRepo: storage.SnapshotBaseRepo{
+		ID:        "source-repo",
+		Operation: storage.SnapshotOperation,
+		Ref:       "main~2",
+	},
+	InitialCommit: &storage.InitialCommit{
+		Message: "Create project from share link",
+		Author: storage.CommitIdentity{
+			Name:  "Bitrig",
+			Email: "commits@bitrig.com",
+		},
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(repo.ID)
+```
+
 ## Features
 
 - Create, list, find, and delete repositories.

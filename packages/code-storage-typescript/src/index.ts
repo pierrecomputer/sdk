@@ -2244,7 +2244,12 @@ export class GitStorage {
     });
 
     const baseRepo = options?.baseRepo;
-    const isFork = baseRepo ? 'id' in baseRepo : false;
+    const isSnapshot =
+      baseRepo &&
+      'id' in baseRepo &&
+      'operation' in baseRepo &&
+      baseRepo.operation === 'snapshot';
+    const isFork = baseRepo ? 'id' in baseRepo && !isSnapshot : false;
     let baseRepoOptions: Record<string, unknown> | null = null;
     let resolvedDefaultBranch: string | undefined;
 
@@ -2255,13 +2260,13 @@ export class GitStorage {
           ttl,
         });
         baseRepoOptions = {
-          provider: 'code',
+          provider: isSnapshot ? 'code.storage' : 'code',
           owner: this.options.name,
           name: baseRepo.id,
-          operation: 'fork',
+          operation: isSnapshot ? 'snapshot' : 'fork',
           auth: { token: baseRepoToken },
           ...(baseRepo.ref ? { ref: baseRepo.ref } : {}),
-          ...(baseRepo.sha ? { sha: baseRepo.sha } : {}),
+          ...('sha' in baseRepo && baseRepo.sha ? { sha: baseRepo.sha } : {}),
         };
       } else {
         // Sync base repo: GitHub or generic git provider (gitlab, bitbucket, etc.)
@@ -2295,6 +2300,17 @@ export class GitStorage {
               ...(resolvedDefaultBranch && {
                 default_branch: resolvedDefaultBranch,
               }),
+              ...(isSnapshot && options.initialCommit
+                ? {
+                    initial_commit: snakecaseKeys(
+                      options.initialCommit as unknown as Record<
+                        string,
+                        unknown
+                      >,
+                      { deep: true }
+                    ),
+                  }
+                : {}),
             },
           }
         : 'repos';
