@@ -2315,7 +2315,13 @@ describe('GitStorage', () => {
         );
         expect(requestUrl.searchParams.get('source_branch')).toBe('feature/preview');
         expect(requestUrl.searchParams.get('target_branch')).toBe('main');
+        expect(requestUrl.searchParams.get('source_is_ephemeral')).toBe('true');
+        expect(requestUrl.searchParams.get('target_is_ephemeral')).toBe('false');
         expect(requestUrl.searchParams.get('include_content')).toBe('true');
+        expect(requestUrl.searchParams.has('sourceIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('targetIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('source_ephemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('target_ephemeral')).toBe(false);
 
         const requestInit = init as RequestInit;
         expect(requestInit.method).toBe('GET');
@@ -2372,6 +2378,8 @@ describe('GitStorage', () => {
       const result = await repo.previewMerge({
         sourceBranch: ' feature/preview ',
         targetBranch: ' main ',
+        sourceIsEphemeral: true,
+        targetIsEphemeral: false,
         includeContent: true,
       });
 
@@ -2414,12 +2422,57 @@ describe('GitStorage', () => {
       });
     });
 
+    it('gets a merge preview from a normal source to an ephemeral target', async () => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-preview-merge-ephemeral-target' });
+
+      mockFetch.mockImplementationOnce((url) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.searchParams.get('source_is_ephemeral')).toBe('false');
+        expect(requestUrl.searchParams.get('target_is_ephemeral')).toBe('true');
+        expect(requestUrl.searchParams.has('sourceIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('targetIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('source_ephemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('target_ephemeral')).toBe(false);
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            status: 'clean',
+            result: 'fast_forward',
+            source_branch: 'main',
+            target_branch: 'feature/preview',
+            source_tip_sha: 'source-sha',
+            target_tip_sha: 'target-sha',
+            merge_base_sha: 'base-sha',
+          }),
+        } as any);
+      });
+
+      await repo.previewMerge({
+        sourceBranch: 'main',
+        sourceIsEphemeral: false,
+        targetBranch: 'feature/preview',
+        targetIsEphemeral: true,
+      });
+    });
+
     it('defaults omitted preview merge conflict arrays to empty lists', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-preview-merge-clean' });
 
-      mockFetch.mockImplementationOnce(() =>
-        Promise.resolve({
+      mockFetch.mockImplementationOnce((url) => {
+        const requestUrl = new URL(url as string);
+        expect(requestUrl.searchParams.has('source_is_ephemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('target_is_ephemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('sourceIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('targetIsEphemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('source_ephemeral')).toBe(false);
+        expect(requestUrl.searchParams.has('target_ephemeral')).toBe(false);
+
+        return Promise.resolve({
           ok: true,
           status: 200,
           statusText: 'OK',
@@ -2432,8 +2485,8 @@ describe('GitStorage', () => {
             target_tip_sha: 'target-sha',
             merge_base_sha: 'base-sha',
           }),
-        } as any)
-      );
+        } as any);
+      });
 
       const result = await repo.previewMerge({
         sourceBranch: 'feature/preview',

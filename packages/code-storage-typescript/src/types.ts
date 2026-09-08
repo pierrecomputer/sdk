@@ -1139,7 +1139,9 @@ export type PreviewMergeResultLabel = "merge_commit" | "fast_forward" | "no_op";
 
 export interface PreviewMergeOptions extends GitStorageInvocationOptions {
   sourceBranch: string;
+  sourceIsEphemeral?: boolean;
   targetBranch: string;
+  targetIsEphemeral?: boolean;
   includeContent?: boolean;
 }
 

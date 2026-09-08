@@ -953,6 +953,8 @@ class Repo(Protocol):
         *,
         source_branch: str,
         target_branch: str,
+        source_is_ephemeral: Optional[bool] = None,
+        target_is_ephemeral: Optional[bool] = None,
         include_content: Optional[bool] = None,
         ttl: Optional[int] = None,
     ) -> PreviewMergeResult:

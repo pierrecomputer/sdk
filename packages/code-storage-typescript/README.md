@@ -415,7 +415,9 @@ console.log(ephemeralDelete.ephemeral); // true
 // conflict blob content when the preview is conflicted.
 const preview = await repo.previewMerge({
   sourceBranch: 'feature/demo',
+  sourceIsEphemeral: true,
   targetBranch: 'main',
+  targetIsEphemeral: false,
   includeContent: true,
 });
 console.log(preview.status, preview.result);
@@ -1057,7 +1059,9 @@ type MergeStrategy = 'merge' | 'ff_only' | 'ff_prefer';
 
 interface PreviewMergeOptions {
   sourceBranch: string;
+  sourceIsEphemeral?: boolean;
   targetBranch: string;
+  targetIsEphemeral?: boolean;
   includeContent?: boolean;
   ttl?: number;
 }
