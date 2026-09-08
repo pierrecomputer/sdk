@@ -1718,9 +1718,12 @@ class RepoImpl implements Repo {
     if (!baseRef && !baseBranch) {
       throw new Error('createBranch baseRef or baseBranch is required');
     }
-    const targetBranch = options?.targetBranch?.trim();
-    if (!targetBranch) {
-      throw new Error('createBranch targetBranch is required');
+    const targetBranch = options?.targetBranch?.trim() || undefined;
+    const targetPrefix = options?.targetPrefix?.trim() || undefined;
+    if (targetBranch && targetPrefix) {
+      throw new Error(
+        'createBranch targetBranch and targetPrefix are mutually exclusive'
+      );
     }
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
@@ -1730,13 +1733,17 @@ class RepoImpl implements Repo {
       refPolicies: options.refPolicies,
     });
 
-    const body: Record<string, unknown> = {
-      target_branch: targetBranch,
-    };
+    const body: Record<string, unknown> = {};
     if (baseRef) {
       body.base_ref = baseRef;
     } else {
       body.base_branch = baseBranch;
+    }
+    if (targetBranch) {
+      body.target_branch = targetBranch;
+    }
+    if (targetPrefix) {
+      body.target_prefix = targetPrefix;
     }
 
     if (options.baseIsEphemeral === true) {

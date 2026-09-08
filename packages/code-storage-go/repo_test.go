@@ -1417,6 +1417,61 @@ func TestCreateBranchPayloadAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateBranchGeneratedTargetPayload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body createBranchRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		want := createBranchRequest{
+			BaseRef:           "main",
+			TargetPrefix:      "attempt/",
+			TargetIsEphemeral: true,
+		}
+		if body != want {
+			t.Fatalf("request=%+v want %+v", body, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message":"branch created","target_branch":"attempt/opaque-id","target_is_ephemeral":true,"commit_sha":"abc123"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	result, err := repo.CreateBranch(nil, CreateBranchOptions{
+		BaseRef:           "main",
+		TargetPrefix:      " attempt/ ",
+		TargetIsEphemeral: true,
+	})
+	if err != nil {
+		t.Fatalf("create branch error: %v", err)
+	}
+	if result.TargetBranch != "attempt/opaque-id" || result.CommitSHA != "abc123" {
+		t.Fatalf("result=%+v", result)
+	}
+}
+
+func TestCreateBranchRejectsTwoTargetOptions(t *testing.T) {
+	client, err := NewClient(Options{Name: "acme", Key: testKey})
+	if err != nil {
+		t.Fatalf("client error: %v", err)
+	}
+	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+	_, err = repo.CreateBranch(nil, CreateBranchOptions{
+		BaseRef:      "main",
+		TargetBranch: "feature/demo",
+		TargetPrefix: "attempt/",
+	})
+	if err == nil || err.Error() != "createBranch targetBranch and targetPrefix are mutually exclusive" {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestListTags(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/repos/tags" {

@@ -219,6 +219,14 @@ branch_result = await repo.create_branch(
 )
 print(branch_result["target_branch"], branch_result.get("commit_sha"))
 
+# Omit target_branch to let the server allocate a name. The prefix is literal.
+attempt = await repo.create_branch(
+    base_ref="main",
+    target_prefix="attempt/",
+    target_is_ephemeral=True,
+)
+print(attempt["target_branch"], attempt.get("commit_sha"))
+
 # Delete a branch (default branch deletion is rejected)
 delete_branch_result = await repo.delete_branch(name="feature/old-onboarding")
 print(delete_branch_result["message"])
@@ -800,7 +808,8 @@ class Repo:
         *,
         base_ref: Optional[str] = None,
         base_branch: Optional[str] = None,  # deprecated
-        target_branch: str,
+        target_branch: Optional[str] = None,
+        target_prefix: Optional[str] = None,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,

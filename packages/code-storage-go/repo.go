@@ -1090,11 +1090,12 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 	baseRef := strings.TrimSpace(options.BaseRef)
 	baseBranch := strings.TrimSpace(options.BaseBranch)
 	targetBranch := strings.TrimSpace(options.TargetBranch)
+	targetPrefix := strings.TrimSpace(options.TargetPrefix)
 	if baseRef == "" && baseBranch == "" {
 		return CreateBranchResult{}, errors.New("createBranch baseRef or baseBranch is required")
 	}
-	if targetBranch == "" {
-		return CreateBranchResult{}, errors.New("createBranch targetBranch is required")
+	if targetBranch != "" && targetPrefix != "" {
+		return CreateBranchResult{}, errors.New("createBranch targetBranch and targetPrefix are mutually exclusive")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
@@ -1105,6 +1106,7 @@ func (r *Repo) CreateBranch(ctx context.Context, options CreateBranchOptions) (C
 
 	body := &createBranchRequest{
 		TargetBranch:      targetBranch,
+		TargetPrefix:      targetPrefix,
 		BaseIsEphemeral:   options.BaseIsEphemeral,
 		TargetIsEphemeral: options.TargetIsEphemeral,
 	}

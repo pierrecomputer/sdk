@@ -317,10 +317,19 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches/create" -X POST \
   -d '{"base_ref":"refs/heads/main","target_branch":"feature/x","base_is_ephemeral":false,"target_is_ephemeral":false}'
 ```
 
-Required: `target_branch` plus one of `base_ref` (preferred, accepts `refs/heads/...`,
-plain branch names, or commit SHAs) or `base_branch` (deprecated alias).
-Optional: `base_is_ephemeral`, `target_is_ephemeral`.
+Required: one of `base_ref` (preferred, accepts `refs/heads/...`, plain branch names, or commit SHAs) or `base_branch` (deprecated alias).
+Set `target_branch` to choose the name. Omit it to let the server allocate a name. Set optional `target_prefix` only when `target_branch` is absent. The prefix is literal, and the server appends an opaque segment.
+Optional: `base_is_ephemeral`, `target_is_ephemeral`, `target_branch`, `target_prefix`.
 Response: `{ "message", "target_branch", "target_is_ephemeral", "commit_sha" }`
+
+```bash
+curl "$CODE_STORAGE_BASE_URL/repos/branches/create" -X POST \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"base_ref":"main","target_prefix":"attempt/","target_is_ephemeral":true}'
+```
+
+Each server-named request allocates a new branch. A retry after an unknown result can create another branch.
 
 ## GET /repos/branches — List Branches
 

@@ -854,7 +854,8 @@ class Repo(Protocol):
         *,
         base_ref: Optional[str] = None,
         base_branch: Optional[str] = None,
-        target_branch: str,
+        target_branch: Optional[str] = None,
+        target_prefix: Optional[str] = None,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
@@ -862,7 +863,8 @@ class Repo(Protocol):
     ) -> CreateBranchResult:
         """Create or promote a branch.
 
-        base_branch is deprecated; prefer base_ref.
+        base_branch is deprecated; prefer base_ref. Omit target_branch to let the server allocate a
+        name. Use target_prefix to group allocated names.
         """
         ...
 

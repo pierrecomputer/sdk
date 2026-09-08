@@ -802,7 +802,8 @@ class RepoImpl:
         *,
         base_ref: Optional[str] = None,
         base_branch: Optional[str] = None,
-        target_branch: str,
+        target_branch: Optional[str] = None,
+        target_prefix: Optional[str] = None,
         base_is_ephemeral: bool = False,
         target_is_ephemeral: bool = False,
         ttl: Optional[int] = None,
@@ -813,20 +814,22 @@ class RepoImpl:
         Args:
             base_ref: Preferred base ref (branch, tag, or commit SHA)
             base_branch: Deprecated branch-only base name
-            target_branch: Target branch name
+            target_branch: Optional target branch name
+            target_prefix: Optional prefix for a server-generated target name
             base_is_ephemeral: Whether the base ref lives in the ephemeral namespace
             target_is_ephemeral: Whether to create the target in the ephemeral namespace
             ttl: Token TTL in seconds
         """
         base_ref_clean = normalize_optional_ref(base_ref)
         base_branch_clean = normalize_optional_ref(base_branch)
-        target_branch_clean = target_branch.strip()
+        target_branch_clean = normalize_optional_ref(target_branch)
+        target_prefix_clean = normalize_optional_string(target_prefix)
 
         effective_base = base_ref_clean or base_branch_clean
         if effective_base is None:
             raise ValueError("create_branch base_ref or base_branch is required")
-        if not target_branch_clean:
-            raise ValueError("create_branch target_branch is required")
+        if target_branch_clean is not None and target_prefix_clean is not None:
+            raise ValueError("create_branch target_branch and target_prefix are mutually exclusive")
 
         if base_branch_clean is not None:
             warnings.warn(
@@ -842,7 +845,6 @@ class RepoImpl:
         )
 
         payload: Dict[str, Any] = {
-            "target_branch": target_branch_clean,
             "base_is_ephemeral": bool(base_is_ephemeral),
             "target_is_ephemeral": bool(target_is_ephemeral),
         }
@@ -850,6 +852,10 @@ class RepoImpl:
             payload["base_ref"] = base_ref_clean
         else:
             payload["base_branch"] = base_branch_clean
+        if target_branch_clean is not None:
+            payload["target_branch"] = target_branch_clean
+        if target_prefix_clean is not None:
+            payload["target_prefix"] = target_prefix_clean
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches/create"
 

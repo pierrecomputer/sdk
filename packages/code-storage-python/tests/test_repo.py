@@ -1158,6 +1158,48 @@ class TestRepoBranchOperations:
             assert payload["target_is_ephemeral"] is True
 
     @pytest.mark.asyncio
+    async def test_create_branch_sends_target_prefix(self, git_storage_options: dict) -> None:
+        """Test create_branch can request a server-generated branch name."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        create_branch_response = MagicMock()
+        create_branch_response.status_code = 200
+        create_branch_response.is_success = True
+        create_branch_response.json.return_value = {
+            "message": "branch created",
+            "target_branch": "attempt/opaque-id",
+            "target_is_ephemeral": True,
+            "commit_sha": "abc123",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(
+                side_effect=[create_repo_response, create_branch_response]
+            )
+
+            repo = await storage.create_repo(id="test-repo")
+            result = await repo.create_branch(
+                base_ref="main",
+                target_prefix=" attempt/ ",
+                target_is_ephemeral=True,
+            )
+
+            assert result["target_branch"] == "attempt/opaque-id"
+            branch_call = client_instance.post.await_args_list[1]
+            assert branch_call.kwargs["json"] == {
+                "base_ref": "main",
+                "target_prefix": "attempt/",
+                "base_is_ephemeral": False,
+                "target_is_ephemeral": True,
+            }
+
+    @pytest.mark.asyncio
     async def test_preview_merge_gets_conflict_content(self, git_storage_options: dict) -> None:
         """Test preview_merge sends read-scoped query params and parses conflicts."""
         storage = GitStorage(git_storage_options)
@@ -1614,8 +1656,10 @@ class TestRepoBranchOperations:
                 )
 
     @pytest.mark.asyncio
-    async def test_create_branch_requires_target_branch(self, git_storage_options: dict) -> None:
-        """create_branch still requires a non-blank target branch."""
+    async def test_create_branch_rejects_two_target_options(
+        self, git_storage_options: dict
+    ) -> None:
+        """create_branch accepts one target option at a time."""
         storage = GitStorage(git_storage_options)
 
         create_repo_response = MagicMock()
@@ -1629,8 +1673,15 @@ class TestRepoBranchOperations:
 
             repo = await storage.create_repo(id="test-repo")
 
-            with pytest.raises(ValueError, match="target_branch is required"):
-                await repo.create_branch(base_ref="main", target_branch="  ")
+            with pytest.raises(
+                ValueError,
+                match="target_branch and target_prefix are mutually exclusive",
+            ):
+                await repo.create_branch(
+                    base_ref="main",
+                    target_branch="feature/demo",
+                    target_prefix="attempt/",
+                )
 
     @pytest.mark.asyncio
     async def test_promote_ephemeral_branch_defaults(self, git_storage_options: dict) -> None:

@@ -389,6 +389,7 @@ type CreateBranchOptions struct {
 	// Deprecated: use BaseRef instead.
 	BaseBranch        string
 	TargetBranch      string
+	TargetPrefix      string
 	BaseIsEphemeral   bool
 	TargetIsEphemeral bool
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
