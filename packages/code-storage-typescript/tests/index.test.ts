@@ -2,9 +2,11 @@ import { importPKCS8, jwtVerify } from 'jose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ApiError,
   CodeStorage,
   GitStorage,
   OP_VERIFY_SIG,
+  RefUpdateError,
   createClient,
 } from '../src/index';
 
@@ -2643,6 +2645,143 @@ describe('GitStorage', () => {
         targetBranch: 'main',
         strategy: 'ff_prefer',
       });
+    });
+
+    it.each([
+      {
+        name: 'merge conflict',
+        body: {
+          error: 'merge conflict',
+          code: 'merge_conflict',
+          conflict_paths: ['README.md'],
+          merge_base_sha: 'base123',
+        },
+        expected: {
+          message: 'merge conflict',
+          status: 'merge_conflict',
+          reason: 'conflict',
+          conflictPaths: ['README.md'],
+          mergeBaseSha: 'base123',
+        },
+      },
+      {
+        name: 'stale target guard',
+        body: {
+          error: 'target branch moved',
+          code: 'precondition_failed',
+          guard: 'target',
+          expected_sha: 'expected-target',
+          actual_sha: 'actual-target',
+        },
+        expected: {
+          message: 'target branch moved',
+          status: 'precondition_failed',
+          reason: 'precondition_failed',
+          guard: 'target',
+          expectedSha: 'expected-target',
+          actualSha: 'actual-target',
+        },
+      },
+      {
+        name: 'stale source guard',
+        body: {
+          error: 'source ref no longer contains the expected commit',
+          code: 'precondition_failed',
+          guard: 'source',
+          expected_sha: 'expected-source',
+          actual_sha: 'actual-source',
+        },
+        expected: {
+          message: 'source ref no longer contains the expected commit',
+          status: 'precondition_failed',
+          reason: 'precondition_failed',
+          guard: 'source',
+          expectedSha: 'expected-source',
+          actualSha: 'actual-source',
+        },
+      },
+    ])('throws RefUpdateError for $name', async ({ body, expected }) => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge-error' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        headers: { get: () => 'application/json' },
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      } as any);
+
+      let error: unknown;
+      try {
+        await repo.merge({
+          sourceRef: 'feature',
+          targetBranch: 'main',
+          strategy: 'merge',
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(RefUpdateError);
+      expect(error).toMatchObject(expected);
+    });
+
+    it.each([
+      {
+        name: 'unknown 409 code',
+        status: 409,
+        statusText: 'Conflict',
+        body: {
+          error: 'merge conflict in README.md',
+          code: 'future_merge_error',
+        },
+      },
+      {
+        name: '403 response',
+        status: 403,
+        statusText: 'Forbidden',
+        body: { error: 'merge conflict', code: 'merge_conflict' },
+      },
+      {
+        name: '500 response',
+        status: 500,
+        statusText: 'Internal Server Error',
+        body: {
+          error: 'target branch moved',
+          code: 'precondition_failed',
+          guard: 'target',
+          expected_sha: 'expected-target',
+          actual_sha: 'actual-target',
+        },
+      },
+    ])('keeps ApiError for $name', async ({ status, statusText, body }) => {
+      const store = new GitStorage({ name: 'v0', key });
+      const repo = store.repo({ id: 'repo-merge-api-error' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status,
+        statusText,
+        headers: { get: () => 'application/json' },
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      } as any);
+
+      let error: unknown;
+      try {
+        await repo.merge({
+          sourceRef: 'feature',
+          targetBranch: 'main',
+          strategy: 'merge',
+        });
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ status, body });
     });
 
     it('preserves squash merge results', async () => {

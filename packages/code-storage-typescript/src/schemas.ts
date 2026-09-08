@@ -391,6 +391,20 @@ export const errorEnvelopeSchema = z.object({
   error: z.string(),
 });
 
+export const mergeErrorResponseSchema = z.discriminatedUnion('code', [
+  z.object({
+    code: z.literal('merge_conflict'),
+    conflict_paths: z.array(z.string()).optional().default([]),
+    merge_base_sha: z.string().optional(),
+  }),
+  z.object({
+    code: z.literal('precondition_failed'),
+    guard: z.enum(['target', 'source']),
+    expected_sha: z.string(),
+    actual_sha: z.string(),
+  }),
+]);
+
 export type ListFilesResponseRaw = z.infer<typeof listFilesResponseSchema>;
 export type RawTreeEntry = z.infer<typeof treeEntryRawSchema>;
 export type TreeEntryTypeRaw = z.infer<typeof treeEntryTypeSchema>;

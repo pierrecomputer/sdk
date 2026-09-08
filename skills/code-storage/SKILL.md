@@ -404,7 +404,18 @@ parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
   "commit_sha", "tree_sha", "source": {ref,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
-Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
+Every merge 409 has a stable `code`. The SDKs map these caller-actionable codes
+to `RefUpdateError`:
+
+- `merge_conflict` uses reason `conflict` and provides conflict paths and the
+  merge base.
+- `precondition_failed` uses reason `precondition_failed` and provides `guard`
+  (`target` or `source`), the expected SHA, and the actual SHA.
+
+TypeScript fields use camelCase. Python fields use snake_case. Go fields use
+exported PascalCase names. An unknown 409 code and every non-409 merge failure
+remain `ApiError` in TypeScript and Python or `APIError` in Go. Do not classify
+an error from its message.
 
 ## GET /repos/{repo_name}/merge/preview — Preview Merge
 

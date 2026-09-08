@@ -15,7 +15,12 @@ from pierre_storage.commit import (
     resolve_commit_ttl_seconds,
     send_diff_commit_request,
 )
-from pierre_storage.errors import ApiError, RefUpdateError, infer_ref_update_reason
+from pierre_storage.errors import (
+    ApiError,
+    RefUpdateError,
+    infer_ref_update_reason,
+    parse_merge_ref_update_error,
+)
 from pierre_storage.types import (
     BlameLine,
     BlameResult,
@@ -1126,6 +1131,7 @@ class RepoImpl:
 
             if response.status_code != 200:
                 message = "Merge failed"
+                error_data: Any = None
                 try:
                     error_data = response.json()
                     if isinstance(error_data, dict) and error_data.get("message"):
@@ -1136,6 +1142,11 @@ class RepoImpl:
                         message = f"{message} with HTTP {response.status_code}"
                 except Exception:
                     message = f"{message} with HTTP {response.status_code}"
+                ref_update_error = parse_merge_ref_update_error(
+                    message, response.status_code, error_data
+                )
+                if ref_update_error is not None:
+                    raise ref_update_error
                 raise ApiError(message, status_code=response.status_code, response=response)
 
             data = response.json()

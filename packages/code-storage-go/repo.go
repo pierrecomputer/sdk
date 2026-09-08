@@ -1300,6 +1300,12 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 
 	resp, err := r.client.api.post(ctx, r.apiPath("merge"), nil, body, jwtToken, nil)
 	if err != nil {
+		var apiErr *APIError
+		if errors.As(err, &apiErr) {
+			if refUpdateErr := parseMergeRefUpdateError(apiErr); refUpdateErr != nil {
+				return MergeResult{}, refUpdateErr
+			}
+		}
 		return MergeResult{}, err
 	}
 	defer resp.Body.Close()

@@ -1,16 +1,26 @@
-import type { RefUpdate, RefUpdateReason } from './types';
+import type { MergeGuard, RefUpdate, RefUpdateReason } from './types';
 
 export interface RefUpdateErrorOptions {
   status: string;
   message?: string;
   refUpdate?: Partial<RefUpdate>;
   reason?: RefUpdateReason;
+  guard?: MergeGuard;
+  expectedSha?: string;
+  actualSha?: string;
+  conflictPaths?: string[];
+  mergeBaseSha?: string;
 }
 
 export class RefUpdateError extends Error {
   public readonly status: string;
   public readonly reason: RefUpdateReason;
   public readonly refUpdate?: Partial<RefUpdate>;
+  public readonly guard?: MergeGuard;
+  public readonly expectedSha?: string;
+  public readonly actualSha?: string;
+  public readonly conflictPaths?: string[];
+  public readonly mergeBaseSha?: string;
 
   constructor(message: string, options: RefUpdateErrorOptions) {
     super(message);
@@ -18,6 +28,11 @@ export class RefUpdateError extends Error {
     this.status = options.status;
     this.reason = options.reason ?? inferRefUpdateReason(options.status);
     this.refUpdate = options.refUpdate;
+    this.guard = options.guard;
+    this.expectedSha = options.expectedSha;
+    this.actualSha = options.actualSha;
+    this.conflictPaths = options.conflictPaths;
+    this.mergeBaseSha = options.mergeBaseSha;
   }
 }
 
