@@ -58,6 +58,7 @@ import type {
   CreateBranchResult,
   CreateCommitFromDiffOptions,
   CreateCommitOptions,
+  CreateGitCredentialByNameOptions,
   CreateTagOptions,
   CreateTagResponse,
   CreateTagResult,
@@ -354,6 +355,10 @@ function getApiInstance(baseUrl: string, version: ValidAPIVersion) {
     );
   }
   return apiInstanceMap.get(`${baseUrl}--${version}`)!;
+}
+
+function legacyGitCredentialPath(): string {
+  return 'v1/repos/git-credentials';
 }
 
 function transformBranchInfo(raw: RawBranchInfo): BranchInfo {
@@ -965,6 +970,10 @@ class RepoImpl implements Repo {
     );
   }
 
+  private repoPath(suffix: string): string {
+    return `repos/${encodeURIComponent(this.id)}/${suffix}`;
+  }
+
   async getRemoteURL(urlOptions?: GetRemoteURLOptions): Promise<string> {
     const url = new URL(
       `https://${this.options.storageBaseUrl}/${this.id}.git`
@@ -1006,7 +1015,7 @@ class RepoImpl implements Repo {
 
     // Allow range and conditional outcomes to surface as normal responses.
     return this.api.get(
-      { path: 'repos/file', params },
+      { path: this.repoPath('file'), params },
       jwt,
       { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
@@ -1023,7 +1032,7 @@ class RepoImpl implements Repo {
     const extraHeaders = buildConditionalHeaders(options.headers);
 
     const response = await this.api.head(
-      { path: 'repos/file', params },
+      { path: this.repoPath('file'), params },
       jwt,
       { allowedStatus: [...FILE_RESPONSE_ALLOWED_STATUS], extraHeaders }
     );
@@ -1060,7 +1069,9 @@ class RepoImpl implements Repo {
     }
 
     const path =
-      Object.keys(body).length > 0 ? { path: 'repos/archive', body } : 'repos/archive';
+      Object.keys(body).length > 0
+        ? { path: this.repoPath('archive'), body }
+        : this.repoPath('archive');
 
     return this.api.post(path, jwt);
   }
@@ -1093,7 +1104,7 @@ class RepoImpl implements Repo {
     }
     const response = await this.api.get(
       {
-        path: 'repos/files',
+        path: this.repoPath('files'),
         params: Object.keys(params).length ? params : undefined,
       },
       jwt
@@ -1139,7 +1150,7 @@ class RepoImpl implements Repo {
     }
     const response = await this.api.get(
       {
-        path: 'repos/files/metadata',
+        path: this.repoPath('files/metadata'),
         params: Object.keys(params).length ? params : undefined,
       },
       jwt
@@ -1182,7 +1193,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/branches', params },
+      { path: this.repoPath('branches'), params },
       jwt
     );
 
@@ -1215,7 +1226,10 @@ class RepoImpl implements Repo {
       }
     }
 
-    const response = await this.api.get({ path: 'repos/tags', params }, jwt);
+    const response = await this.api.get(
+      { path: this.repoPath('tags'), params },
+      jwt
+    );
     const raw = listTagsResponseSchema.parse(await response.json());
     return transformListTagsResult({
       ...raw,
@@ -1259,7 +1273,10 @@ class RepoImpl implements Repo {
       }
     }
 
-    const response = await this.api.get({ path: 'repos/commits', params }, jwt);
+    const response = await this.api.get(
+      { path: this.repoPath('commits'), params },
+      jwt
+    );
 
     const raw = listCommitsResponseSchema.parse(await response.json());
     return transformListCommitsResult({
@@ -1281,7 +1298,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.get(
-      { path: 'repos/commit', params: { ref } },
+      { path: this.repoPath('commit'), params: { ref } },
       jwt
     );
 
@@ -1316,7 +1333,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/blame', params },
+      { path: this.repoPath('blame'), params },
       jwt
     );
 
@@ -1343,7 +1360,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/notes', params },
+      { path: this.repoPath('notes'), params },
       jwt
     );
     const raw = noteReadResponseSchema.parse(await response.json());
@@ -1377,9 +1394,11 @@ class RepoImpl implements Repo {
       notesRef: preferredInput(options.notesRef, options.ref),
     });
 
-    const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.post(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'POST');
     if (!result.result.success) {
@@ -1427,9 +1446,11 @@ class RepoImpl implements Repo {
       notesRef: preferredInput(options.notesRef, options.ref),
     });
 
-    const response = await this.api.post({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.post(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'POST');
     if (!result.result.success) {
@@ -1494,9 +1515,11 @@ class RepoImpl implements Repo {
       };
     }
 
-    const response = await this.api.delete({ path: 'repos/notes', body }, jwt, {
-      allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS],
-    });
+    const response = await this.api.delete(
+      { path: this.repoPath('notes'), body },
+      jwt,
+      { allowedStatus: [...NOTE_WRITE_ALLOWED_STATUS] }
+    );
 
     const result = await parseNoteWriteResponse(response, 'DELETE');
     if (!result.result.success) {
@@ -1556,7 +1579,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/notes/refs', params },
+      { path: this.repoPath('notes/refs'), params },
       jwt
     );
 
@@ -1594,7 +1617,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/branches/diff', params },
+      { path: this.repoPath('branches/diff'), params },
       jwt
     );
 
@@ -1636,7 +1659,7 @@ class RepoImpl implements Repo {
       params.path = options.paths;
     }
 
-    const response = await this.api.get({ path: 'repos/diff', params }, jwt);
+    const response = await this.api.get({ path: this.repoPath('diff'), params }, jwt);
 
     const raw = commitDiffResponseSchema.parse(await response.json());
     return transformCommitDiffResult(raw);
@@ -1718,7 +1741,7 @@ class RepoImpl implements Repo {
       };
     }
 
-    const response = await this.api.post({ path: 'repos/grep', body }, jwt);
+    const response = await this.api.post({ path: this.repoPath('grep'), body }, jwt);
     const raw = grepResponseSchema.parse(await response.json());
 
     return {
@@ -1751,7 +1774,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/pull-upstream', body },
+      { path: this.repoPath('pull-upstream'), body },
       jwt
     );
 
@@ -1801,7 +1824,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/branches/create', body },
+      { path: this.repoPath('branches/create'), body },
       jwt
     );
     const raw = createBranchResponseSchema.parse(await response.json());
@@ -1835,7 +1858,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.delete(
-      { path: 'repos/branches', body },
+      { path: this.repoPath('branches'), body },
       jwt
     );
     const raw = deleteBranchResponseSchema.parse(await response.json());
@@ -1870,7 +1893,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.get(
-      { path: 'repos/merge/preview', params },
+      { path: this.repoPath('merge/preview'), params },
       jwt
     );
     const raw = previewMergeResponseSchema.parse(await response.json());
@@ -1960,7 +1983,7 @@ class RepoImpl implements Repo {
       body.squash = options.squash;
     }
 
-    const response = await this.api.post({ path: 'repos/merge', body }, jwt);
+    const response = await this.api.post({ path: this.repoPath('merge'), body }, jwt);
     const raw = mergeResponseSchema.parse(await response.json());
     return transformMergeResult(raw);
   }
@@ -1987,7 +2010,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.post(
-      { path: 'repos/tags', body: { name, ref } },
+      { path: this.repoPath('tags'), body: { name, ref } },
       jwt
     );
     const raw = createTagResponseSchema.parse(await response.json());
@@ -2011,7 +2034,7 @@ class RepoImpl implements Repo {
     });
 
     const response = await this.api.delete(
-      { path: 'repos/tags', body: { name } },
+      this.repoPath(`tags/${encodeURIComponent(name)}`),
       jwt
     );
     const raw = deleteTagResponseSchema.parse(await response.json());
@@ -2086,7 +2109,7 @@ class RepoImpl implements Repo {
     }
 
     const response = await this.api.post(
-      { path: 'repos/restore-commit', body: { metadata } },
+      { path: this.repoPath('restore-commit'), body: { metadata } },
       jwt,
       {
         allowedStatus: [...RESTORE_COMMIT_ALLOWED_STATUS],
@@ -2114,11 +2137,10 @@ class RepoImpl implements Repo {
   }
 
   createCommit(options: CreateCommitOptions): CommitBuilder {
-    const version = this.options.apiVersion ?? API_VERSION;
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchCommitTransport({ baseUrl, version });
+    const transport = new FetchCommitTransport({ baseUrl, repoId: this.id });
     const ttl = resolveCommitTtlSeconds(options);
     const builderOptions: CreateCommitOptions = {
       ...options,
@@ -2141,11 +2163,13 @@ class RepoImpl implements Repo {
   async createCommitFromDiff(
     options: CreateCommitFromDiffOptions
   ): Promise<CommitResult> {
-    const version = this.options.apiVersion ?? API_VERSION;
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchDiffCommitTransport({ baseUrl, version });
+    const transport = new FetchDiffCommitTransport({
+      baseUrl,
+      repoId: this.id,
+    });
     const ttl = resolveCommitTtlSeconds(options);
     const requestOptions: CreateCommitFromDiffOptions = {
       ...options,
@@ -2360,7 +2384,11 @@ export class GitStorage {
     });
 
     // Allow 404 to indicate "not found" without throwing
-    const resp = await this.api.get('repo', jwt, { allowedStatus: [404] });
+    const resp = await this.api.get(
+      `repos/${encodeURIComponent(options.id)}`,
+      jwt,
+      { allowedStatus: [404] }
+    );
     if (resp.status === 404) {
       return null;
     }
@@ -2409,9 +2437,11 @@ export class GitStorage {
     });
 
     // Allow 404 and 409 for clearer error handling
-    const resp = await this.api.delete('repos/delete', jwt, {
-      allowedStatus: [404, 409],
-    });
+    const resp = await this.api.delete(
+      `repos/${encodeURIComponent(options.id)}`,
+      jwt,
+      { allowedStatus: [404, 409] }
+    );
     if (resp.status === 404) {
       throw new Error('Repository not found');
     }
@@ -2431,27 +2461,44 @@ export class GitStorage {
    * Used to authenticate sync operations for non-GitHub providers (GitLab, Bitbucket, etc.)
    */
   async createGitCredential(
+    options: CreateGitCredentialByNameOptions
+  ): Promise<GitCredential>;
+  async createGitCredential(
     options: CreateGitCredentialOptions
+  ): Promise<GitCredential>;
+  async createGitCredential(
+    options: CreateGitCredentialOptions | CreateGitCredentialByNameOptions
   ): Promise<GitCredential> {
+    const repoName =
+      'repoName' in options ? options.repoName?.trim() : undefined;
+    const repoId = options.repoId?.trim();
+    if (!repoName && !repoId) {
+      throw new Error('createGitCredential repoName or repoId is required');
+    }
+
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT(options.repoId, {
+    const jwt = await this.generateJWT(repoName || repoId!, {
       permissions: ['repo:write'],
       ttl,
     });
 
     const body: Record<string, unknown> = {
-      repo_id: options.repoId,
       password: options.password,
     };
     if (options.username !== undefined) {
       body.username = options.username;
     }
 
-    const resp = await this.api.post(
-      { path: 'repos/git-credentials', body },
-      jwt,
-      { allowedStatus: [409] }
-    );
+    const request = repoName
+      ? {
+          path: `repos/${encodeURIComponent(repoName)}/git-credentials`,
+          body,
+        }
+      : {
+          path: legacyGitCredentialPath(),
+          body: { ...body, repo_id: repoId },
+        };
+    const resp = await this.api.post(request, jwt, { allowedStatus: [409] });
     if (resp.status === 409) {
       throw new Error('A credential already exists for this repository');
     }
@@ -2466,25 +2513,30 @@ export class GitStorage {
   async updateGitCredential(
     options: UpdateGitCredentialOptions
   ): Promise<GitCredential> {
+    const repoName = options.repoName?.trim();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const jwt = await this.generateJWT(repoName || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
     const body: Record<string, unknown> = {
-      id: options.id,
       password: options.password,
     };
     if (options.username !== undefined) {
       body.username = options.username;
     }
 
-    const resp = await this.api.put(
-      { path: 'repos/git-credentials', body },
-      jwt,
-      { allowedStatus: [404] }
-    );
+    const request = repoName
+      ? {
+          path: `repos/${encodeURIComponent(repoName)}/git-credentials/${encodeURIComponent(options.id)}`,
+          body,
+        }
+      : {
+          path: legacyGitCredentialPath(),
+          body: { ...body, id: options.id },
+        };
+    const resp = await this.api.put(request, jwt, { allowedStatus: [404] });
     if (resp.status === 404) {
       throw new Error('Credential not found');
     }
@@ -2500,14 +2552,18 @@ export class GitStorage {
    * Delete a generic git credential.
    */
   async deleteGitCredential(options: DeleteGitCredentialOptions): Promise<void> {
+    const repoName = options.repoName?.trim();
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
-    const jwt = await this.generateJWT('org', {
+    const jwt = await this.generateJWT(repoName || 'org', {
       permissions: ['repo:write'],
       ttl,
     });
 
+    const request = repoName
+      ? `repos/${encodeURIComponent(repoName)}/git-credentials/${encodeURIComponent(options.id)}`
+      : { path: legacyGitCredentialPath(), body: { id: options.id } };
     const resp = await this.api.delete(
-      { path: 'repos/git-credentials', body: { id: options.id } },
+      request,
       jwt,
       { allowedStatus: [404] }
     );

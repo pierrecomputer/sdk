@@ -4,12 +4,11 @@ Pierre Git Storage SDK for TypeScript/JavaScript applications.
 
 ## End-to-End Smoke Test
 
-- `node packages/git-storage-sdk/tests/full-workflow.js -e production -s pierre -k /home/ian/pierre-prod-key.pem`  
-  Drives
-  the Pierre workflow via the SDK: creates a repository, writes commits, fetches
-  branch and diff data, and confirms storage APIs. Swap in your own private key
-  path when running outside this workstation and adjust `-e`/`-s` for
-  non-production environments.
+- `pnpm build && node tests/full-workflow.js -e production -s YOUR_ORG -k /path/to/private.pem`
+  drives the Pierre workflow via the SDK. It uses a namespaced repository,
+  creates and rotates a Git credential, writes commits, checks storage APIs,
+  deletes the credential, and starts repository deletion. Adjust `-e` and `-s`
+  for non-production environments.
 
 ## Installation
 
@@ -24,6 +23,33 @@ New code should use `ref`, `baseRef`, `sourceRef`, `objectRef`, `notesRef`,
 `repoName`; commit diffs expose `baseSha`; merge sources expose `ref`; note
 writes expose `notesRef`; and ref updates expose `targetBranch`. Deprecated
 result aliases remain populated with the preferred value.
+
+Repository methods now use the preferred `/api/repos/{repo_name}/*` routes.
+Git credential methods accept `repoName` for these routes:
+
+```typescript
+const credential = await store.createGitCredential({
+  repoName: 'team/project',
+  username: 'git',
+  password: process.env.GIT_ACCESS_TOKEN!,
+});
+
+await store.updateGitCredential({
+  repoName: 'team/project',
+  id: credential.id,
+  password: process.env.ROTATED_GIT_ACCESS_TOKEN!,
+});
+
+await store.deleteGitCredential({
+  repoName: 'team/project',
+  id: credential.id,
+});
+```
+
+The create-only `repoId` option is deprecated and still means the internal
+repository ID. Update and delete calls without `repoName` also keep their old
+request shape for compatibility. The deprecated `apiVersion` option is still
+accepted but does not select request routes.
 
 ## Usage
 

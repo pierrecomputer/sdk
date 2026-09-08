@@ -154,7 +154,7 @@ describe('createCommitFromDiff', () => {
 
     // diff commit call
     mockFetch.mockImplementationOnce(async (url, init) => {
-      expect(String(url)).toMatch(/\/api\/v1\/repos\/diff-commit$/);
+      expect(String(url)).toMatch(/\/api\/repos\/repo-main\/diff-commit$/);
       expect(init?.method).toBe('POST');
       const headers = init?.headers as Record<string, string>;
       expect(headers.Authorization).toMatch(/^Bearer\s.+/);

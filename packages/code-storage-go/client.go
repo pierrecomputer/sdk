@@ -264,7 +264,7 @@ func (c *Client) FindOne(ctx context.Context, options FindOneOptions) (*Repo, er
 		return nil, err
 	}
 
-	resp, err := c.api.get(ctx, "repo", nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	resp, err := c.api.get(ctx, "repos/"+url.PathEscape(options.ID), nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (c *Client) DeleteRepo(ctx context.Context, options DeleteRepoOptions) (Del
 		return DeleteRepoResult{}, err
 	}
 
-	resp, err := c.api.delete(ctx, "repos/delete", nil, nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true, 409: true}})
+	resp, err := c.api.delete(ctx, "repos/"+url.PathEscape(options.ID), nil, nil, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true, 409: true}})
 	if err != nil {
 		return DeleteRepoResult{}, err
 	}
@@ -347,28 +347,43 @@ func (c *Client) DeleteRepo(ctx context.Context, options DeleteRepoOptions) (Del
 
 // CreateGitCredential creates a generic git credential for a repository.
 func (c *Client) CreateGitCredential(ctx context.Context, options CreateGitCredentialOptions) (*GitCredential, error) {
-	if strings.TrimSpace(options.RepoID) == "" {
-		return nil, errors.New("createGitCredential repoId is required")
+	repoName := strings.TrimSpace(options.RepoName)
+	repoID := strings.TrimSpace(options.RepoID)
+	if repoName == "" && repoID == "" {
+		return nil, errors.New("createGitCredential repoName or repoId is required")
 	}
 	if strings.TrimSpace(options.Password) == "" {
 		return nil, errors.New("createGitCredential password is required")
 	}
 
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT(options.RepoID, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	repository := repoName
+	if repository == "" {
+		repository = repoID
+	}
+	jwtToken, err := c.generateJWT(repository, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
 	if err != nil {
 		return nil, err
 	}
 
 	body := &createGitCredentialRequest{
-		RepoID:   options.RepoID,
 		Password: options.Password,
 	}
 	if strings.TrimSpace(options.Username) != "" {
 		body.Username = options.Username
 	}
 
-	resp, err := c.api.post(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
+	path := legacyGitCredentialPath()
+	var requestBody interface{} = &struct {
+		RepoID   string `json:"repo_id"`
+		Username string `json:"username,omitempty"`
+		Password string `json:"password"`
+	}{RepoID: repoID, Username: body.Username, Password: body.Password}
+	if repoName != "" {
+		path = gitCredentialPath(repoName, "")
+		requestBody = body
+	}
+	resp, err := c.api.post(ctx, path, nil, requestBody, jwtToken, &requestOptions{allowedStatus: map[int]bool{409: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -396,8 +411,13 @@ func (c *Client) UpdateGitCredential(ctx context.Context, options UpdateGitCrede
 		return nil, errors.New("updateGitCredential password is required")
 	}
 
+	repoName := strings.TrimSpace(options.RepoName)
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	repository := repoName
+	if repository == "" {
+		repository = "org"
+	}
+	jwtToken, err := c.generateJWT(repository, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
 	if err != nil {
 		return nil, err
 	}
@@ -409,8 +429,16 @@ func (c *Client) UpdateGitCredential(ctx context.Context, options UpdateGitCrede
 	if strings.TrimSpace(options.Username) != "" {
 		body.Username = options.Username
 	}
-
-	resp, err := c.api.put(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	path := legacyGitCredentialPath()
+	var requestBody interface{} = body
+	if repoName != "" {
+		path = gitCredentialPath(repoName, options.ID)
+		requestBody = &updateGitCredentialPathRequest{
+			Username: body.Username,
+			Password: body.Password,
+		}
+	}
+	resp, err := c.api.put(ctx, path, nil, requestBody, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return nil, err
 	}
@@ -436,15 +464,24 @@ func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCrede
 		return errors.New("deleteGitCredential id is required")
 	}
 
+	repoName := strings.TrimSpace(options.RepoName)
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT("org", RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	repository := repoName
+	if repository == "" {
+		repository = "org"
+	}
+	jwtToken, err := c.generateJWT(repository, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
 	if err != nil {
 		return err
 	}
 
-	body := &deleteGitCredentialRequest{ID: options.ID}
-
-	resp, err := c.api.delete(ctx, "repos/git-credentials", nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
+	path := legacyGitCredentialPath()
+	var body interface{} = &deleteGitCredentialRequest{ID: options.ID}
+	if repoName != "" {
+		path = gitCredentialPath(repoName, options.ID)
+		body = nil
+	}
+	resp, err := c.api.delete(ctx, path, nil, body, jwtToken, &requestOptions{allowedStatus: map[int]bool{404: true}})
 	if err != nil {
 		return err
 	}
@@ -454,6 +491,18 @@ func (c *Client) DeleteGitCredential(ctx context.Context, options DeleteGitCrede
 	}
 
 	return nil
+}
+
+func gitCredentialPath(repoName, credentialID string) string {
+	path := "repos/" + url.PathEscape(repoName) + "/git-credentials"
+	if credentialID != "" {
+		path += "/" + url.PathEscape(credentialID)
+	}
+	return path
+}
+
+func legacyGitCredentialPath() string {
+	return "v1/repos/git-credentials"
 }
 
 func (c *Client) generateJWT(repoID string, options RemoteURLOptions) (string, error) {

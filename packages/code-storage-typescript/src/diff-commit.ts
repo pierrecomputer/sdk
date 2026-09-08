@@ -180,9 +180,9 @@ class DiffCommitExecutor {
 export class FetchDiffCommitTransport implements DiffCommitTransport {
   private readonly url: string;
 
-  constructor(config: { baseUrl: string; version: number }) {
+  constructor(config: { baseUrl: string; repoId: string }) {
     const trimmedBase = config.baseUrl.replace(/\/+$/, '');
-    this.url = `${trimmedBase}/api/v${config.version}/repos/diff-commit`;
+    this.url = `${trimmedBase}/api/repos/${encodeURIComponent(config.repoId)}/diff-commit`;
   }
 
   async send(request: DiffCommitTransportRequest): Promise<CommitPackAckRaw> {

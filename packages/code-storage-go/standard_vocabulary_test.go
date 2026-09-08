@@ -22,7 +22,7 @@ func TestStandardVocabularyRequests(t *testing.T) {
 		request := capturedStandardRequest{query: r.URL.Query()}
 		body, _ := io.ReadAll(r.Body)
 		if len(bytes.TrimSpace(body)) > 0 {
-			if r.URL.Path == "/api/v1/repos/commit-pack" || r.URL.Path == "/api/v1/repos/diff-commit" {
+			if r.URL.Path == "/api/repos/repo/commit-pack" || r.URL.Path == "/api/repos/repo/diff-commit" {
 				var envelope map[string]map[string]interface{}
 				_ = json.Unmarshal(bytes.Split(body, []byte("\n"))[0], &envelope)
 				request.body = envelope["metadata"]
@@ -35,25 +35,25 @@ func TestStandardVocabularyRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch key {
-		case "GET /api/v1/repos/commits":
+		case "GET /api/repos/repo/commits":
 			_, _ = w.Write([]byte(`{"commits":[],"has_more":false}`))
-		case "GET /api/v1/repos/commit":
+		case "GET /api/repos/repo/commit":
 			_, _ = w.Write([]byte(`{"commit":{"sha":"sha","parent_shas":[],"message":"message","author_name":"A","author_email":"a@example.com","committer_name":"A","committer_email":"a@example.com","date":"2026-08-28T00:00:00Z"}}`))
-		case "GET /api/v1/repos/diff":
+		case "GET /api/repos/repo/diff":
 			_, _ = w.Write([]byte(`{"sha":"sha","base_sha":"base","stats":{},"files":[],"filtered_files":[]}`))
-		case "GET /api/v1/repos/notes":
+		case "GET /api/repos/repo/notes":
 			_, _ = w.Write([]byte(`{"sha":"sha","note":"note","ref_sha":"notes-sha"}`))
-		case "POST /api/v1/repos/merge":
+		case "POST /api/repos/repo/merge":
 			_, _ = w.Write([]byte(`{"result":"fast_forward","commit_sha":"sha","tree_sha":"tree","source":{"ref":"source","ephemeral":false,"sha":"sha"},"target":{"branch":"main","ephemeral":false,"old_sha":"old","new_sha":"sha"},"promoted_commits":1}`))
-		case "POST /api/v1/repos/tags":
+		case "POST /api/repos/repo/tags":
 			_, _ = w.Write([]byte(`{"name":"v1","sha":"sha","message":"created"}`))
-		case "DELETE /api/v1/repos/branches":
+		case "DELETE /api/repos/repo/branches":
 			_, _ = w.Write([]byte(`{"target_branch":"branch","message":"deleted","ephemeral":false}`))
-		case "POST /api/v1/repos/notes", "DELETE /api/v1/repos/notes":
+		case "POST /api/repos/repo/notes", "DELETE /api/repos/repo/notes":
 			_, _ = w.Write([]byte(`{"sha":"sha","notes_ref":"refs/notes/reviews","new_ref_sha":"notes-sha","result":{"success":true,"status":"ok"}}`))
-		case "POST /api/v1/repos/restore-commit":
+		case "POST /api/repos/repo/restore-commit":
 			_, _ = w.Write([]byte(`{"commit":{"commit_sha":"sha","tree_sha":"tree","target_branch":"main","pack_bytes":1},"result":{"target_branch":"main","old_sha":"old","new_sha":"sha","success":true,"status":"ok"}}`))
-		case "POST /api/v1/repos/commit-pack", "POST /api/v1/repos/diff-commit":
+		case "POST /api/repos/repo/commit-pack", "POST /api/repos/repo/diff-commit":
 			_, _ = w.Write([]byte(`{"commit":{"commit_sha":"sha","tree_sha":"tree","target_branch":"main","pack_bytes":1,"blob_count":0},"result":{"target_branch":"main","old_sha":"old","new_sha":"sha","success":true,"status":"ok"}}`))
 		default:
 			t.Fatalf("unexpected request: %s", key)
@@ -114,26 +114,26 @@ func TestStandardVocabularyRequests(t *testing.T) {
 			t.Fatalf("%s query = %v, want %v", key, got, expected)
 		}
 	}
-	assertQuery("GET /api/v1/repos/commits", url.Values{"ref": {"preferred"}})
-	assertQuery("GET /api/v1/repos/commit", url.Values{"ref": {"preferred"}})
-	assertQuery("GET /api/v1/repos/diff", url.Values{
+	assertQuery("GET /api/repos/repo/commits", url.Values{"ref": {"preferred"}})
+	assertQuery("GET /api/repos/repo/commit", url.Values{"ref": {"preferred"}})
+	assertQuery("GET /api/repos/repo/diff", url.Values{
 		"ref": {"preferred"}, "base_ref": {"preferred-base"}, "ref_is_ephemeral": {"false"},
 		"base_is_ephemeral": {"false"}, "git_apply_compatible": {"true"},
 	})
-	assertQuery("GET /api/v1/repos/notes", url.Values{"object_ref": {"preferred"}, "notes_ref": {"preferred-notes"}})
+	assertQuery("GET /api/repos/repo/notes", url.Values{"object_ref": {"preferred"}, "notes_ref": {"preferred-notes"}})
 
-	assertBodyField(t, captured["POST /api/v1/repos/merge"][0].body, "source_ref", "preferred", "source_branch")
-	assertBodyField(t, captured["POST /api/v1/repos/tags"][0].body, "ref", "preferred", "target")
-	assertBodyField(t, captured["DELETE /api/v1/repos/branches"][0].body, "target_branch", "preferred", "name")
-	assertBodyField(t, captured["POST /api/v1/repos/notes"][0].body, "object_ref", "preferred", "sha")
-	assertBodyField(t, captured["POST /api/v1/repos/notes"][0].body, "notes_ref", "preferred-notes", "ref")
-	assertBodyField(t, captured["POST /api/v1/repos/notes"][0].body, "expected_notes_ref_sha", "preferred-guard", "expected_ref_sha")
-	assertBodyField(t, captured["POST /api/v1/repos/notes"][1].body, "object_ref", "object", "sha")
-	assertBodyField(t, captured["DELETE /api/v1/repos/notes"][0].body, "object_ref", "object", "sha")
-	assertBodyField(t, captured["POST /api/v1/repos/restore-commit"][0].body["metadata"].(map[string]interface{}), "base_ref", "preferred", "target_commit_sha")
-	assertBodyField(t, captured["POST /api/v1/repos/restore-commit"][0].body["metadata"].(map[string]interface{}), "expected_target_sha", "preferred-guard", "expected_head_sha")
+	assertBodyField(t, captured["POST /api/repos/repo/merge"][0].body, "source_ref", "preferred", "source_branch")
+	assertBodyField(t, captured["POST /api/repos/repo/tags"][0].body, "ref", "preferred", "target")
+	assertBodyField(t, captured["DELETE /api/repos/repo/branches"][0].body, "target_branch", "preferred", "name")
+	assertBodyField(t, captured["POST /api/repos/repo/notes"][0].body, "object_ref", "preferred", "sha")
+	assertBodyField(t, captured["POST /api/repos/repo/notes"][0].body, "notes_ref", "preferred-notes", "ref")
+	assertBodyField(t, captured["POST /api/repos/repo/notes"][0].body, "expected_notes_ref_sha", "preferred-guard", "expected_ref_sha")
+	assertBodyField(t, captured["POST /api/repos/repo/notes"][1].body, "object_ref", "object", "sha")
+	assertBodyField(t, captured["DELETE /api/repos/repo/notes"][0].body, "object_ref", "object", "sha")
+	assertBodyField(t, captured["POST /api/repos/repo/restore-commit"][0].body["metadata"].(map[string]interface{}), "base_ref", "preferred", "target_commit_sha")
+	assertBodyField(t, captured["POST /api/repos/repo/restore-commit"][0].body["metadata"].(map[string]interface{}), "expected_target_sha", "preferred-guard", "expected_head_sha")
 
-	for _, key := range []string{"POST /api/v1/repos/commit-pack", "POST /api/v1/repos/diff-commit"} {
+	for _, key := range []string{"POST /api/repos/repo/commit-pack", "POST /api/repos/repo/diff-commit"} {
 		body := captured[key][0].body
 		assertBodyField(t, body, "expected_target_sha", "preferred-guard", "expected_head_sha")
 		if body["target_is_ephemeral"] != false || body["base_is_ephemeral"] != false {
@@ -221,23 +221,23 @@ func TestStandardVocabularyResponseAliases(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				response := map[string]interface{}{}
 				switch r.Method + " " + r.URL.Path {
-				case "GET /api/v1/repos":
+				case "GET /api/repos":
 					repo := map[string]interface{}{"repo_id": "repo", "default_branch": "main", "created_at": ""}
 					setVocabularyFields(repo, test.includeStandard, test.includeDeprecated, "repo_name", "url")
 					response = map[string]interface{}{"repos": []interface{}{repo}, "has_more": false}
-				case "GET /api/v1/repos/diff":
+				case "GET /api/repos/repo/diff":
 					response = map[string]interface{}{"sha": "sha", "base_sha": "base", "stats": map[string]interface{}{}, "files": []interface{}{}, "filtered_files": []interface{}{}}
-				case "DELETE /api/v1/repos/branches":
+				case "DELETE /api/repos/repo/branches":
 					response = map[string]interface{}{"message": "deleted", "ephemeral": false}
 					setVocabularyFields(response, test.includeStandard, test.includeDeprecated, "target_branch", "name")
-				case "POST /api/v1/repos/merge":
+				case "POST /api/repos/repo/merge":
 					source := map[string]interface{}{"ephemeral": false, "sha": "sha"}
 					setVocabularyFields(source, test.includeStandard, test.includeDeprecated, "ref", "branch")
 					response = map[string]interface{}{
 						"result": "fast_forward", "commit_sha": "sha", "tree_sha": "tree", "source": source,
 						"target": map[string]interface{}{"branch": "main", "ephemeral": false, "old_sha": "old", "new_sha": "sha"}, "promoted_commits": 1,
 					}
-				case "POST /api/v1/repos/notes":
+				case "POST /api/repos/repo/notes":
 					response = map[string]interface{}{"sha": "sha", "new_ref_sha": "notes-sha", "result": map[string]interface{}{"success": true, "status": "ok"}}
 					setVocabularyFields(response, test.includeStandard, test.includeDeprecated, "notes_ref", "target_ref")
 				default:

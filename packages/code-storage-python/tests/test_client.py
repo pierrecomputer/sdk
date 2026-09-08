@@ -25,6 +25,13 @@ class TestGitStorage:
         config = storage.get_config()
         assert config["key"] == test_key
 
+    def test_api_version_is_deprecated(self, git_storage_options: dict) -> None:
+        """Warn when a caller keeps the deprecated API version option."""
+        with pytest.warns(DeprecationWarning, match="api_version is deprecated"):
+            storage = GitStorage({**git_storage_options, "api_version": 1})
+
+        assert storage.get_config()["api_version"] == 1
+
     def test_missing_options(self) -> None:
         """Test error when options are missing."""
         with pytest.raises(ValueError, match="GitStorage requires a name"):
@@ -90,12 +97,14 @@ class TestGitStorage:
     async def test_token_sent_verbatim(self) -> None:
         """Test that a pre-minted token is sent verbatim in the Authorization header."""
         expected_token = "my-pre-minted-jwt-token-value"
-        storage = GitStorage({
-            "name": "test-customer",
-            "token": expected_token,
-            "api_base_url": "https://api.test.code.storage",
-            "storage_base_url": "test.code.storage",
-        })
+        storage = GitStorage(
+            {
+                "name": "test-customer",
+                "token": expected_token,
+                "api_base_url": "https://api.test.code.storage",
+                "storage_base_url": "test.code.storage",
+            }
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -527,7 +536,7 @@ class TestGitStorage:
             mock_delete.assert_called_once()
             call_args = mock_delete.call_args[0]
             api_url = call_args[0]
-            assert api_url == "https://api.test.code.storage/api/v1/repos/delete"
+            assert api_url == "https://api.test.code.storage/api/repos/test-repo"
 
             # Verify headers include Authorization with repo:write scope
             call_kwargs = mock_delete.call_args[1]
@@ -637,6 +646,161 @@ class TestGitStorage:
         assert captured_body["base_repo"]["upstream_host"] == "gitlab.example.com"
 
     @pytest.mark.asyncio
+    async def test_preferred_git_credential_routes(self, git_storage_options: dict) -> None:
+        """Use canonical routes and raw repository-name JWT claims."""
+        storage = GitStorage(git_storage_options)
+
+        create_response = MagicMock(status_code=201, is_success=True)
+        create_response.json.return_value = {"id": "cred/123"}
+        update_response = MagicMock(status_code=200, is_success=True)
+        update_response.json.return_value = {"id": "cred/123"}
+        delete_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=create_response)
+            mock_put = AsyncMock(return_value=update_response)
+            mock_request = AsyncMock(return_value=delete_response)
+            async_client = mock_client.return_value.__aenter__.return_value
+            async_client.post = mock_post
+            async_client.put = mock_put
+            async_client.request = mock_request
+
+            await storage.create_git_credential(
+                repo_name="owner/repo",
+                password="token",
+                username="git",
+            )
+            await storage.update_git_credential(
+                repo_name="owner/repo",
+                id="cred/123",
+                password="new-token",
+            )
+            await storage.delete_git_credential(repo_name="owner/repo", id="cred/123")
+
+        create_url = mock_post.call_args.args[0]
+        assert create_url.endswith("/api/repos/owner%2Frepo/git-credentials")
+        assert mock_post.call_args.kwargs["json"] == {
+            "username": "git",
+            "password": "token",
+        }
+
+        update_url = mock_put.call_args.args[0]
+        assert update_url.endswith("/api/repos/owner%2Frepo/git-credentials/cred%2F123")
+        assert mock_put.call_args.kwargs["json"] == {"password": "new-token"}
+
+        assert mock_request.call_args.args[:2] == (
+            "DELETE",
+            "https://api.test.code.storage/api/repos/owner%2Frepo/git-credentials/cred%2F123",
+        )
+        assert mock_request.call_args.kwargs.get("json") is None
+
+        for request in (mock_post, mock_put, mock_request):
+            authorization = request.call_args.kwargs["headers"]["Authorization"]
+            claims = jwt.decode(
+                authorization.removeprefix("Bearer "),
+                options={"verify_signature": False},
+            )
+            assert claims["repo"] == "owner/repo"
+
+    @pytest.mark.asyncio
+    async def test_repo_name_wins_for_git_credential_create(
+        self, git_storage_options: dict
+    ) -> None:
+        """Prefer the repository name when both create fields exist."""
+        storage = GitStorage(git_storage_options)
+        response = MagicMock(status_code=201, is_success=True)
+        response.json.return_value = {"id": "cred-123"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            await storage.create_git_credential(
+                repo_name="preferred/repo",
+                repo_id="internal-id",
+                password="token",
+            )
+
+        assert mock_post.call_args.args[0].endswith("/api/repos/preferred%2Frepo/git-credentials")
+        assert mock_post.call_args.kwargs["json"] == {"password": "token"}
+
+    @pytest.mark.asyncio
+    async def test_deprecated_git_credential_requests_keep_the_legacy_contract(
+        self, git_storage_options: dict
+    ) -> None:
+        """Keep the old route, body, and JWT claim for old call shapes."""
+        storage = GitStorage(git_storage_options)
+        create_response = MagicMock(status_code=201, is_success=True)
+        create_response.json.return_value = {"id": "cred-123"}
+        update_response = MagicMock(status_code=200, is_success=True)
+        update_response.json.return_value = {"id": "cred-123"}
+        delete_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=create_response)
+            mock_put = AsyncMock(return_value=update_response)
+            mock_request = AsyncMock(return_value=delete_response)
+            async_client = mock_client.return_value.__aenter__.return_value
+            async_client.post = mock_post
+            async_client.put = mock_put
+            async_client.request = mock_request
+
+            with pytest.warns(DeprecationWarning, match="repo_id"):
+                await storage.create_git_credential(repo_id="internal-id", password="token")
+            with pytest.warns(DeprecationWarning, match="repo_name"):
+                await storage.update_git_credential(id="cred-123", password="new-token")
+            with pytest.warns(DeprecationWarning, match="repo_name"):
+                await storage.delete_git_credential(id="cred-123")
+
+        legacy_url = "https://api.test.code.storage/api/v1/repos/git-credentials"
+        assert mock_post.call_args.args[0] == legacy_url
+        assert mock_post.call_args.kwargs["json"] == {
+            "repo_id": "internal-id",
+            "password": "token",
+        }
+        assert mock_put.call_args.args[0] == legacy_url
+        assert mock_put.call_args.kwargs["json"] == {
+            "id": "cred-123",
+            "password": "new-token",
+        }
+        assert mock_request.call_args.args[:2] == ("DELETE", legacy_url)
+        assert mock_request.call_args.kwargs["json"] == {"id": "cred-123"}
+
+        create_claims = jwt.decode(
+            mock_post.call_args.kwargs["headers"]["Authorization"].removeprefix("Bearer "),
+            options={"verify_signature": False},
+        )
+        assert create_claims["repo"] == "internal-id"
+        for request in (mock_put, mock_request):
+            claims = jwt.decode(
+                request.call_args.kwargs["headers"]["Authorization"].removeprefix("Bearer "),
+                options={"verify_signature": False},
+            )
+            assert claims["repo"] == "org"
+
+    @pytest.mark.asyncio
+    async def test_legacy_credential_warning_points_to_the_caller(
+        self, git_storage_options: dict
+    ) -> None:
+        """Set stacklevel so update and delete warnings point to caller code."""
+        storage = GitStorage(git_storage_options)
+        update_response = MagicMock(status_code=200, is_success=True)
+        update_response.json.return_value = {"id": "cred-123"}
+        delete_response = MagicMock(status_code=204, is_success=True)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            async_client = mock_client.return_value.__aenter__.return_value
+            async_client.put = AsyncMock(return_value=update_response)
+            async_client.request = AsyncMock(return_value=delete_response)
+
+            with pytest.warns(DeprecationWarning) as update_warnings:
+                await storage.update_git_credential(id="cred-123", password="new-token")
+            with pytest.warns(DeprecationWarning) as delete_warnings:
+                await storage.delete_git_credential(id="cred-123")
+
+        assert update_warnings[0].filename == __file__
+        assert delete_warnings[0].filename == __file__
+
+    @pytest.mark.asyncio
     async def test_create_git_credential(self, git_storage_options: dict) -> None:
         """Test creating a git credential."""
         storage = GitStorage(git_storage_options)
@@ -672,9 +836,7 @@ class TestGitStorage:
             assert body["username"] == "myuser"
 
     @pytest.mark.asyncio
-    async def test_create_git_credential_without_username(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_create_git_credential_without_username(self, git_storage_options: dict) -> None:
         """Test creating a git credential without a username."""
         storage = GitStorage(git_storage_options)
 
@@ -959,9 +1121,7 @@ class TestJWTGeneration:
             assert "test-repo+import.git" in url
 
     @pytest.mark.asyncio
-    async def test_get_import_remote_url_with_permissions(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_get_import_remote_url_with_permissions(self, git_storage_options: dict) -> None:
         """Test import remote URL with custom permissions."""
         storage = GitStorage(git_storage_options)
 
@@ -1325,7 +1485,7 @@ class TestAPIURLConstruction:
             call_args = mock_post.call_args[0]
             assert len(call_args) > 0
             api_url = call_args[0]
-            assert api_url == "https://api.test.code.storage/api/v1/repos"
+            assert api_url == "https://api.test.code.storage/api/repos"
 
     @pytest.mark.asyncio
     async def test_api_requests_with_default_url_uses_org_name(self, test_key: str) -> None:
@@ -1351,7 +1511,7 @@ class TestAPIURLConstruction:
             call_args = mock_post.call_args[0]
             api_url = call_args[0]
             # Should be https://api.my-org.code.storage when using defaults
-            assert api_url == "https://api.my-org.code.storage/api/v1/repos"
+            assert api_url == "https://api.my-org.code.storage/api/repos"
 
     @pytest.mark.asyncio
     async def test_custom_api_url_overrides_default(self, test_key: str) -> None:
@@ -1376,7 +1536,7 @@ class TestAPIURLConstruction:
             mock_post.assert_called_once()
             call_args = mock_post.call_args[0]
             api_url = call_args[0]
-            assert api_url == f"{custom_url}/api/v1/repos"
+            assert api_url == f"{custom_url}/api/repos"
 
 
 class TestCodeStorageAgentHeader:
