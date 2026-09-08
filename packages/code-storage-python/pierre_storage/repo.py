@@ -1039,6 +1039,7 @@ class RepoImpl:
         source_ref: Optional[str] = None,
         source_branch: Optional[str] = None,
         source_is_ephemeral: Optional[bool] = None,
+        expected_source_sha: Optional[str] = None,
         target_is_ephemeral: Optional[bool] = None,
         expected_target_sha: Optional[str] = None,
         commit_message: Optional[str] = None,
@@ -1050,6 +1051,10 @@ class RepoImpl:
         ref_policies: Optional[Refs] = None,
     ) -> MergeBranchesResult:
         """Merge a source branch into a target branch.
+
+        Provide expected_source_sha to require the source ref to contain that commit
+        when the merge starts. The merge uses that exact commit even if the source ref
+        moves before the target update.
 
         Provide expected_target_sha to require the target branch to still point at that
         commit. Omit it to merge into the current target tip; native Code Storage
@@ -1081,6 +1086,10 @@ class RepoImpl:
             payload["source_is_ephemeral"] = bool(source_is_ephemeral)
         if target_is_ephemeral is not None:
             payload["target_is_ephemeral"] = bool(target_is_ephemeral)
+
+        expected_source_sha_clean = normalize_optional_string(expected_source_sha)
+        if expected_source_sha_clean is not None:
+            payload["expected_source_sha"] = expected_source_sha_clean
 
         expected_target_sha_clean = normalize_optional_string(expected_target_sha)
         if expected_target_sha_clean is not None:

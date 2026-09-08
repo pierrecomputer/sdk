@@ -5,7 +5,8 @@ Pierre Git Storage SDK for Go.
 ## Standard vocabulary
 
 New code should use `Ref`, `BaseRef`, `SourceRef`, `ObjectRef`, `NotesRef`,
-`TargetBranch`, and `ExpectedTargetSHA`. Repository list entries expose
+`TargetBranch`, `ExpectedSourceSHA`, and `ExpectedTargetSHA`. Repository list
+entries expose
 `RepoName`; commit diffs expose `BaseSHA`; merge sources expose `Ref`; note
 writes expose `NotesRef`; and ref updates expose `TargetBranch`. Deprecated
 result aliases remain populated with the preferred value.
@@ -293,6 +294,9 @@ fmt.Println(preview.Status, preview.Result, preview.ConflictPaths)
 result, err := repo.Merge(context.Background(), storage.MergeOptions{
 	SourceRef:         "feature",
 	SourceIsEphemeral: true,
+	// Set ExpectedSourceSHA to merge the exact previewed commit.
+	// The source ref must contain it when the merge starts.
+	ExpectedSourceSHA: preview.SourceTipSHA,
 	TargetBranch:      "main",
 	// Leave ExpectedTargetSHA empty to merge into the current target tip.
 	// Set it to require TargetBranch to still point at that commit; moved targets return 409.

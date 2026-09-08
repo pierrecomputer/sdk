@@ -1994,6 +1994,11 @@ class RepoImpl implements Repo {
       body.target_is_ephemeral = options.targetIsEphemeral;
     }
 
+    const expectedSourceSha = options.expectedSourceSha?.trim();
+    if (expectedSourceSha) {
+      body.expected_source_sha = expectedSourceSha;
+    }
+
     const expectedTargetSha = options.expectedTargetSha?.trim();
     if (expectedTargetSha) {
       body.expected_target_sha = expectedTargetSha;

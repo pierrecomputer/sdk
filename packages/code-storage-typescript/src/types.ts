@@ -1111,6 +1111,12 @@ export interface MergeOptions
   /** @deprecated Use sourceRef instead. */
   sourceBranch?: string;
   sourceIsEphemeral?: boolean;
+  /**
+   * When provided, the source ref must contain this commit when the merge starts.
+   * The merge uses this exact commit even if the source ref moves before the
+   * target update.
+   */
+  expectedSourceSha?: string;
   targetBranch: string;
   targetIsEphemeral?: boolean;
   /**

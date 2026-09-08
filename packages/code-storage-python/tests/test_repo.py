@@ -1386,6 +1386,7 @@ class TestRepoBranchOperations:
             result = await repo.merge(
                 source_branch=" feature ",
                 source_is_ephemeral=True,
+                expected_source_sha=" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
                 target_branch=" main ",
                 target_is_ephemeral=False,
                 expected_target_sha=" old123 ",
@@ -1423,6 +1424,7 @@ class TestRepoBranchOperations:
             assert merge_call.kwargs["json"] == {
                 "source_ref": "feature",
                 "source_is_ephemeral": True,
+                "expected_source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "target_branch": "main",
                 "target_is_ephemeral": False,
                 "expected_target_sha": "old123",
@@ -1439,10 +1441,10 @@ class TestRepoBranchOperations:
             assert payload["exp"] - payload["iat"] == 900
 
     @pytest.mark.asyncio
-    async def test_merge_omits_expected_target_sha_for_current_target_tip(
+    async def test_merge_omits_source_and_target_sha_guards(
         self, git_storage_options: dict
     ) -> None:
-        """Omitted expected_target_sha requests merge into the current target tip."""
+        """Test that merge omits source and target SHA guards when absent."""
         storage = GitStorage(git_storage_options)
 
         create_repo_response = MagicMock()

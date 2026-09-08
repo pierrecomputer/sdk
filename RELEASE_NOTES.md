@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Exact merge source SHA guards
+
+- Added optional source SHA guards to merge calls in the TypeScript, Python,
+  and Go SDKs.
+- The guard pins the merge to the previewed source commit. Existing calls omit
+  the request field.
+
 ### Ephemeral merge previews
 
 - Added source and target ephemeral namespace flags to merge previews in the TypeScript, Python, and Go SDKs.
