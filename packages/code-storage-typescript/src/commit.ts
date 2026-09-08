@@ -18,7 +18,7 @@ import type {
   CommitSignature,
   CommitTextFileOptions,
   CreateCommitOptions,
-  LegacyCreateCommitOptions,
+  CreateCommitRefOptions,
 } from './types';
 import { getUserAgent } from './version';
 
@@ -38,11 +38,11 @@ const BufferCtor: NodeBufferConstructor | undefined = (
 
 interface CommitMetadataPayload {
   target_branch: string;
-  expected_head_sha?: string;
+  expected_target_sha?: string;
   base_branch?: string;
   commit_message: string;
-  ephemeral?: boolean;
-  ephemeral_base?: boolean;
+  target_is_ephemeral?: boolean;
+  base_is_ephemeral?: boolean;
   author: {
     name: string;
     email: string;
@@ -73,10 +73,10 @@ interface CommitTransport {
 type NormalizedCommitOptions = {
   targetBranch: string;
   commitMessage: string;
-  expectedHeadSha?: string;
+  expectedTargetSha?: string;
   baseBranch?: string;
-  ephemeral?: boolean;
-  ephemeralBase?: boolean;
+  targetIsEphemeral?: boolean;
+  baseIsEphemeral?: boolean;
   author: CommitSignature;
   committer?: CommitSignature;
   signal?: AbortSignal;
@@ -124,8 +124,8 @@ export class CommitBuilderImpl implements CommitBuilder {
       name: trimmedAuthorName,
       email: trimmedAuthorEmail,
     };
-    if (typeof this.options.expectedHeadSha === 'string') {
-      this.options.expectedHeadSha = this.options.expectedHeadSha.trim();
+    if (typeof this.options.expectedTargetSha === 'string') {
+      this.options.expectedTargetSha = this.options.expectedTargetSha.trim();
     }
     if (typeof this.options.baseBranch === 'string') {
       const trimmedBase = this.options.baseBranch.trim();
@@ -141,8 +141,8 @@ export class CommitBuilderImpl implements CommitBuilder {
       }
     }
 
-    if (this.options.ephemeralBase && !this.options.baseBranch) {
-      throw new Error('createCommit ephemeralBase requires baseBranch');
+    if (this.options.baseIsEphemeral && !this.options.baseBranch) {
+      throw new Error('createCommit baseIsEphemeral requires baseBranch');
     }
   }
 
@@ -246,8 +246,8 @@ export class CommitBuilderImpl implements CommitBuilder {
       files,
     };
 
-    if (this.options.expectedHeadSha) {
-      metadata.expected_head_sha = this.options.expectedHeadSha;
+    if (this.options.expectedTargetSha) {
+      metadata.expected_target_sha = this.options.expectedTargetSha;
     }
     if (this.options.baseBranch) {
       metadata.base_branch = this.options.baseBranch;
@@ -259,11 +259,11 @@ export class CommitBuilderImpl implements CommitBuilder {
       };
     }
 
-    if (this.options.ephemeral) {
-      metadata.ephemeral = true;
+    if (typeof this.options.targetIsEphemeral === 'boolean') {
+      metadata.target_is_ephemeral = this.options.targetIsEphemeral;
     }
-    if (this.options.ephemeralBase) {
-      metadata.ephemeral_base = true;
+    if (typeof this.options.baseIsEphemeral === 'boolean') {
+      metadata.base_is_ephemeral = this.options.baseIsEphemeral;
     }
 
     return metadata;
@@ -368,15 +368,30 @@ function normalizeCommitOptions(
   return {
     targetBranch: resolveTargetBranch(options),
     commitMessage: options.commitMessage,
-    expectedHeadSha: options.expectedHeadSha,
+    expectedTargetSha: options.expectedTargetSha ?? options.expectedHeadSha,
     baseBranch: options.baseBranch,
-    ephemeral: options.ephemeral === true,
-    ephemeralBase: options.ephemeralBase === true,
+    targetIsEphemeral: resolveOptionalBoolean(
+      options.targetIsEphemeral,
+      options.ephemeral
+    ),
+    baseIsEphemeral: resolveOptionalBoolean(
+      options.baseIsEphemeral,
+      options.ephemeralBase
+    ),
     author: options.author,
     committer: options.committer,
     signal: options.signal,
     ttl: options.ttl,
   };
+}
+
+function resolveOptionalBoolean(
+  preferred: boolean | undefined,
+  deprecated: boolean | undefined
+): boolean | undefined {
+  if (typeof preferred === 'boolean') return preferred;
+  if (typeof deprecated === 'boolean') return deprecated;
+  return undefined;
 }
 
 function resolveTargetBranch(options: CreateCommitOptions): string {
@@ -385,8 +400,8 @@ function resolveTargetBranch(options: CreateCommitOptions): string {
   if (branchCandidate) {
     return normalizeBranchName(branchCandidate);
   }
-  if (hasLegacyTargetRef(options)) {
-    return normalizeLegacyTargetRef(options.targetRef);
+  if (hasTargetRef(options)) {
+    return normalizeTargetRef(options.targetRef);
   }
   throw new Error('createCommit targetBranch is required');
 }
@@ -409,7 +424,7 @@ function normalizeBranchName(value: string): string {
   return trimmed;
 }
 
-function normalizeLegacyTargetRef(ref: string): string {
+function normalizeTargetRef(ref: string): string {
   const trimmed = ref.trim();
   if (!trimmed) {
     throw new Error('createCommit targetRef is required');
@@ -424,10 +439,10 @@ function normalizeLegacyTargetRef(ref: string): string {
   return branch;
 }
 
-function hasLegacyTargetRef(
+function hasTargetRef(
   options: CreateCommitOptions
-): options is LegacyCreateCommitOptions {
-  return typeof (options as LegacyCreateCommitOptions).targetRef === 'string';
+): options is CreateCommitRefOptions {
+  return typeof (options as CreateCommitRefOptions).targetRef === 'string';
 }
 
 export function createCommitBuilder(deps: CommitBuilderDeps): CommitBuilder {

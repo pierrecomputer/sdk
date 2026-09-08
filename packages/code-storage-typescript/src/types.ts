@@ -267,6 +267,8 @@ export type RawRepoInfo = SchemaRawRepoInfo;
 
 export interface RepoInfo {
   repoId: string;
+  repoName: string;
+  /** @deprecated Use repoName instead. */
   url: string;
   defaultBranch: string;
   createdAt: string;
@@ -456,13 +458,17 @@ export interface CreateBranchResult {
 
 export interface DeleteBranchOptions
   extends GitStorageInvocationOptions, PolicyOptions {
-  name: string;
+  targetBranch?: string;
+  /** @deprecated Use targetBranch instead. */
+  name?: string;
   ephemeral?: boolean;
 }
 
 export type DeleteBranchResponse = DeleteBranchResponseRaw;
 
 export interface DeleteBranchResult {
+  targetBranch: string;
+  /** @deprecated Use targetBranch instead. */
   name: string;
   message: string;
   ephemeral: boolean;
@@ -492,7 +498,9 @@ export interface ListTagsResult {
 export interface CreateTagOptions
   extends GitStorageInvocationOptions, PolicyOptions {
   name: string;
-  target: string;
+  ref?: string;
+  /** @deprecated Use ref instead. */
+  target?: string;
 }
 
 export type CreateTagResponse = CreateTagResponseRaw;
@@ -517,6 +525,8 @@ export interface DeleteTagResult {
 
 // List Commits API types
 export interface ListCommitsOptions extends GitStorageInvocationOptions {
+  ref?: string;
+  /** @deprecated Use ref instead. */
   branch?: string;
   cursor?: string;
   limit?: number;
@@ -561,7 +571,9 @@ export interface ListCommitsResult {
 
 // Get Commit API types
 export interface GetCommitOptions extends GitStorageInvocationOptions {
-  sha: string;
+  ref?: string;
+  /** @deprecated Use ref instead. */
+  sha?: string;
 }
 
 export type GetCommitResponse = GetCommitResponseRaw;
@@ -607,13 +619,17 @@ export interface BlameResult {
 
 // Git notes API types
 export interface GetNoteOptions extends GitStorageInvocationOptions {
-  sha: string;
+  objectRef?: string;
+  /** @deprecated Use objectRef instead. */
+  sha?: string;
   /**
    * Notes ref to read from. A bare name like `reviews` is placed under
    * `refs/notes/`; a fully-qualified `refs/notes/*` ref is also accepted.
    * Defaults to `refs/notes/commits`. Custom refs require the feature to be
    * enabled server-side.
    */
+  notesRef?: string;
+  /** @deprecated Use notesRef instead. */
   ref?: string;
 }
 
@@ -627,8 +643,12 @@ export interface GetNoteResult {
 
 interface NoteWriteBaseOptions
   extends GitStorageInvocationOptions, PolicyOptions {
-  sha: string;
+  objectRef?: string;
+  /** @deprecated Use objectRef instead. */
+  sha?: string;
   note: string;
+  expectedNotesRefSha?: string;
+  /** @deprecated Use expectedNotesRefSha instead. */
   expectedRefSha?: string;
   author?: CommitSignature;
   /**
@@ -637,6 +657,8 @@ interface NoteWriteBaseOptions
    * Defaults to `refs/notes/commits`. Custom refs require the feature to be
    * enabled server-side, and the JWT `refPolicies` must permit writing to it.
    */
+  notesRef?: string;
+  /** @deprecated Use notesRef instead. */
   ref?: string;
 }
 
@@ -646,7 +668,11 @@ export type AppendNoteOptions = NoteWriteBaseOptions;
 
 export interface DeleteNoteOptions
   extends GitStorageInvocationOptions, PolicyOptions {
-  sha: string;
+  objectRef?: string;
+  /** @deprecated Use objectRef instead. */
+  sha?: string;
+  expectedNotesRefSha?: string;
+  /** @deprecated Use expectedNotesRefSha instead. */
   expectedRefSha?: string;
   author?: CommitSignature;
   /**
@@ -654,6 +680,8 @@ export interface DeleteNoteOptions
    * `refs/notes/`; a fully-qualified `refs/notes/*` ref is also accepted.
    * Defaults to `refs/notes/commits`.
    */
+  notesRef?: string;
+  /** @deprecated Use notesRef instead. */
   ref?: string;
 }
 
@@ -667,9 +695,12 @@ export type NoteWriteResponse = NoteWriteResponseRaw;
 
 export interface NoteWriteResult {
   sha: string;
+  notesRef: string;
   /**
    * The notes ref the operation targeted (the resolved value of the request
-   * `ref`, defaulting to `refs/notes/commits`).
+   * `notesRef`, defaulting to `refs/notes/commits`).
+   *
+   * @deprecated Use notesRef instead.
    */
   targetRef: string;
   baseCommit?: string;
@@ -729,8 +760,14 @@ export interface GetBranchDiffResult {
 
 // Commit Diff API types
 export interface GetCommitDiffOptions extends GitStorageInvocationOptions {
-  sha: string;
+  ref?: string;
+  /** @deprecated Use ref instead. */
+  sha?: string;
+  baseRef?: string;
+  /** @deprecated Use baseRef instead. */
   baseSha?: string;
+  refIsEphemeral?: boolean;
+  baseIsEphemeral?: boolean;
   /** Generate raw diffs that can be applied to the exact base tree. Defaults to false. */
   gitApplyCompatible?: boolean;
   /** Optional paths to filter the diff to specific files */
@@ -741,6 +778,7 @@ export type GetCommitDiffResponse = GetCommitDiffResponseRaw;
 
 export interface GetCommitDiffResult {
   sha: string;
+  baseSha?: string;
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];
@@ -849,9 +887,15 @@ export interface FilteredFile extends DiffFileBase {}
 interface CreateCommitBaseOptions
   extends GitStorageInvocationOptions, PolicyOptions {
   commitMessage: string;
+  expectedTargetSha?: string;
+  /** @deprecated Use expectedTargetSha instead. */
   expectedHeadSha?: string;
   baseBranch?: string;
+  targetIsEphemeral?: boolean;
+  /** @deprecated Use targetIsEphemeral instead. */
   ephemeral?: boolean;
+  baseIsEphemeral?: boolean;
+  /** @deprecated Use baseIsEphemeral instead. */
   ephemeralBase?: boolean;
   author: CommitSignature;
   committer?: CommitSignature;
@@ -863,17 +907,17 @@ export interface CreateCommitBranchOptions extends CreateCommitBaseOptions {
   targetRef?: never;
 }
 
-/**
- * @deprecated Use {@link CreateCommitBranchOptions} instead.
- */
-export interface LegacyCreateCommitOptions extends CreateCommitBaseOptions {
+export interface CreateCommitRefOptions extends CreateCommitBaseOptions {
   targetBranch?: never;
   targetRef: string;
 }
 
+/** Published compatibility name for {@link CreateCommitRefOptions}. */
+export interface LegacyCreateCommitOptions extends CreateCommitRefOptions {}
+
 export type CreateCommitOptions =
   | CreateCommitBranchOptions
-  | LegacyCreateCommitOptions;
+  | CreateCommitRefOptions;
 
 export interface CommitSignature {
   name: string;
@@ -954,9 +998,15 @@ export interface CreateCommitFromDiffOptions
   targetBranch: string;
   commitMessage: string;
   diff: DiffSource;
+  expectedTargetSha?: string;
+  /** @deprecated Use expectedTargetSha instead. */
   expectedHeadSha?: string;
   baseBranch?: string;
+  targetIsEphemeral?: boolean;
+  /** @deprecated Use targetIsEphemeral instead. */
   ephemeral?: boolean;
+  baseIsEphemeral?: boolean;
+  /** @deprecated Use baseIsEphemeral instead. */
   ephemeralBase?: boolean;
   author: CommitSignature;
   committer?: CommitSignature;
@@ -964,6 +1014,8 @@ export interface CreateCommitFromDiffOptions
 }
 
 export interface RefUpdate {
+  targetBranch: string;
+  /** @deprecated Use targetBranch instead. */
   branch: string;
   oldSha: string;
   newSha: string;
@@ -1002,7 +1054,9 @@ export type MergeResultLabel =
 
 export interface MergeOptions
   extends GitStorageInvocationOptions, PolicyOptions {
-  sourceBranch: string;
+  sourceRef?: string;
+  /** @deprecated Use sourceRef instead. */
+  sourceBranch?: string;
   sourceIsEphemeral?: boolean;
   targetBranch: string;
   targetIsEphemeral?: boolean;
@@ -1066,6 +1120,8 @@ export interface PreviewMergeResult {
 }
 
 export interface MergeSourceResult {
+  ref: string;
+  /** @deprecated Use ref instead. */
   branch: string;
   ephemeral: boolean;
   sha: string;
@@ -1091,8 +1147,12 @@ export interface MergeResult {
 export interface RestoreCommitOptions
   extends GitStorageInvocationOptions, PolicyOptions {
   targetBranch: string;
-  targetCommitSha: string;
+  baseRef?: string;
+  /** @deprecated Use baseRef instead. */
+  targetCommitSha?: string;
   commitMessage?: string;
+  expectedTargetSha?: string;
+  /** @deprecated Use expectedTargetSha instead. */
   expectedHeadSha?: string;
   author: CommitSignature;
   committer?: CommitSignature;

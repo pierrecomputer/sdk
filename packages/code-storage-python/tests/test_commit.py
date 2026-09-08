@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from pierre_storage import GitStorage
-from pierre_storage.version import get_user_agent
 from pierre_storage.errors import RefUpdateError
+from pierre_storage.version import get_user_agent
 
 
 class TestCommitBuilder:
@@ -415,7 +415,8 @@ class TestCommitBuilder:
             metadata_line = captured_body.split("\n")[0]
             metadata = json.loads(metadata_line)["metadata"]
             assert metadata["base_branch"] == "main"
-            assert metadata["expected_head_sha"] == "abc123"
+            assert metadata["expected_target_sha"] == "abc123"
+            assert "expected_head_sha" not in metadata
             assert metadata["target_branch"] == "feature/one"
 
     @pytest.mark.asyncio
@@ -558,8 +559,10 @@ class TestCommitBuilder:
 
             metadata_line = captured_body.split("\n")[0]
             metadata = json.loads(metadata_line)["metadata"]
-            assert metadata["ephemeral"] is True
-            assert metadata["ephemeral_base"] is True
+            assert metadata["target_is_ephemeral"] is True
+            assert metadata["base_is_ephemeral"] is True
+            assert "ephemeral" not in metadata
+            assert "ephemeral_base" not in metadata
             assert metadata["base_branch"] == "feature/base"
 
     @pytest.mark.asyncio
@@ -588,7 +591,7 @@ class TestCommitBuilder:
                     author={"name": "Author", "email": "author@example.com"},
                 )
 
-            assert "ephemeral_base requires base_branch" in str(exc_info.value)
+            assert "base_is_ephemeral requires base_branch" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_create_commit_base_branch_rejects_refs_prefix(

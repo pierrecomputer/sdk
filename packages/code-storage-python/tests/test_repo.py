@@ -1310,7 +1310,12 @@ class TestRepoBranchOperations:
                 "result": "merge_commit",
                 "commit_sha": "merge123",
                 "tree_sha": "tree123",
-                "source": {"branch": "feature", "ephemeral": True, "sha": "source123"},
+                "source": {
+                    "ref": "feature",
+                    "branch": "feature",
+                    "ephemeral": True,
+                    "sha": "source123",
+                },
                 "target": {
                     "branch": "main",
                     "ephemeral": False,
@@ -1325,7 +1330,7 @@ class TestRepoBranchOperations:
             merge_call = client_instance.post.await_args_list[1]
             assert merge_call.args[0].endswith("/api/v1/repos/merge")
             assert merge_call.kwargs["json"] == {
-                "source_branch": "feature",
+                "source_ref": "feature",
                 "source_is_ephemeral": True,
                 "target_branch": "main",
                 "target_is_ephemeral": False,
@@ -1385,7 +1390,7 @@ class TestRepoBranchOperations:
             assert "merge_base_sha" not in result
             payload = client_instance.post.await_args_list[1].kwargs["json"]
             assert payload == {
-                "source_branch": "feature",
+                "source_ref": "feature",
                 "target_branch": "main",
                 "strategy": "ff_prefer",
             }
@@ -1439,7 +1444,7 @@ class TestRepoBranchOperations:
 
             repo = await storage.create_repo(id="test-repo")
 
-            with pytest.raises(ValueError, match="source_branch is required"):
+            with pytest.raises(ValueError, match="source_ref is required"):
                 await repo.merge(source_branch=" ", target_branch="main", strategy="merge")
 
             with pytest.raises(ValueError, match="target_branch is required"):
@@ -1840,7 +1845,7 @@ class TestRepoCommitOperations:
 
             called_url = mock_get.await_args.args[0]
             assert "ephemeral=true" in called_url
-            assert "branch=feature" in called_url
+            assert "ref=feature" in called_url
 
     @pytest.mark.asyncio
     async def test_list_commits_path_query_param(self, git_storage_options: dict) -> None:
@@ -1873,7 +1878,7 @@ class TestRepoCommitOperations:
 
             called_url = mock_get.await_args.args[0]
             params = parse_qs(urlparse(called_url).query)
-            assert params.get("branch") == ["main"]
+            assert params.get("ref") == ["main"]
             assert params.get("path") == ["docs/guide.md"]
 
     @pytest.mark.asyncio
@@ -1932,7 +1937,7 @@ class TestRepoCommitOperations:
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
             assert parsed.path.endswith("/api/v1/repos/commit")
-            assert parse_qs(parsed.query) == {"sha": ["abc123"]}
+            assert parse_qs(parsed.query) == {"ref": ["abc123"]}
 
             headers = client_instance.get.call_args.kwargs["headers"]
             assert headers["Code-Storage-Agent"] == get_user_agent()
@@ -2018,7 +2023,7 @@ class TestRepoCommitOperations:
 
             called_url = client_instance.get.call_args.args[0]
             parsed = urlparse(called_url)
-            assert parse_qs(parsed.query) == {"sha": ["abc123"]}
+            assert parse_qs(parsed.query) == {"ref": ["abc123"]}
 
             headers = client_instance.get.call_args.kwargs["headers"]
             token = headers["Authorization"].replace("Bearer ", "")
@@ -2042,10 +2047,10 @@ class TestRepoCommitOperations:
 
             repo = await storage.create_repo(id="test-repo")
 
-            with pytest.raises(ValueError, match="get_commit sha is required"):
+            with pytest.raises(ValueError, match="get_commit ref is required"):
                 await repo.get_commit(sha="")
 
-            with pytest.raises(ValueError, match="get_commit sha is required"):
+            with pytest.raises(ValueError, match="get_commit ref is required"):
                 await repo.get_commit(sha="   ")
 
             client_instance.get.assert_not_called()
@@ -2351,21 +2356,21 @@ class TestRepoNoteOperations:
 
             create_call = client_instance.post.call_args_list[1]
             assert create_call.kwargs["json"] == {
-                "sha": "abc123",
+                "object_ref": "abc123",
                 "action": "add",
                 "note": "note content",
             }
 
             append_call = client_instance.post.call_args_list[2]
             assert append_call.kwargs["json"] == {
-                "sha": "abc123",
+                "object_ref": "abc123",
                 "action": "append",
                 "note": "note append",
             }
 
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.args[0] == "DELETE"
-            assert delete_call.kwargs["json"] == {"sha": "abc123"}
+            assert delete_call.kwargs["json"] == {"object_ref": "abc123"}
 
     @pytest.mark.asyncio
     async def test_note_ref_targeting(self, git_storage_options: dict) -> None:
@@ -2420,22 +2425,22 @@ class TestRepoNoteOperations:
 
             read_result = await repo.get_note(sha="abc123", ref="reviews")
             assert read_result["note"] == "reviewed"
-            assert "ref=reviews" in mock_get.await_args.args[0]
+            assert "notes_ref=reviews" in mock_get.await_args.args[0]
 
             await repo.create_note(sha="abc123", note="LGTM", ref="reviews")
             create_call = client_instance.post.call_args_list[1]
             assert create_call.kwargs["json"] == {
-                "sha": "abc123",
+                "object_ref": "abc123",
                 "action": "add",
                 "note": "LGTM",
-                "ref": "reviews",
+                "notes_ref": "reviews",
             }
 
             await repo.delete_note(sha="abc123", ref="refs/notes/reviews")
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.kwargs["json"] == {
-                "sha": "abc123",
-                "ref": "refs/notes/reviews",
+                "object_ref": "abc123",
+                "notes_ref": "refs/notes/reviews",
             }
 
     @pytest.mark.asyncio
@@ -2611,7 +2616,7 @@ class TestRepoTagOperations:
             create_call = client_instance.post.call_args_list[1]
             assert create_call.kwargs["json"] == {
                 "name": "v1.0.0",
-                "target": "0123456789abcdef0123456789abcdef01234567",
+                "ref": "0123456789abcdef0123456789abcdef01234567",
             }
 
             delete_call = client_instance.request.call_args_list[0]
@@ -2646,6 +2651,7 @@ class TestRepoTagOperations:
 
             result = await repo.delete_branch(name="feature/old-onboarding")
             assert result == {
+                "target_branch": "feature/old-onboarding",
                 "name": "feature/old-onboarding",
                 "message": "branch deleted",
                 "ephemeral": False,
@@ -2654,7 +2660,9 @@ class TestRepoTagOperations:
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.args[0] == "DELETE"
             assert delete_call.args[1].endswith("/repos/branches")
-            assert delete_call.kwargs["json"] == {"name": "feature/old-onboarding"}
+            assert delete_call.kwargs["json"] == {
+                "target_branch": "feature/old-onboarding",
+            }
 
     @pytest.mark.asyncio
     async def test_delete_branch_ephemeral(self, git_storage_options: dict) -> None:
@@ -2687,6 +2695,7 @@ class TestRepoTagOperations:
                 ephemeral=True,
             )
             assert result == {
+                "target_branch": "merge/123e4567-e89b-12d3-a456-426614174000",
                 "name": "merge/123e4567-e89b-12d3-a456-426614174000",
                 "message": "branch deleted",
                 "ephemeral": True,
@@ -2694,7 +2703,7 @@ class TestRepoTagOperations:
 
             delete_call = client_instance.request.call_args_list[0]
             assert delete_call.kwargs["json"] == {
-                "name": "merge/123e4567-e89b-12d3-a456-426614174000",
+                "target_branch": "merge/123e4567-e89b-12d3-a456-426614174000",
                 "ephemeral": True,
             }
 
@@ -2714,10 +2723,12 @@ class TestRepoTagOperations:
 
             repo = await storage.create_repo(id="test-repo")
 
-            with pytest.raises(ValueError, match="delete_branch name is required"):
+            with pytest.raises(ValueError, match="delete_branch target_branch is required"):
                 await repo.delete_branch(name="   ")
 
-            with pytest.raises(ValueError, match="delete_branch name must not start with refs/"):
+            with pytest.raises(
+                ValueError, match="delete_branch target_branch must not start with refs/"
+            ):
                 await repo.delete_branch(name="refs/heads/feature/demo")
 
 
@@ -3063,14 +3074,14 @@ class TestRepoDiffOperations:
             assert result["stats"]["additions"] == 5
             assert len(result["files"]) == 2
 
-            # Verify the URL contains the baseSha parameter
+            # Verify the URL contains the standard revision parameters.
             call_args = mock_get.call_args
             url = call_args[0][0]
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            assert params["sha"] == ["abc123"]
-            assert params["baseSha"] == ["def456"]
-            assert params["gitApplyCompatible"] == ["true"]
+            assert params["ref"] == ["abc123"]
+            assert params["base_ref"] == ["def456"]
+            assert params["git_apply_compatible"] == ["true"]
 
 
 class TestRepoUpstreamOperations:

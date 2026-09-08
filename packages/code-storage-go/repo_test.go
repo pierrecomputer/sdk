@@ -367,7 +367,7 @@ func TestListFilesWithMetadataPaginationAndType(t *testing.T) {
 func TestListCommitsPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("branch") != "main" || q.Get("path") != "docs/guide.md" {
+		if q.Get("ref") != "main" || q.Get("path") != "docs/guide.md" {
 			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -948,8 +948,8 @@ func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 		t.Fatalf("merge error: %v", err)
 	}
 
-	if captured["source_branch"] != "feature" {
-		t.Fatalf("unexpected source_branch: %v", captured["source_branch"])
+	if captured["source_ref"] != "feature" {
+		t.Fatalf("unexpected source_ref: %v", captured["source_ref"])
 	}
 	if captured["source_is_ephemeral"] != true {
 		t.Fatalf("unexpected source_is_ephemeral: %v", captured["source_is_ephemeral"])
@@ -985,7 +985,7 @@ func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 		Result:          MergeResultMergeCommit,
 		CommitSHA:       "commit123",
 		TreeSHA:         "tree123",
-		Source:          MergeRef{Branch: "feature", Ephemeral: true, SHA: "source123"},
+		Source:          MergeRef{Ref: "feature", Branch: "feature", Ephemeral: true, SHA: "source123"},
 		Target:          MergeTargetRef{Branch: "main", Ephemeral: false, OldSHA: "old123", NewSHA: "new123"},
 		MergeBaseSHA:    "base123",
 		PromotedCommits: 2,
@@ -1049,7 +1049,7 @@ func TestMergeValidation(t *testing.T) {
 		options MergeOptions
 		want    string
 	}{
-		{name: "missing_source", options: MergeOptions{TargetBranch: "main", Strategy: MergeStrategyMerge}, want: "merge sourceBranch is required"},
+		{name: "missing_source", options: MergeOptions{TargetBranch: "main", Strategy: MergeStrategyMerge}, want: "merge sourceRef is required"},
 		{name: "missing_target", options: MergeOptions{SourceBranch: "feature", Strategy: MergeStrategyMerge}, want: "merge targetBranch is required"},
 		{name: "missing_strategy", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main"}, want: "merge strategy is required"},
 		{name: "invalid_strategy", options: MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategy("squash")}, want: "merge strategy is invalid"},
@@ -1183,7 +1183,7 @@ func TestCommitDiffQuery(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		q := r.URL.Query()
-		if q.Get("sha") != "abc" || q.Get("baseSha") != "base" || q.Get("gitApplyCompatible") != "true" {
+		if q.Get("ref") != "abc" || q.Get("base_ref") != "base" || q.Get("git_apply_compatible") != "true" {
 			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -1465,7 +1465,7 @@ func TestCreateTag(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode body: %v", err)
 		}
-		if body.Name != "v1.0.0" || body.Target != "0123456789abcdef0123456789abcdef01234567" {
+		if body.Name != "v1.0.0" || body.Ref != "0123456789abcdef0123456789abcdef01234567" {
 			t.Fatalf("unexpected create tag payload: %+v", body)
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -1549,7 +1549,7 @@ func TestDeleteBranch(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode body: %v", err)
 		}
-		if body.Name != "feature/old-onboarding" {
+		if body.TargetBranch != "feature/old-onboarding" {
 			t.Fatalf("unexpected delete branch payload: %+v", body)
 		}
 		if body.Ephemeral != nil {
@@ -1593,8 +1593,8 @@ func TestDeleteBranchEphemeral(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode body: %v", err)
 		}
-		if body.Name != "merge/123e4567-e89b-12d3-a456-426614174000" {
-			t.Fatalf("unexpected delete branch name: %s", body.Name)
+		if body.TargetBranch != "merge/123e4567-e89b-12d3-a456-426614174000" {
+			t.Fatalf("unexpected delete branch name: %s", body.TargetBranch)
 		}
 		if body.Ephemeral == nil || !*body.Ephemeral {
 			t.Fatalf("expected ephemeral=true, got %#v", body.Ephemeral)
@@ -1631,11 +1631,11 @@ func TestDeleteBranchValidation(t *testing.T) {
 	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
 
 	if _, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "  "}); err == nil ||
-		!strings.Contains(err.Error(), "deleteBranch name is required") {
+		!strings.Contains(err.Error(), "deleteBranch targetBranch is required") {
 		t.Fatalf("expected name-required error, got %v", err)
 	}
 	if _, err := repo.DeleteBranch(nil, DeleteBranchOptions{Name: "refs/heads/feature/demo"}); err == nil ||
-		!strings.Contains(err.Error(), "deleteBranch name must not start with refs/") {
+		!strings.Contains(err.Error(), "deleteBranch targetBranch must not start with refs/") {
 		t.Fatalf("expected refs/ rejection, got %v", err)
 	}
 }
@@ -1794,8 +1794,8 @@ func TestGetNote(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		q := r.URL.Query()
-		if q.Get("sha") != "abc123" {
-			t.Fatalf("unexpected sha query: %s", q.Get("sha"))
+		if q.Get("object_ref") != "abc123" {
+			t.Fatalf("unexpected object_ref query: %s", q.Get("object_ref"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"sha":"abc123","note":"hello notes","ref_sha":"def456"}`))
@@ -1826,8 +1826,8 @@ func TestNoteRefTargeting(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
-			if got := r.URL.Query().Get("ref"); got != "reviews" {
-				t.Fatalf("unexpected ref query: %q", got)
+			if got := r.URL.Query().Get("notes_ref"); got != "reviews" {
+				t.Fatalf("unexpected notes_ref query: %q", got)
 			}
 			_, _ = w.Write([]byte(`{"sha":"abc123","note":"reviewed","ref_sha":"def456"}`))
 		case http.MethodPost:
@@ -1857,8 +1857,8 @@ func TestNoteRefTargeting(t *testing.T) {
 	}
 	var postPayload map[string]interface{}
 	_ = json.Unmarshal(postBody, &postPayload)
-	if postPayload["ref"] != "reviews" {
-		t.Fatalf("expected create note ref reviews, got %v", postPayload["ref"])
+	if postPayload["notes_ref"] != "reviews" {
+		t.Fatalf("expected create note notes_ref reviews, got %v", postPayload["notes_ref"])
 	}
 
 	if _, err := repo.DeleteNote(nil, DeleteNoteOptions{SHA: "abc123", Ref: "refs/notes/reviews"}); err != nil {
@@ -1866,8 +1866,8 @@ func TestNoteRefTargeting(t *testing.T) {
 	}
 	var deletePayload map[string]interface{}
 	_ = json.Unmarshal(deleteBody, &deletePayload)
-	if deletePayload["ref"] != "refs/notes/reviews" {
-		t.Fatalf("expected delete note ref refs/notes/reviews, got %v", deletePayload["ref"])
+	if deletePayload["notes_ref"] != "refs/notes/reviews" {
+		t.Fatalf("expected delete note notes_ref refs/notes/reviews, got %v", deletePayload["notes_ref"])
 	}
 }
 
@@ -2142,8 +2142,8 @@ func TestListCommitsEphemeralQueryParam(t *testing.T) {
 	if !strings.Contains(rawQuery, "ephemeral=true") {
 		t.Fatalf("expected ephemeral=true in query, got %q", rawQuery)
 	}
-	if !strings.Contains(rawQuery, "branch=feature") {
-		t.Fatalf("expected branch=feature in query, got %q", rawQuery)
+	if !strings.Contains(rawQuery, "ref=feature") {
+		t.Fatalf("expected ref=feature in query, got %q", rawQuery)
 	}
 }
 
@@ -2179,8 +2179,8 @@ func TestGetCommit(t *testing.T) {
 		if r.URL.Path != "/api/v1/repos/commit" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if got := r.URL.Query().Get("sha"); got != "abc123" {
-			t.Fatalf("unexpected sha query: %q", got)
+		if got := r.URL.Query().Get("ref"); got != "abc123" {
+			t.Fatalf("unexpected ref query: %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"commit":{"sha":"abc123","parent_shas":["def456"],"message":"feat: add endpoint","author_name":"Jane Doe","author_email":"jane@example.com","committer_name":"Jane Doe","committer_email":"jane@example.com","date":"2024-01-15T14:32:18Z","signature":"-----BEGIN PGP SIGNATURE-----\nABC\n-----END PGP SIGNATURE-----\n","payload":"tree deadbeef\nauthor Jane Doe <jane@example.com> 1700000000 +0000\n"}}`))

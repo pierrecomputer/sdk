@@ -18,12 +18,13 @@ type commitPackAck struct {
 		BlobCount    int    `json:"blob_count"`
 	} `json:"commit"`
 	Result struct {
-		Branch  string `json:"branch"`
-		OldSHA  string `json:"old_sha"`
-		NewSHA  string `json:"new_sha"`
-		Success bool   `json:"success"`
-		Status  string `json:"status"`
-		Message string `json:"message,omitempty"`
+		TargetBranch *string `json:"target_branch"`
+		Branch       string  `json:"branch"`
+		OldSHA       string  `json:"old_sha"`
+		NewSHA       string  `json:"new_sha"`
+		Success      bool    `json:"success"`
+		Status       string  `json:"status"`
+		Message      string  `json:"message,omitempty"`
 	} `json:"result"`
 }
 
@@ -36,12 +37,13 @@ type commitPackResponse struct {
 		BlobCount    int    `json:"blob_count"`
 	} `json:"commit,omitempty"`
 	Result struct {
-		Branch  string `json:"branch"`
-		OldSHA  string `json:"old_sha"`
-		NewSHA  string `json:"new_sha"`
-		Success *bool  `json:"success"`
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		TargetBranch *string `json:"target_branch"`
+		Branch       string  `json:"branch"`
+		OldSHA       string  `json:"old_sha"`
+		NewSHA       string  `json:"new_sha"`
+		Success      *bool   `json:"success"`
+		Status       string  `json:"status"`
+		Message      string  `json:"message"`
 	} `json:"result"`
 }
 
@@ -50,10 +52,12 @@ type errorEnvelope struct {
 }
 
 func buildCommitResult(ack commitPackAck) (CommitResult, error) {
+	targetBranch := preferredResponseString(ack.Result.TargetBranch, ack.Result.Branch)
 	refUpdate := RefUpdate{
-		Branch: ack.Result.Branch,
-		OldSHA: ack.Result.OldSHA,
-		NewSHA: ack.Result.NewSHA,
+		TargetBranch: targetBranch,
+		Branch:       targetBranch,
+		OldSHA:       ack.Result.OldSHA,
+		NewSHA:       ack.Result.NewSHA,
 	}
 
 	if !ack.Result.Success {
@@ -92,7 +96,7 @@ func parseCommitPackError(resp *http.Response, fallbackMessage string) (string, 
 		if parsed.Result.Message != "" {
 			message = strings.TrimSpace(parsed.Result.Message)
 		}
-		refUpdate = partialRefUpdate(parsed.Result.Branch, parsed.Result.OldSHA, parsed.Result.NewSHA)
+		refUpdate = partialRefUpdate(preferredResponseString(parsed.Result.TargetBranch, parsed.Result.Branch), parsed.Result.OldSHA, parsed.Result.NewSHA)
 	}
 
 	if message == "" {
@@ -135,7 +139,7 @@ func partialRefUpdate(branch string, oldSHA string, newSHA string) *RefUpdate {
 	if branch == "" && oldSHA == "" && newSHA == "" {
 		return nil
 	}
-	return &RefUpdate{Branch: branch, OldSHA: oldSHA, NewSHA: newSHA}
+	return &RefUpdate{TargetBranch: branch, Branch: branch, OldSHA: oldSHA, NewSHA: newSHA}
 }
 
 func readAll(resp *http.Response) ([]byte, error) {

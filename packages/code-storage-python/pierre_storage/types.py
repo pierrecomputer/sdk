@@ -137,6 +137,8 @@ class RepoInfo(TypedDict, total=False):
     """Repository info in list responses."""
 
     repo_id: str
+    repo_name: str
+    # Deprecated: use repo_name.
     url: str
     default_branch: str
     created_at: str
@@ -300,6 +302,8 @@ class DeleteTagResult(TypedDict):
 class DeleteBranchResult(TypedDict):
     """Result from deleting a branch."""
 
+    target_branch: str
+    # Deprecated: use target_branch.
     name: str
     message: str
     ephemeral: bool
@@ -397,6 +401,8 @@ class NoteWriteResult(TypedDict):
     """Result from writing a git note."""
 
     sha: str
+    notes_ref: str
+    # Deprecated: use notes_ref.
     target_ref: str
     base_commit: NotRequired[str]
     new_ref_sha: str
@@ -475,6 +481,7 @@ class GetCommitDiffResult(TypedDict):
     """Result from getting commit diff."""
 
     sha: str
+    base_sha: NotRequired[str]
     stats: DiffStats
     files: List[FileDiff]
     filtered_files: List[FilteredFile]
@@ -534,9 +541,15 @@ class CreateCommitOptions(TypedDict, total=False):
     target_branch: str  # required
     commit_message: str  # required
     author: CommitSignature  # required
+    expected_target_sha: Optional[str]
+    # Deprecated: use expected_target_sha.
     expected_head_sha: Optional[str]
     base_branch: Optional[str]
+    target_is_ephemeral: bool
+    base_is_ephemeral: bool
+    # Deprecated: use target_is_ephemeral.
     ephemeral: bool
+    # Deprecated: use base_is_ephemeral.
     ephemeral_base: bool
     committer: Optional[CommitSignature]
     ttl: int
@@ -551,6 +564,8 @@ PreviewMergeResultLabel = Literal["merge_commit", "fast_forward", "no_op"]
 class MergeBranchesOptions(TypedDict, total=False):
     """Options for merging repository branches."""
 
+    source_ref: str  # required
+    # Deprecated: use source_ref.
     source_branch: str  # required
     source_is_ephemeral: bool
     target_branch: str  # required
@@ -569,6 +584,8 @@ class MergeBranchesOptions(TypedDict, total=False):
 class MergeSourceResult(TypedDict):
     """Source branch details from a merge result."""
 
+    ref: str
+    # Deprecated: use ref.
     branch: str
     ephemeral: bool
     sha: str
@@ -642,6 +659,8 @@ class PreviewMergeResult(TypedDict):
 class RefUpdate(TypedDict):
     """Information about a ref update."""
 
+    target_branch: str
+    # Deprecated: use target_branch.
     branch: str
     old_sha: str
     new_sha: str
@@ -869,7 +888,8 @@ class Repo(Protocol):
     async def delete_branch(
         self,
         *,
-        name: str,
+        target_branch: Optional[str] = None,
+        name: Optional[str] = None,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -880,9 +900,10 @@ class Repo(Protocol):
     async def merge(
         self,
         *,
-        source_branch: str,
         target_branch: str,
         strategy: MergeStrategy,
+        source_ref: Optional[str] = None,
+        source_branch: Optional[str] = None,
         source_is_ephemeral: Optional[bool] = None,
         target_is_ephemeral: Optional[bool] = None,
         expected_target_sha: Optional[str] = None,
@@ -922,7 +943,8 @@ class Repo(Protocol):
         self,
         *,
         name: str,
-        target: str,
+        ref: Optional[str] = None,
+        target: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> CreateTagResult:
@@ -952,6 +974,7 @@ class Repo(Protocol):
     async def list_commits(
         self,
         *,
+        ref: Optional[str] = None,
         branch: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
@@ -965,7 +988,8 @@ class Repo(Protocol):
     async def get_commit(
         self,
         *,
-        sha: str,
+        ref: Optional[str] = None,
+        sha: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitResult:
         """Fetch metadata for a single commit (no diff)."""
@@ -987,7 +1011,9 @@ class Repo(Protocol):
     async def get_note(
         self,
         *,
-        sha: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult:
@@ -997,10 +1023,13 @@ class Repo(Protocol):
     async def create_note(
         self,
         *,
-        sha: str,
         note: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -1011,10 +1040,13 @@ class Repo(Protocol):
     async def append_note(
         self,
         *,
-        sha: str,
         note: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -1025,9 +1057,12 @@ class Repo(Protocol):
     async def delete_note(
         self,
         *,
-        sha: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional["CommitSignature"] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -1062,8 +1097,12 @@ class Repo(Protocol):
     async def get_commit_diff(
         self,
         *,
-        sha: str,
+        ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        base_ref: Optional[str] = None,
         base_sha: Optional[str] = None,
+        ref_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         git_apply_compatible: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         ttl: Optional[int] = None,
@@ -1109,9 +1148,11 @@ class Repo(Protocol):
         self,
         *,
         target_branch: str,
-        target_commit_sha: str,
         author: CommitSignature,
+        base_ref: Optional[str] = None,
+        target_commit_sha: Optional[str] = None,
         commit_message: Optional[str] = None,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
@@ -1126,8 +1167,11 @@ class Repo(Protocol):
         target_branch: str,
         commit_message: str,
         author: CommitSignature,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
@@ -1144,8 +1188,11 @@ class Repo(Protocol):
         commit_message: str,
         diff: FileSource,
         author: CommitSignature,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,

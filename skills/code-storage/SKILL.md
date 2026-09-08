@@ -162,7 +162,7 @@ Username is always `t`. Password is the JWT.
 | **NOTES**                     |          |                                   |                 |
 | Create note on commit         | POST     | `/repos/notes` (action:"add")     | `git:write`     |
 | Append to note                | POST     | `/repos/notes` (action:"append")  | `git:write`     |
-| Get note for commit           | GET      | `/repos/notes?sha=SHA`            | `git:read`      |
+| Get note for commit           | GET      | `/repos/notes?object_ref=REF`     | `git:read`      |
 | Delete note                   | DELETE   | `/repos/notes`                    | `git:write`     |
 | List notes refs               | GET      | `/repos/notes/refs`               | `git:read`      |
 | **GIT SYNC**                  |          |                                   |                 |
@@ -351,7 +351,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/merge" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "source_branch": "feature/demo",
+    "source_ref": "feature/demo",
     "target_branch": "main",
     "strategy": "merge",
     "source_is_ephemeral": false,
@@ -361,7 +361,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/merge" -X POST \
   }'
 ```
 
-Required: `source_branch`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
+Required: `source_ref`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
 Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
 `commit_message`, `author`, `committer`, `allow_unrelated_histories`, `squash`.
 
@@ -375,7 +375,7 @@ Target-tip modes:
 Set `squash: true` to collapse the source into a single new commit whose only
 parent is the current target tip. It is incompatible with `ff_only`.
 Response: `{ "result": "merge_commit"|"fast_forward"|"no_op"|"squash"|"unknown",
-  "commit_sha", "tree_sha", "source": {branch,ephemeral,sha},
+  "commit_sha", "tree_sha", "source": {ref,ephemeral,sha},
   "target": {branch,ephemeral,old_sha,new_sha}, "merge_base_sha?", "promoted_commits" }`
 Conflicts return HTTP 409 with `conflict_paths` and `merge_base_sha` preserved on the body.
 
@@ -401,12 +401,12 @@ and `filtered_conflicts` for omitted content such as `max_conflict_files_exceede
 curl "$CODE_STORAGE_BASE_URL/repos/branches" -X DELETE \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"feature/old-onboarding"}'
+  -d '{"target_branch":"feature/old-onboarding"}'
 ```
 
 The default branch cannot be deleted. If the repository is connected to GitHub sync, branch deletion
 triggers a sync automatically.
-Response: `{ "name": "feature/old-onboarding", "message": "branch deleted", "ephemeral": false }`
+Response: `{ "target_branch": "feature/old-onboarding", "message": "branch deleted", "ephemeral": false }`
 
 Pass `"ephemeral": true` in the body to delete a branch under the ephemeral namespace. When `ephemeral` is true the default-branch protection is skipped
 (the default branch is always non-ephemeral) and GitHub mirroring is not triggered. The response
@@ -422,9 +422,9 @@ Send metadata line first, then blob_chunk lines.
 {"blob_chunk":{"content_id":"b1","data":"BASE64_CONTENT","eof":true}}
 ```
 
-Key metadata fields: `target_branch`*, `commit_message`*, `author`* (`name`+`email`), `files`*, `expected_head_sha`, `base_branch`, `committer`, `ephemeral`, `ephemeral_base`
+Key metadata fields: `target_branch`*, `commit_message`*, `author`* (`name`+`email`), `files`*, `expected_target_sha`, `base_branch`, `committer`, `target_is_ephemeral`, `base_is_ephemeral`
 File operations: `upsert` (default) or `delete`. For `delete`, omit blob chunks; only the metadata entry is required. `data` is base64; decoded chunks must be 4 MiB or smaller.
-Response `201`: `{ "commit": { "commit_sha", "tree_sha", "target_branch", "pack_bytes", "blob_count" }, "result": { "branch", "old_sha", "new_sha", "success", "status", "message" } }`
+Response `201`: `{ "commit": { "commit_sha", "tree_sha", "target_branch", "pack_bytes", "blob_count" }, "result": { "target_branch", "old_sha", "new_sha", "success", "status", "message" } }`
 Errors: `409` head SHA mismatch, `404` base branch not found
 
 ## POST /repos/diff-commit — Create Commit from Diff
@@ -442,13 +442,13 @@ Diff must be compatible with `git apply --cached --binary`. Same response schema
 ## GET /repos/commits — List Commits
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&path=docs/guide.md&limit=20&cursor=CURSOR" \
+curl "$CODE_STORAGE_BASE_URL/repos/commits?ref=main&path=docs/guide.md&limit=20&cursor=CURSOR" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
 Params:
-- `branch` (defaults to repository default branch)
-- `ephemeral=true` (resolve `branch` from the ephemeral namespace; defaults to `false`)
+- `ref` (defaults to repository default branch)
+- `ephemeral=true` (resolve `ref` from the ephemeral namespace; defaults to `false`)
 - `path` (optional repository-relative file or subtree to scope history to —
   only commits that touched that path are returned)
 - `cursor`, `limit` (default 20, max 100)
@@ -459,11 +459,11 @@ Response: `{ "commits": [{ "sha", "parent_shas", "message", "author_name", "auth
 ## GET /repos/commit — Get Commit
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/commit?sha=COMMIT_SHA" \
+curl "$CODE_STORAGE_BASE_URL/repos/commit?ref=COMMIT_SHA" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `sha` (required — full SHA, short SHA, branch name, or any revision Git
+Params: `ref` (required — full SHA, short SHA, branch name, or any revision Git
 can resolve). Returns commit metadata only; use `/repos/diff` for the diff.
 Response: `{ "commit": { "sha", "parent_shas", "message", "author_name", "author_email", "committer_name", "committer_email", "date", "signature"?, "payload"? } }`
 `parent_shas` preserves Git parent order and is an empty array for root commits.
@@ -471,22 +471,23 @@ Response: `{ "commit": { "sha", "parent_shas", "message", "author_name", "author
 `payload` (the exact signed bytes: the raw commit object with the gpgsig header
 removed) are present only for signed commits and omitted otherwise. Together
 they let callers verify the signature themselves, mirroring GitHub's `verification` object.
-Errors: `400` missing/blank `sha`, `404` commit not found.
+Errors: `400` missing/blank `ref`, `404` commit not found.
 
 ## GET /repos/diff — Get Commit Diff
 
 ```bash
-curl "$CODE_STORAGE_BASE_URL/repos/diff?sha=COMMIT_SHA&baseSha=OPTIONAL_BASE&gitApplyCompatible=true&path=src/foo.go" \
+curl "$CODE_STORAGE_BASE_URL/repos/diff?ref=COMMIT_SHA&base_ref=OPTIONAL_BASE&git_apply_compatible=true&path=src/foo.go" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Params: `sha` (required), `baseSha`, `gitApplyCompatible` (boolean), `path` (repeatable).
+Params: `ref` (required), `base_ref`, `ref_is_ephemeral`, `base_is_ephemeral`,
+`git_apply_compatible` (boolean), `path` (repeatable).
 The default suppresses changes in the amount of whitespace for review readability. Set
-`gitApplyCompatible=true` when the raw output will be passed to `git apply`; it includes whitespace
+`git_apply_compatible=true` when the raw output will be passed to `git apply`; it includes whitespace
 changes consistently in file discovery, raw diffs, and stats. When `filtered_files` is empty and
 every changed file has non-empty `raw`, concatenating `files[].raw` in response order produces a
 patch for the exact base tree.
-Response: `{ "sha", "stats", "files": [...], "filtered_files": [...] }`
+Response: `{ "sha", "base_sha", "stats", "files": [...], "filtered_files": [...] }`
 Large files (>500KB) or binary files appear in `filtered_files` without diff content.
 
 ## POST /repos/restore-commit — Restore Branch to Commit
@@ -497,11 +498,11 @@ Content-Type: `application/json`. Body wraps the metadata in a `metadata` envelo
 curl "$CODE_STORAGE_BASE_URL/repos/restore-commit" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"metadata":{"target_branch":"main","target_commit_sha":"abc123...","author":{"name":"Bot","email":"bot@x.com"},"commit_message":"Rollback"}}'
+  -d '{"metadata":{"target_branch":"main","base_ref":"abc123...","author":{"name":"Bot","email":"bot@x.com"},"commit_message":"Rollback"}}'
 ```
 
-Required metadata fields: `target_branch`, `target_commit_sha`, `author` (`name`+`email`).
-Optional: `commit_message`, `expected_head_sha` (guard), `committer`.
+Required metadata fields: `target_branch`, `base_ref`, `author` (`name`+`email`).
+Optional: `commit_message`, `expected_target_sha` (guard), `committer`.
 Response: same schema as commit-pack result. Failed ref updates surface as
 `RefUpdateError` in the SDKs (status, message, ref details preserved).
 
@@ -689,7 +690,7 @@ Response: streaming `tar.gz`. Headers: `Content-Type: application/gzip`.
 # Create lightweight tag
 curl "$CODE_STORAGE_BASE_URL/repos/tags" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"v1.0.0","target":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}'
+  -d '{"name":"v1.0.0","ref":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}'
 
 # List tags
 curl "$CODE_STORAGE_BASE_URL/repos/tags?limit=20&cursor=CURSOR" \
@@ -701,7 +702,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/tags" -X DELETE \
   -d '{"name":"v1.0.0"}'
 ```
 
-Tag names must not start with `refs/`. `target` must be a full 40-character lowercase hex commit SHA.
+Tag names must not start with `refs/`. `ref` must be a resolvable revision.
 Create uses `git:write`; list uses `git:read`; delete requires both `git:read` and `git:write`.
 If the repository is synced to GitHub, tag create/delete triggers sync automatically.
 
@@ -714,42 +715,42 @@ POST creates or appends, differentiated by the `action` field (`"add"` or
 # Create note
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sha":"COMMIT_SHA","action":"add","note":"Build passed","author":{"name":"CI","email":"ci@x.com"}}'
+  -d '{"object_ref":"COMMIT_SHA","action":"add","note":"Build passed","author":{"name":"CI","email":"ci@x.com"}}'
 
 # Append to note
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sha":"COMMIT_SHA","action":"append","note":"\nDeployed to staging","author":{"name":"CI","email":"ci@x.com"}}'
+  -d '{"object_ref":"COMMIT_SHA","action":"append","note":"\nDeployed to staging","author":{"name":"CI","email":"ci@x.com"}}'
 
 # Get note
-curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA" \
+curl "$CODE_STORAGE_BASE_URL/repos/notes?object_ref=COMMIT_SHA" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 
 # Delete note
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X DELETE \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sha":"COMMIT_SHA","author":{"name":"CI","email":"ci@x.com"}}'
+  -d '{"object_ref":"COMMIT_SHA","author":{"name":"CI","email":"ci@x.com"}}'
 
 # Create/read a note on a custom notes ref (default is refs/notes/commits).
-# The write `ref` field and the read `ref` query param accept a bare name like
+# The write `notes_ref` field and the read `notes_ref` query param accept a bare name like
 # "reviews" (placed under refs/notes/), the "notes/reviews" shorthand, or a
 # fully-qualified "refs/notes/reviews".
 curl "$CODE_STORAGE_BASE_URL/repos/notes" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sha":"COMMIT_SHA","action":"add","note":"LGTM","ref":"reviews"}'
-curl "$CODE_STORAGE_BASE_URL/repos/notes?sha=COMMIT_SHA&ref=reviews" \
+  -d '{"object_ref":"COMMIT_SHA","action":"add","note":"LGTM","notes_ref":"reviews"}'
+curl "$CODE_STORAGE_BASE_URL/repos/notes?object_ref=COMMIT_SHA&notes_ref=reviews" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-Optional fields on writes: `expected_ref_sha` (optimistic guard), `author` (`name`+`email`),
-`ref` (target notes ref). `add` fails if a note already exists; use `append` to
+Optional fields on writes: `expected_notes_ref_sha` (optimistic guard), `author` (`name`+`email`),
+`notes_ref` (target notes ref). `add` fails if a note already exists; use `append` to
 extend one, or delete then add to replace it.
-Write response: `{ "sha", "target_ref", "base_commit?", "new_ref_sha", "result": { "success", "status", "message?" } }`
-(`target_ref` echoes the resolved `ref`, defaulting to `refs/notes/commits`).
+Write response: `{ "sha", "notes_ref", "base_commit?", "new_ref_sha", "result": { "success", "status", "message?" } }`
+(`notes_ref` echoes the resolved notes ref, defaulting to `refs/notes/commits`).
 Read response: `{ "sha", "note", "ref_sha" }`
 
-**Notes refs.** Every note lives under a `refs/notes/*` ref. Omit `ref` to use
-the default `refs/notes/commits`. A non-default `ref` requires custom notes refs
+**Notes refs.** Every note lives under a `refs/notes/*` ref. Omit `notes_ref` to use
+the default `refs/notes/commits`. A non-default `notes_ref` requires custom notes refs
 to be enabled server-side (otherwise HTTP 400 `custom notes refs are not
 enabled`); when writing to a custom ref, the JWT's per-ref policies must permit
 it. Notes are not synced to a connected GitHub remote — custom refs stay
@@ -803,10 +804,10 @@ All list endpoints use cursor-based pagination.
 
 ```bash
 # First page
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20"
+curl "$CODE_STORAGE_BASE_URL/repos/commits?ref=main&limit=20"
 
 # Subsequent pages — use next_cursor from previous response
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20&cursor=NEXT_CURSOR_VALUE"
+curl "$CODE_STORAGE_BASE_URL/repos/commits?ref=main&limit=20&cursor=NEXT_CURSOR_VALUE"
 ```
 
 Stop when `"has_more": false` or `next_cursor` is absent.
@@ -870,7 +871,7 @@ git push
 ```bash
 # Step 1 — Create ephemeral commit (sets up ephemeral branch)
 printf '%s\n%s\n' \
-  '{"metadata":{"target_branch":"preview/pr-42","base_branch":"main","ephemeral":true,"commit_message":"Preview for PR 42","author":{"name":"CI","email":"ci@x.com"},"files":[{"path":"index.html","operation":"upsert","content_id":"h1"}]}}' \
+  '{"metadata":{"target_branch":"preview/pr-42","base_branch":"main","target_is_ephemeral":true,"commit_message":"Preview for PR 42","author":{"name":"CI","email":"ci@x.com"},"files":[{"path":"index.html","operation":"upsert","content_id":"h1"}]}}' \
   '{"blob_chunk":{"content_id":"h1","data":"PGgxPlByZXZpZXc8L2gxPg==","eof":true}}' | \
 curl "$CODE_STORAGE_BASE_URL/repos/commit-pack" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
@@ -1016,14 +1017,14 @@ etc.). Define the policy once and reuse it. When minting JWTs by hand, add the
 
 ```bash
 # Step 1 — List commits to find the target SHA
-curl "$CODE_STORAGE_BASE_URL/repos/commits?branch=main&limit=20" \
+curl "$CODE_STORAGE_BASE_URL/repos/commits?ref=main&limit=20" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 
 # Step 2 — Restore branch to that commit
 curl "$CODE_STORAGE_BASE_URL/repos/restore-commit" -X POST \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"metadata":{"target_branch":"main","target_commit_sha":"GOOD_SHA","author":{"name":"Agent","email":"agent@x.com"},"commit_message":"Rollback to stable"}}'
+  -d '{"metadata":{"target_branch":"main","base_ref":"GOOD_SHA","author":{"name":"Agent","email":"agent@x.com"},"commit_message":"Rollback to stable"}}'
 ```
 
 # ERROR HANDLING GUIDE
@@ -1037,7 +1038,7 @@ All API errors return JSON: `{ "error": "description" }` plus HTTP status code.
 | **401**     | Invalid or missing JWT          | Re-mint JWT. Verify `iss`, `repo`, `exp` claims. Check key matches org.     |
 | **403**     | JWT valid but missing scope     | Re-mint JWT with required scope (`git:read`, `git:write`, `repo:write`).    |
 | **404**     | Resource not found              | Verify repo ID, branch name, file path, or commit SHA. Repo may be empty.   |
-| **409**     | Conflict (optimistic lock)      | Fetch current state (`GET /repo`, list commits), resolve, retry with fresh `expected_head_sha`. |
+| **409**     | Conflict (optimistic lock)      | Fetch current state (`GET /repo`, list commits), resolve, retry with fresh `expected_target_sha`. |
 | **500**     | Internal server error           | Retry once with exponential backoff. If persistent, contact support.         |
 | **502/503** | Storage unavailable / sync busy | Wait and retry. Repository may be mid-sync or storage temporarily offline.   |
 | **504**     | Gateway timeout                 | Retry the operation. If streaming commit, reduce chunk size.                 |
@@ -1056,7 +1057,7 @@ export CODE_STORAGE_TOKEN="$(mint_jwt --repo REPO --scope SCOPE --ttl 3600)"
 # Fetch current HEAD
 CURRENT_SHA=$(curl "$CODE_STORAGE_BASE_URL/repos/commits?limit=1" \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN" | jq -r '.commits[0].sha')
-# Include in next commit attempt as expected_head_sha
+# Include in next commit attempt as expected_target_sha
 ```
 
 **Diff cannot be applied (400/result.success=false on diff-commit):**
@@ -1098,13 +1099,13 @@ git push origin feature-branch
 |-----------------------|-----------------------------------------------------------------------------------------|
 | Repo ID               | String; can contain `/` for namespacing (e.g. `team/project`, `users/alice/app`)       |
 | JWT `repo` claim      | Must match exactly the repo ID being accessed                                           |
-| Ephemeral namespace   | Set `ephemeral:true` on commits/files; URL: `REPO_ID+ephemeral.git`; no GitHub sync    |
+| Ephemeral namespace   | Set `target_is_ephemeral:true` on commits and `ephemeral:true` on files; URL: `REPO_ID+ephemeral.git`; no GitHub sync    |
 | Forking               | One-time copy from Code Storage repo. Independent after fork. Same org only.           |
 | Git Sync              | Upstream sync via GitHub App or generic HTTPS Git providers with stored credentials.   |
-| Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/notes/refs`. |
+| Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `notes_ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/notes/refs`. |
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
-| `expected_head_sha`   | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
+| `expected_target_sha` | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
 | Merge preview         | `GET /repos/merge/preview?source_branch=...&target_branch=...&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |

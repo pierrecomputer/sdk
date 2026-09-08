@@ -28,8 +28,10 @@ export function buildCommitResult(ack: CommitPackAckRaw): CommitResult {
 }
 
 export function toRefUpdate(result: CommitPackAckRaw['result']): RefUpdate {
+  const targetBranch = result.target_branch ?? result.branch ?? '';
   return {
-    branch: result.branch,
+    targetBranch,
+    branch: targetBranch,
     oldSha: result.old_sha,
     newSha: result.new_sha,
   };
@@ -76,7 +78,7 @@ export async function parseCommitPackError(
         statusLabel = result.status.trim() as typeof statusLabel;
       }
       refUpdate = toPartialRefUpdateFields(
-        result.branch,
+        result.target_branch ?? result.branch,
         result.old_sha,
         result.new_sha
       );
@@ -119,6 +121,7 @@ function toPartialRefUpdateFields(
   const refUpdate: Partial<RefUpdate> = {};
 
   if (typeof branch === 'string' && branch.trim() !== '') {
+    refUpdate.targetBranch = branch.trim();
     refUpdate.branch = branch.trim();
   }
   if (typeof oldSha === 'string' && oldSha.trim() !== '') {

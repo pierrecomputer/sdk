@@ -156,7 +156,9 @@ type RepoBaseInfo struct {
 
 // RepoInfo describes a repo in list results.
 type RepoInfo struct {
-	RepoID        string
+	RepoID   string
+	RepoName string
+	// Deprecated: use RepoName instead.
 	URL           string
 	DefaultBranch string
 	CreatedAt     string
@@ -406,6 +408,8 @@ type CreateBranchResult struct {
 // DeleteBranchOptions configures branch deletion.
 type DeleteBranchOptions struct {
 	InvocationOptions
+	TargetBranch string
+	// Deprecated: use TargetBranch instead.
 	Name      string
 	Ephemeral *bool
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
@@ -414,6 +418,8 @@ type DeleteBranchOptions struct {
 
 // DeleteBranchResult describes branch deletion result.
 type DeleteBranchResult struct {
+	TargetBranch string
+	// Deprecated: use TargetBranch instead.
 	Name      string
 	Message   string
 	Ephemeral bool
@@ -431,6 +437,8 @@ const (
 // MergeOptions configures branch merge operations.
 type MergeOptions struct {
 	InvocationOptions
+	SourceRef string
+	// Deprecated: use SourceRef instead.
 	SourceBranch      string
 	SourceIsEphemeral bool
 	TargetBranch      string
@@ -479,6 +487,8 @@ const (
 
 // MergeRef describes a merge source ref.
 type MergeRef struct {
+	Ref string
+	// Deprecated: use Ref instead.
 	Branch    string
 	Ephemeral bool
 	SHA       string
@@ -572,7 +582,9 @@ type ListTagsResult struct {
 // CreateTagOptions configures tag creation.
 type CreateTagOptions struct {
 	InvocationOptions
-	Name   string
+	Name string
+	Ref  string
+	// Deprecated: use Ref instead.
 	Target string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
@@ -602,6 +614,8 @@ type DeleteTagResult struct {
 // ListCommitsOptions configures list commits.
 type ListCommitsOptions struct {
 	InvocationOptions
+	Ref string
+	// Deprecated: use Ref instead.
 	Branch    string
 	Cursor    string
 	Limit     int
@@ -643,6 +657,8 @@ type ListCommitsResult struct {
 // GetCommitOptions configures a single-commit metadata lookup.
 type GetCommitOptions struct {
 	InvocationOptions
+	Ref string
+	// Deprecated: use Ref instead.
 	SHA string
 }
 
@@ -697,11 +713,15 @@ type NoteAuthor struct {
 // GetNoteOptions configures get note.
 type GetNoteOptions struct {
 	InvocationOptions
+	ObjectRef string
+	// Deprecated: use ObjectRef instead.
 	SHA string
-	// Ref is the notes ref to read from. A bare name like "reviews" is placed
+	// NotesRef is the notes ref to read from. A bare name like "reviews" is placed
 	// under refs/notes/; a fully-qualified refs/notes/* ref is also accepted.
 	// Defaults to refs/notes/commits. Custom refs require the feature to be
 	// enabled server-side.
+	NotesRef string
+	// Deprecated: use NotesRef instead.
 	Ref string
 }
 
@@ -715,14 +735,20 @@ type GetNoteResult struct {
 // CreateNoteOptions configures note creation.
 type CreateNoteOptions struct {
 	InvocationOptions
-	SHA            string
-	Note           string
+	ObjectRef string
+	// Deprecated: use ObjectRef instead.
+	SHA                 string
+	Note                string
+	ExpectedNotesRefSHA string
+	// Deprecated: use ExpectedNotesRefSHA instead.
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ref is the notes ref to target. A bare name like "reviews" is placed
+	// NotesRef is the notes ref to target. A bare name like "reviews" is placed
 	// under refs/notes/; a fully-qualified refs/notes/* ref is also accepted.
 	// Defaults to refs/notes/commits. Custom refs require the feature to be
 	// enabled server-side, and RefPolicies must permit writing to it.
+	NotesRef string
+	// Deprecated: use NotesRef instead.
 	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
@@ -731,11 +757,17 @@ type CreateNoteOptions struct {
 // AppendNoteOptions configures note append.
 type AppendNoteOptions struct {
 	InvocationOptions
-	SHA            string
-	Note           string
+	ObjectRef string
+	// Deprecated: use ObjectRef instead.
+	SHA                 string
+	Note                string
+	ExpectedNotesRefSHA string
+	// Deprecated: use ExpectedNotesRefSHA instead.
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ref is the notes ref to target. See CreateNoteOptions.Ref.
+	// NotesRef is the notes ref to target. See CreateNoteOptions.NotesRef.
+	NotesRef string
+	// Deprecated: use NotesRef instead.
 	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
@@ -744,10 +776,16 @@ type AppendNoteOptions struct {
 // DeleteNoteOptions configures note delete.
 type DeleteNoteOptions struct {
 	InvocationOptions
-	SHA            string
+	ObjectRef string
+	// Deprecated: use ObjectRef instead.
+	SHA                 string
+	ExpectedNotesRefSHA string
+	// Deprecated: use ExpectedNotesRefSHA instead.
 	ExpectedRefSHA string
 	Author         *NoteAuthor
-	// Ref is the notes ref to target. See CreateNoteOptions.Ref.
+	// NotesRef is the notes ref to target. See CreateNoteOptions.NotesRef.
+	NotesRef string
+	// Deprecated: use NotesRef instead.
 	Ref string
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
@@ -756,8 +794,9 @@ type DeleteNoteOptions struct {
 // NoteWriteResult describes note write response.
 type NoteWriteResult struct {
 	SHA string
-	// TargetRef is the notes ref the operation targeted (the resolved value of
-	// the request Ref, defaulting to refs/notes/commits).
+	// NotesRef is the notes ref the operation targeted.
+	NotesRef string
+	// Deprecated: use NotesRef instead.
 	TargetRef  string
 	BaseCommit string
 	NewRefSHA  string
@@ -866,8 +905,14 @@ type GetBranchDiffResult struct {
 // GetCommitDiffOptions configures commit diff.
 type GetCommitDiffOptions struct {
 	InvocationOptions
-	SHA                string
+	Ref string
+	// Deprecated: use Ref instead.
+	SHA     string
+	BaseRef string
+	// Deprecated: use BaseRef instead.
 	BaseSHA            string
+	RefIsEphemeral     *bool
+	BaseIsEphemeral    *bool
 	GitApplyCompatible bool // Generate raw diffs that can be applied to the base tree.
 	Paths              []string
 }
@@ -875,6 +920,7 @@ type GetCommitDiffOptions struct {
 // GetCommitDiffResult describes commit diff.
 type GetCommitDiffResult struct {
 	SHA           string
+	BaseSHA       string
 	Stats         DiffStats
 	Files         []FileDiff
 	FilteredFiles []FilteredFile
@@ -993,6 +1039,8 @@ type CommitResult struct {
 
 // RefUpdate describes ref update details.
 type RefUpdate struct {
+	TargetBranch string
+	// Deprecated: use TargetBranch instead.
 	Branch string
 	OldSHA string
 	NewSHA string
@@ -1011,15 +1059,22 @@ type CommitBuilder struct {
 // CommitOptions configures commit operations.
 type CommitOptions struct {
 	InvocationOptions
-	TargetBranch    string
-	TargetRef       string
-	CommitMessage   string
-	ExpectedHeadSHA string
-	BaseBranch      string
-	Ephemeral       bool
-	EphemeralBase   bool
-	Author          CommitSignature
-	Committer       *CommitSignature
+	TargetBranch string
+	// TargetRef is a fully qualified refs/heads/* target. TargetBranch wins when both fields are set.
+	TargetRef         string
+	CommitMessage     string
+	ExpectedTargetSHA string
+	// Deprecated: use ExpectedTargetSHA instead.
+	ExpectedHeadSHA   string
+	BaseBranch        string
+	TargetIsEphemeral *bool
+	BaseIsEphemeral   *bool
+	// Deprecated: use TargetIsEphemeral instead.
+	Ephemeral bool
+	// Deprecated: use BaseIsEphemeral instead.
+	EphemeralBase bool
+	Author        CommitSignature
+	Committer     *CommitSignature
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
 }
@@ -1027,15 +1082,21 @@ type CommitOptions struct {
 // CommitFromDiffOptions configures diff commit.
 type CommitFromDiffOptions struct {
 	InvocationOptions
-	TargetBranch    string
-	CommitMessage   string
-	Diff            io.Reader
-	ExpectedHeadSHA string
-	BaseBranch      string
-	Ephemeral       bool
-	EphemeralBase   bool
-	Author          CommitSignature
-	Committer       *CommitSignature
+	TargetBranch      string
+	CommitMessage     string
+	Diff              io.Reader
+	ExpectedTargetSHA string
+	// Deprecated: use ExpectedTargetSHA instead.
+	ExpectedHeadSHA   string
+	BaseBranch        string
+	TargetIsEphemeral *bool
+	BaseIsEphemeral   *bool
+	// Deprecated: use TargetIsEphemeral instead.
+	Ephemeral bool
+	// Deprecated: use BaseIsEphemeral instead.
+	EphemeralBase bool
+	Author        CommitSignature
+	Committer     *CommitSignature
 	// RefPolicies is evaluated in declaration order. The first matching rule wins.
 	RefPolicies RefPolicyList
 }
@@ -1043,9 +1104,13 @@ type CommitFromDiffOptions struct {
 // RestoreCommitOptions configures restore commit.
 type RestoreCommitOptions struct {
 	InvocationOptions
-	TargetBranch    string
-	TargetCommitSHA string
-	CommitMessage   string
+	TargetBranch string
+	BaseRef      string
+	// Deprecated: use BaseRef instead.
+	TargetCommitSHA   string
+	CommitMessage     string
+	ExpectedTargetSHA string
+	// Deprecated: use ExpectedTargetSHA instead.
 	ExpectedHeadSHA string
 	Author          CommitSignature
 	Committer       *CommitSignature

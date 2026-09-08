@@ -36,7 +36,7 @@ func (b *CommitBuilder) normalize() error {
 		}
 		b.options.TargetBranch = branch
 	} else if b.options.TargetRef != "" {
-		branch, err := normalizeLegacyTargetRef(b.options.TargetRef)
+		branch, err := normalizeTargetRef(b.options.TargetRef)
 		if err != nil {
 			return err
 		}
@@ -55,14 +55,16 @@ func (b *CommitBuilder) normalize() error {
 	b.options.Author.Name = strings.TrimSpace(b.options.Author.Name)
 	b.options.Author.Email = strings.TrimSpace(b.options.Author.Email)
 
-	b.options.ExpectedHeadSHA = strings.TrimSpace(b.options.ExpectedHeadSHA)
+	b.options.ExpectedTargetSHA = preferredString(b.options.ExpectedTargetSHA, b.options.ExpectedHeadSHA)
+	b.options.TargetIsEphemeral = preferredBool(b.options.TargetIsEphemeral, b.options.Ephemeral)
+	b.options.BaseIsEphemeral = preferredBool(b.options.BaseIsEphemeral, b.options.EphemeralBase)
 	b.options.BaseBranch = strings.TrimSpace(b.options.BaseBranch)
 	if b.options.BaseBranch != "" && strings.HasPrefix(b.options.BaseBranch, "refs/") {
 		return errors.New("createCommit baseBranch must not include refs/ prefix")
 	}
 
-	if b.options.EphemeralBase && b.options.BaseBranch == "" {
-		return errors.New("createCommit ephemeralBase requires baseBranch")
+	if b.options.BaseIsEphemeral != nil && *b.options.BaseIsEphemeral && b.options.BaseBranch == "" {
+		return errors.New("createCommit baseIsEphemeral requires baseBranch")
 	}
 
 	if b.options.Committer != nil {
@@ -267,8 +269,8 @@ func buildCommitMetadata(options CommitOptions, ops []commitOperation) *commitMe
 		Files: files,
 	}
 
-	if options.ExpectedHeadSHA != "" {
-		metadata.ExpectedHeadSHA = options.ExpectedHeadSHA
+	if options.ExpectedTargetSHA != "" {
+		metadata.ExpectedTargetSHA = options.ExpectedTargetSHA
 	}
 	if options.BaseBranch != "" {
 		metadata.BaseBranch = options.BaseBranch
@@ -279,12 +281,8 @@ func buildCommitMetadata(options CommitOptions, ops []commitOperation) *commitMe
 			Email: options.Committer.Email,
 		}
 	}
-	if options.Ephemeral {
-		metadata.Ephemeral = true
-	}
-	if options.EphemeralBase {
-		metadata.EphemeralBase = true
-	}
+	metadata.TargetIsEphemeral = options.TargetIsEphemeral
+	metadata.BaseIsEphemeral = options.BaseIsEphemeral
 
 	return metadata
 }
@@ -361,7 +359,7 @@ func normalizeBranchName(value string) (string, error) {
 	return trimmed, nil
 }
 
-func normalizeLegacyTargetRef(ref string) (string, error) {
+func normalizeTargetRef(ref string) (string, error) {
 	trimmed := strings.TrimSpace(ref)
 	if trimmed == "" {
 		return "", errors.New("createCommit targetRef is required")

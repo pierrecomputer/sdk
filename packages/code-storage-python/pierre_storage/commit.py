@@ -49,9 +49,13 @@ def _normalize_commit_options(options: CreateCommitOptions) -> Dict[str, Any]:
         raise ValueError("createCommit author name and email are required")
     normalized["author"] = {"name": author_name, "email": author_email}
 
-    expected_head_sha = options.get("expected_head_sha")
-    if expected_head_sha:
-        normalized["expected_head_sha"] = expected_head_sha.strip()
+    expected_target_sha = (
+        options.get("expected_target_sha")
+        if "expected_target_sha" in options
+        else options.get("expected_head_sha")
+    )
+    if expected_target_sha:
+        normalized["expected_target_sha"] = expected_target_sha.strip()
 
     base_branch = options.get("base_branch")
     if base_branch:
@@ -63,14 +67,18 @@ def _normalize_commit_options(options: CreateCommitOptions) -> Dict[str, Any]:
         else:
             normalized["base_branch"] = trimmed_base
 
-    if "ephemeral" in options:
-        normalized["ephemeral"] = bool(options["ephemeral"])
+    if "target_is_ephemeral" in options:
+        normalized["target_is_ephemeral"] = bool(options["target_is_ephemeral"])
+    elif "ephemeral" in options:
+        normalized["target_is_ephemeral"] = bool(options["ephemeral"])
 
-    if "ephemeral_base" in options:
-        normalized["ephemeral_base"] = bool(options["ephemeral_base"])
+    if "base_is_ephemeral" in options:
+        normalized["base_is_ephemeral"] = bool(options["base_is_ephemeral"])
+    elif "ephemeral_base" in options:
+        normalized["base_is_ephemeral"] = bool(options["ephemeral_base"])
 
-    if normalized.get("ephemeral_base") and "base_branch" not in normalized:
-        raise ValueError("createCommit ephemeral_base requires base_branch")
+    if normalized.get("base_is_ephemeral") and "base_branch" not in normalized:
+        raise ValueError("createCommit base_is_ephemeral requires base_branch")
 
     if "committer" in options and options["committer"]:
         normalized["committer"] = options["committer"]
@@ -89,17 +97,17 @@ def _base_metadata_from_options(options: Dict[str, Any]) -> Dict[str, Any]:
         "author": options["author"],
     }
 
-    if options.get("expected_head_sha"):
-        metadata["expected_head_sha"] = options["expected_head_sha"]
+    if options.get("expected_target_sha"):
+        metadata["expected_target_sha"] = options["expected_target_sha"]
 
     if options.get("base_branch"):
         metadata["base_branch"] = options["base_branch"]
 
-    if options.get("ephemeral"):
-        metadata["ephemeral"] = True
+    if "target_is_ephemeral" in options:
+        metadata["target_is_ephemeral"] = options["target_is_ephemeral"]
 
-    if options.get("ephemeral_base"):
-        metadata["ephemeral_base"] = True
+    if "base_is_ephemeral" in options:
+        metadata["base_is_ephemeral"] = options["base_is_ephemeral"]
 
     if options.get("committer"):
         metadata["committer"] = options["committer"]
@@ -109,8 +117,12 @@ def _base_metadata_from_options(options: Dict[str, Any]) -> Dict[str, Any]:
 
 def _to_ref_update(result: Dict[str, Any]) -> RefUpdate:
     """Convert result payload to ref update info."""
+    target_branch = (
+        result["target_branch"] if "target_branch" in result else result.get("branch", "")
+    )
     return {
-        "branch": result.get("branch", ""),
+        "target_branch": target_branch,
+        "branch": target_branch,
         "old_sha": result.get("old_sha", ""),
         "new_sha": result.get("new_sha", ""),
     }
@@ -157,8 +169,12 @@ async def _parse_commit_error(response: httpx.Response, operation: str) -> Dict[
                 status = result["status"]
             if result.get("message"):
                 message = result["message"]
+            target_branch = (
+                result["target_branch"] if "target_branch" in result else result.get("branch")
+            )
             ref_update = {
-                "branch": result.get("branch"),
+                "target_branch": target_branch,
+                "branch": target_branch,
                 "old_sha": result.get("old_sha"),
                 "new_sha": result.get("new_sha"),
             }

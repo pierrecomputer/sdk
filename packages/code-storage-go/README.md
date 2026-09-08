@@ -2,6 +2,14 @@
 
 Pierre Git Storage SDK for Go.
 
+## Standard vocabulary
+
+New code should use `Ref`, `BaseRef`, `SourceRef`, `ObjectRef`, `NotesRef`,
+`TargetBranch`, and `ExpectedTargetSHA`. Repository list entries expose
+`RepoName`; commit diffs expose `BaseSHA`; merge sources expose `Ref`; note
+writes expose `NotesRef`; and ref updates expose `TargetBranch`. Deprecated
+result aliases remain populated with the preferred value.
+
 ## Usage
 
 ```go
@@ -131,8 +139,8 @@ if err != nil {
 fmt.Println(tags.Tags)
 
 createdTag, err := repo.CreateTag(context.Background(), storage.CreateTagOptions{
-	Name:   "v1.0.0",
-	Target: "0123456789abcdef0123456789abcdef01234567",
+	Name: "v1.0.0",
+	Ref:  "0123456789abcdef0123456789abcdef01234567",
 })
 if err != nil {
 	log.Fatal(err)
@@ -148,7 +156,7 @@ if err != nil {
 fmt.Println(deletedTag.Message)
 
 deletedBranch, err := repo.DeleteBranch(context.Background(), storage.DeleteBranchOptions{
-	Name: "feature/old-onboarding",
+	TargetBranch: "feature/old-onboarding",
 })
 if err != nil {
 	log.Fatal(err)
@@ -158,8 +166,8 @@ fmt.Println(deletedBranch.Message)
 // Set Ephemeral to delete a branch from the ephemeral namespace
 ephemeral := true
 deletedEphemeral, err := repo.DeleteBranch(context.Background(), storage.DeleteBranchOptions{
-	Name:      "merge/123e4567-e89b-12d3-a456-426614174000",
-	Ephemeral: &ephemeral,
+	TargetBranch: "merge/123e4567-e89b-12d3-a456-426614174000",
+	Ephemeral:    &ephemeral,
 })
 if err != nil {
 	log.Fatal(err)
@@ -170,21 +178,21 @@ fmt.Println(deletedEphemeral.Ephemeral)
 ### Manage notes
 
 ```go
-// Create and read a note. Notes default to refs/notes/commits. Set Ref to
+// Create and read a note. Notes default to refs/notes/commits. Set NotesRef to
 // target another notes ref; a bare name like "reviews" is placed under
 // refs/notes/ (a fully-qualified refs/notes/* ref also works). Custom refs must
 // be enabled server-side.
 if _, err := repo.CreateNote(context.Background(), storage.CreateNoteOptions{
-	SHA:  "0123456789abcdef0123456789abcdef01234567",
-	Note: "LGTM",
-	Ref:  "reviews",
+	ObjectRef: "0123456789abcdef0123456789abcdef01234567",
+	Note:      "LGTM",
+	NotesRef:  "reviews",
 }); err != nil {
 	log.Fatal(err)
 }
 
 note, err := repo.GetNote(context.Background(), storage.GetNoteOptions{
-	SHA: "0123456789abcdef0123456789abcdef01234567",
-	Ref: "reviews",
+	ObjectRef: "0123456789abcdef0123456789abcdef01234567",
+	NotesRef:  "reviews",
 })
 if err != nil {
 	log.Fatal(err)
@@ -230,7 +238,7 @@ fmt.Println(preview.Status, preview.Result, preview.ConflictPaths)
 
 ```go
 result, err := repo.Merge(context.Background(), storage.MergeOptions{
-	SourceBranch:      "feature",
+	SourceRef:         "feature",
 	SourceIsEphemeral: true,
 	TargetBranch:      "main",
 	// Leave ExpectedTargetSHA empty to merge into the current target tip.
@@ -266,6 +274,10 @@ if err != nil {
 fmt.Println(result.CommitSHA)
 ```
 
+`TargetRef` is also supported for a fully qualified branch ref such as
+`refs/heads/main`. It is not deprecated. `TargetBranch` wins when both fields
+are set.
+
 ### Inspect commit parents
 
 `ListCommits` and `GetCommit` expose parent SHAs in Git parent order. Root
@@ -273,7 +285,7 @@ commits return an empty slice.
 
 ```go
 commits, err := repo.ListCommits(context.Background(), storage.ListCommitsOptions{
-	Branch: "main",
+	Ref:   "main",
 	Limit:  20,
 })
 if err != nil {
@@ -289,8 +301,8 @@ for _, commit := range commits.Commits {
 
 ```go
 diff, err := repo.GetCommitDiff(context.Background(), storage.GetCommitDiffOptions{
-	SHA:           "head-commit-sha",
-	BaseSHA:       "base-commit-sha",
+	Ref:                "head-commit-sha",
+	BaseRef:            "base-commit-sha",
 	GitApplyCompatible: true,
 })
 if err != nil {
@@ -301,6 +313,14 @@ if err != nil {
 `GitApplyCompatible` generates raw diffs for use with `git apply`. When no files are filtered and every
 changed file has non-empty `Raw`, concatenate each `diff.Files[i].Raw` in response order to produce
 a patch for the exact base tree.
+
+Deprecated request fields remain accepted for migration. These include
+`ExpectedHeadSHA`, `Ephemeral`, and `EphemeralBase` for commits; `SHA` and
+`Branch` for revision reads; `SourceBranch` for merges; `TargetCommitSHA` for
+restores; `Target` for tag creation; `Name` for branch deletion; and `SHA`,
+`Ref`, and `ExpectedRefSHA` for notes. Preferred values win when both forms are
+present. The preferred commit flags use `*bool`, so an explicit `false` can
+override a deprecated `true`.
 
 TTL fields use `time.Duration` values (for example `time.Hour`).
 

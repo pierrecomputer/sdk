@@ -273,7 +273,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
-      expect(requestUrl.searchParams.get('branch')).toBe('feature-branch');
+      expect(requestUrl.searchParams.get('ref')).toBe('feature-branch');
       expect(requestUrl.searchParams.get('ephemeral')).toBe('true');
       return Promise.resolve({
         ok: true,
@@ -293,7 +293,7 @@ describe('GitStorage', () => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
-      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+      expect(requestUrl.searchParams.get('object_ref')).toBe('abc123');
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -322,7 +322,7 @@ describe('GitStorage', () => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
-      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+      expect(requestUrl.searchParams.get('ref')).toBe('abc123');
 
       const headers = (init?.headers ?? {}) as Record<string, string>;
       const payload = decodeJwtPayload(stripBearer(headers.Authorization));
@@ -405,7 +405,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/commit')).toBe(true);
-      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
+      expect(requestUrl.searchParams.get('ref')).toBe('abc123');
 
       const headers = (init?.headers ?? {}) as Record<string, string>;
       const payload = decodeJwtPayload(stripBearer(headers.Authorization));
@@ -442,14 +442,14 @@ describe('GitStorage', () => {
     await expect(
       // @ts-expect-error - exercising runtime validation when sha is omitted
       repo.getCommit({})
-    ).rejects.toThrow('getCommit sha is required');
+    ).rejects.toThrow('getCommit ref is required');
 
     await expect(repo.getCommit({ sha: '' })).rejects.toThrow(
-      'getCommit sha is required'
+      'getCommit ref is required'
     );
 
     await expect(repo.getCommit({ sha: '   ' })).rejects.toThrow(
-      'getCommit sha is required'
+      'getCommit ref is required'
     );
   });
 
@@ -596,7 +596,7 @@ describe('GitStorage', () => {
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
-        sha: 'abc123',
+        object_ref: 'abc123',
         action: 'add',
         note: 'note content',
       });
@@ -627,7 +627,7 @@ describe('GitStorage', () => {
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
-        sha: 'abc123',
+        object_ref: 'abc123',
         action: 'append',
         note: 'note append',
       });
@@ -657,7 +657,7 @@ describe('GitStorage', () => {
       expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
       expect(init?.body).toBeDefined();
       const payload = JSON.parse(init?.body as string);
-      expect(payload).toEqual({ sha: 'abc123' });
+      expect(payload).toEqual({ object_ref: 'abc123' });
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -684,8 +684,8 @@ describe('GitStorage', () => {
       expect(init?.method).toBe('GET');
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/notes')).toBe(true);
-      expect(requestUrl.searchParams.get('sha')).toBe('abc123');
-      expect(requestUrl.searchParams.get('ref')).toBe('reviews');
+      expect(requestUrl.searchParams.get('object_ref')).toBe('abc123');
+      expect(requestUrl.searchParams.get('notes_ref')).toBe('reviews');
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -704,10 +704,10 @@ describe('GitStorage', () => {
       expect(init?.method).toBe('POST');
       const payload = JSON.parse(init?.body as string);
       expect(payload).toEqual({
-        sha: 'abc123',
+        object_ref: 'abc123',
         action: 'add',
         note: 'note content',
-        ref: 'reviews',
+        notes_ref: 'reviews',
       });
       return Promise.resolve({
         ok: true,
@@ -733,7 +733,10 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url, init) => {
       expect(init?.method).toBe('DELETE');
       const payload = JSON.parse(init?.body as string);
-      expect(payload).toEqual({ sha: 'abc123', ref: 'refs/notes/reviews' });
+      expect(payload).toEqual({
+        object_ref: 'abc123',
+        notes_ref: 'refs/notes/reviews',
+      });
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -1114,7 +1117,7 @@ describe('GitStorage', () => {
     mockFetch.mockImplementationOnce((url) => {
       const requestUrl = new URL(url as string);
       expect(requestUrl.pathname.endsWith('/repos/commits')).toBe(true);
-      expect(requestUrl.searchParams.get('branch')).toBe('main');
+      expect(requestUrl.searchParams.get('ref')).toBe('main');
       expect(requestUrl.searchParams.get('path')).toBe('docs/guide.md');
       return Promise.resolve({
         ok: true,
@@ -2471,7 +2474,7 @@ describe('GitStorage', () => {
 
         const body = JSON.parse(requestInit.body as string);
         expect(body).toEqual({
-          source_branch: 'feature',
+          source_ref: 'feature',
           source_is_ephemeral: true,
           target_branch: 'main',
           target_is_ephemeral: false,
@@ -2521,7 +2524,12 @@ describe('GitStorage', () => {
         result: 'merge_commit',
         commitSha: 'merge-sha',
         treeSha: 'tree-sha',
-        source: { branch: 'feature', ephemeral: true, sha: 'source-sha' },
+        source: {
+          ref: 'feature',
+          branch: 'feature',
+          ephemeral: true,
+          sha: 'source-sha',
+        },
         target: {
           branch: 'main',
           ephemeral: false,
@@ -2540,7 +2548,7 @@ describe('GitStorage', () => {
       mockFetch.mockImplementationOnce((_url, init) => {
         const body = JSON.parse((init as RequestInit).body as string);
         expect(body).toEqual({
-          source_branch: 'feature',
+          source_ref: 'feature',
           target_branch: 'main',
           strategy: 'ff_prefer',
         });
@@ -2579,7 +2587,7 @@ describe('GitStorage', () => {
       mockFetch.mockImplementationOnce((_url, init) => {
         const body = JSON.parse((init as RequestInit).body as string);
         expect(body).toEqual({
-          source_branch: 'feature',
+          source_ref: 'feature',
           target_branch: 'main',
           strategy: 'merge',
           squash: true,
@@ -2616,7 +2624,12 @@ describe('GitStorage', () => {
         result: 'squash',
         commitSha: 'squash-sha',
         treeSha: 'tree-sha',
-        source: { branch: 'feature', ephemeral: false, sha: 'source-sha' },
+        source: {
+          ref: 'feature',
+          branch: 'feature',
+          ephemeral: false,
+          sha: 'source-sha',
+        },
         target: {
           branch: 'main',
           ephemeral: false,
@@ -2634,7 +2647,7 @@ describe('GitStorage', () => {
 
       await expect(
         repo.merge({ sourceBranch: '', targetBranch: 'main', strategy: 'merge' })
-      ).rejects.toThrow('merge sourceBranch is required');
+      ).rejects.toThrow('merge sourceRef is required');
       await expect(
         repo.merge({ sourceBranch: 'feature', targetBranch: '', strategy: 'merge' })
       ).rejects.toThrow('merge targetBranch is required');
@@ -2726,7 +2739,7 @@ describe('GitStorage', () => {
         const body = JSON.parse(requestInit.body as string);
         expect(body).toEqual({
           name: 'v1.0.0',
-          target: '0123456789abcdef0123456789abcdef01234567',
+          ref: '0123456789abcdef0123456789abcdef01234567',
         });
 
         return Promise.resolve({
@@ -2811,7 +2824,7 @@ describe('GitStorage', () => {
         expect(payload.scopes).toEqual(['git:write']);
 
         const body = JSON.parse(requestInit.body as string);
-        expect(body).toEqual({ name: 'feature/old-onboarding' });
+        expect(body).toEqual({ target_branch: 'feature/old-onboarding' });
 
         return Promise.resolve({
           ok: true,
@@ -2829,6 +2842,7 @@ describe('GitStorage', () => {
         name: 'feature/old-onboarding',
       });
       expect(result).toEqual({
+        targetBranch: 'feature/old-onboarding',
         name: 'feature/old-onboarding',
         message: 'branch deleted',
         ephemeral: false,
@@ -2845,7 +2859,7 @@ describe('GitStorage', () => {
 
         const body = JSON.parse(requestInit.body as string);
         expect(body).toEqual({
-          name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+          target_branch: 'merge/123e4567-e89b-12d3-a456-426614174000',
           ephemeral: true,
         });
 
@@ -2866,6 +2880,7 @@ describe('GitStorage', () => {
         ephemeral: true,
       });
       expect(result).toEqual({
+        targetBranch: 'merge/123e4567-e89b-12d3-a456-426614174000',
         name: 'merge/123e4567-e89b-12d3-a456-426614174000',
         message: 'branch deleted',
         ephemeral: true,
@@ -2877,11 +2892,11 @@ describe('GitStorage', () => {
       const repo = await store.createRepo({ id: 'repo-delete-branch-validation' });
 
       await expect(repo.deleteBranch({ name: '' })).rejects.toThrow(
-        'deleteBranch name is required'
+        'deleteBranch targetBranch is required'
       );
       await expect(
         repo.deleteBranch({ name: 'refs/heads/feature/demo' })
-      ).rejects.toThrow('deleteBranch name must not start with refs/');
+      ).rejects.toThrow('deleteBranch targetBranch must not start with refs/');
     });
   });
 
@@ -2945,9 +2960,9 @@ describe('GitStorage', () => {
 
       mockFetch.mockImplementationOnce((url) => {
         const requestUrl = new URL(url as string);
-        expect(requestUrl.searchParams.get('sha')).toBe('head');
-        expect(requestUrl.searchParams.get('baseSha')).toBe('base');
-        expect(requestUrl.searchParams.get('gitApplyCompatible')).toBe('true');
+        expect(requestUrl.searchParams.get('ref')).toBe('head');
+        expect(requestUrl.searchParams.get('base_ref')).toBe('base');
+        expect(requestUrl.searchParams.get('git_apply_compatible')).toBe('true');
 
         return Promise.resolve({
           ok: true,
@@ -3030,6 +3045,7 @@ describe('GitStorage', () => {
         targetBranch: 'main',
         packBytes: 1024,
         refUpdate: {
+          targetBranch: 'main',
           branch: 'main',
           oldSha: '0123456789abcdef0123456789abcdef01234567',
           newSha: '89abcdef0123456789abcdef0123456789abcdef',
@@ -3051,8 +3067,8 @@ describe('GitStorage', () => {
       expect(parsedBody).toEqual({
         metadata: {
           target_branch: 'main',
-          expected_head_sha: 'main',
-          target_commit_sha: '0123456789abcdef0123456789abcdef01234567',
+          expected_target_sha: 'main',
+          base_ref: '0123456789abcdef0123456789abcdef01234567',
           commit_message: 'Restore "feature"',
           author: {
             name: 'Author Name',

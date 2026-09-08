@@ -17,6 +17,14 @@ Pierre Git Storage SDK for TypeScript/JavaScript applications.
 npm install @pierre/storage
 ```
 
+## Standard vocabulary
+
+New code should use `ref`, `baseRef`, `sourceRef`, `objectRef`, `notesRef`,
+`targetBranch`, and `expectedTargetSha`. Repository list entries expose
+`repoName`; commit diffs expose `baseSha`; merge sources expose `ref`; note
+writes expose `notesRef`; and ref updates expose `targetBranch`. Deprecated
+result aliases remain populated with the preferred value.
+
 ## Usage
 
 ### Basic Setup
@@ -247,7 +255,7 @@ console.log(tags.tags);
 // Create a lightweight tag at a commit SHA
 const createdTag = await repo.createTag({
   name: 'v1.0.0',
-  target: '0123456789abcdef0123456789abcdef01234567',
+  ref: '0123456789abcdef0123456789abcdef01234567',
 });
 console.log(createdTag.message);
 
@@ -257,7 +265,7 @@ console.log(deletedTag.message);
 
 // List commits
 const commits = await repo.listCommits({
-  branch: 'main', // optional
+  ref: 'main', // optional
   limit: 20,
   cursor: undefined, // for pagination
 });
@@ -265,7 +273,7 @@ console.log(commits.commits);
 console.log(commits.commits[0]?.parentShas); // Git parent order; [] for a root commit
 
 // Get a single commit's metadata (no diff)
-const { commit } = await repo.getCommit({ sha: 'abc123...' });
+const { commit } = await repo.getCommit({ ref: 'abc123...' });
 console.log(commit.message, commit.authorName, commit.parentShas);
 // Signed commits also expose the armored signature plus the exact signed
 // payload (raw commit object minus the gpgsig header) so you can verify it
@@ -288,12 +296,12 @@ for (const line of blame.lines) {
 }
 
 // Read a git note for a commit
-const note = await repo.getNote({ sha: 'abc123...' });
+const note = await repo.getNote({ objectRef: 'abc123...' });
 console.log(note.note);
 
 // Add a git note
 const noteResult = await repo.createNote({
-  sha: 'abc123...',
+  objectRef: 'abc123...',
   note: 'Release QA approved',
   author: { name: 'Release Bot', email: 'release@example.com' },
 });
@@ -301,22 +309,22 @@ console.log(noteResult.newRefSha);
 
 // Append to an existing git note
 await repo.appendNote({
-  sha: 'abc123...',
+  objectRef: 'abc123...',
   note: 'Follow-up review complete',
 });
 
 // Delete a git note
-await repo.deleteNote({ sha: 'abc123...' });
+await repo.deleteNote({ objectRef: 'abc123...' });
 
-// Notes default to refs/notes/commits. Pass `ref` to target another notes ref;
+// Notes default to refs/notes/commits. Pass `notesRef` to target another notes ref;
 // a bare name like `reviews` is placed under refs/notes/ (a fully-qualified
 // refs/notes/* ref also works). Custom refs must be enabled server-side.
 await repo.createNote({
-  sha: 'abc123...',
+  objectRef: 'abc123...',
   note: 'LGTM',
-  ref: 'reviews',
+  notesRef: 'reviews',
 });
-const reviewNote = await repo.getNote({ sha: 'abc123...', ref: 'reviews' });
+const reviewNote = await repo.getNote({ objectRef: 'abc123...', notesRef: 'reviews' });
 
 // Discover custom notes namespaces with cursor pagination. Requires the custom
 // notes refs feature to be enabled server-side.
@@ -338,8 +346,8 @@ console.log(branchDiff.files);
 
 // Get commit diff
 const commitDiff = await repo.getCommitDiff({
-  sha: 'abc123...',
-  baseSha: 'def456...', // optional base commit
+  ref: 'abc123...',
+  baseRef: 'def456...', // optional base commit
   gitApplyCompatible: true, // generate raw diffs for use with git apply
 });
 console.log(commitDiff.stats);
@@ -355,12 +363,12 @@ const branch = await repo.createBranch({
 console.log(branch.targetBranch, branch.commitSha);
 
 // Delete a branch (default branch deletion is rejected)
-const deletedBranch = await repo.deleteBranch({ name: 'feature/demo' });
+const deletedBranch = await repo.deleteBranch({ targetBranch: 'feature/demo' });
 console.log(deletedBranch.message);
 
 // Pass `ephemeral: true` to delete a branch from the ephemeral namespace
 const ephemeralDelete = await repo.deleteBranch({
-  name: 'merge/123e4567-e89b-12d3-a456-426614174000',
+  targetBranch: 'merge/123e4567-e89b-12d3-a456-426614174000',
   ephemeral: true,
 });
 console.log(ephemeralDelete.ephemeral); // true
@@ -382,7 +390,7 @@ console.log(preview.conflictPaths, preview.conflicts, preview.filteredConflicts)
 // Merge one branch into another. Source and target can independently be
 // ephemeral branches.
 const mergeResult = await repo.merge({
-  sourceBranch: 'feature/demo',
+  sourceRef: 'feature/demo',
   sourceIsEphemeral: true,
   targetBranch: 'main',
   targetIsEphemeral: false,
@@ -397,7 +405,7 @@ const mergeResult = await repo.merge({
 console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', 'squash', or 'unknown'
 console.log(mergeResult.commitSha, mergeResult.target.newSha);
 
-// repo.merge() requires sourceBranch, targetBranch, and strategy. It returns
+// repo.merge() requires sourceRef, targetBranch, and strategy. It returns
 // camelCase metadata for the source tip, target update, merge base (when
 // reported), and number of promoted commits. A backend conflict response
 // (HTTP 409) is surfaced as an API error with the response body preserved for
@@ -446,6 +454,8 @@ type CommitResult = {
   packBytes: number;
   blobCount: number;
   refUpdate: {
+    targetBranch: string;
+    /** @deprecated Use targetBranch. */
     branch: string;
     oldSha: string; // All zeroes when the ref is created
     newSha: string;
@@ -454,28 +464,37 @@ type CommitResult = {
 ```
 
 If the backend reports a failure (for example, the branch advanced past
-`expectedHeadSha`) the builder throws a `RefUpdateError` containing the status,
+`expectedTargetSha`) the builder throws a `RefUpdateError` containing the status,
 reason, and ref details.
 
 **Options**
 
 - `targetBranch` (required): Branch name (for example `main`) that will receive
   the commit.
-- `expectedHeadSha` (optional): Commit SHA that must match the remote tip; omit
+- `expectedTargetSha` (optional): Commit SHA that must match the remote tip; omit
   to fast-forward unconditionally.
 - `baseBranch` (optional): Mirrors the `base_branch` metadata and names an
   existing branch whose tip should seed `targetBranch` if it does not exist.
-  Leave `expectedHeadSha` empty when creating a new branch from `baseBranch`;
-  when both are provided and the branch already exists, `expectedHeadSha`
+  Leave `expectedTargetSha` empty when creating a new branch from `baseBranch`;
+  when both are provided and the branch already exists, `expectedTargetSha`
   continues to enforce the fast-forward guard.
 - `commitMessage` (required): The commit message.
 - `author` (required): Include `name` and `email` for the commit author.
 - `committer` (optional): Include `name` and `email`. If omitted, the author
   identity is reused.
 - `signal` (optional): Abort an in-flight upload with `AbortController`.
-- `targetRef` (deprecated, optional): Fully qualified ref (for example
-  `refs/heads/main`). Prefer `targetBranch`, which now accepts plain branch
-  names.
+- `targetIsEphemeral` and `baseIsEphemeral` (optional): Select the ephemeral
+  namespace for the target and base branches.
+- `targetRef` (optional): Fully qualified branch ref (for example
+  `refs/heads/main`). It remains supported without a deprecation. When both
+  target forms are present, `targetBranch` wins.
+
+Deprecated request aliases remain accepted for migration. These include
+`expectedHeadSha`, `ephemeral`, and `ephemeralBase` for commits; `sha` and
+`branch` for revision reads; `sourceBranch` for merges; `targetCommitSha` for
+restores; `target` for tag creation; `name` for branch deletion; and `sha`,
+`ref`, and `expectedRefSha` for notes. Preferred values win when both forms are
+present.
 
 > Files are chunked into 4 MiB segments under the hood, so you can stream large
 > assets without buffering them entirely in memory. File paths are normalized
@@ -483,9 +502,9 @@ reason, and ref details.
 
 > The `targetBranch` must already exist on the remote repository unless you
 > provide `baseBranch` (or the repository has no refs). To seed an empty
-> repository, point to the default branch and omit `expectedHeadSha`. To create
+> repository, point to the default branch and omit `expectedTargetSha`. To create
 > a missing branch within an existing repository, set `baseBranch` to the source
-> branch and omit `expectedHeadSha` so the service clones that tip before
+> branch and omit `expectedTargetSha` so the service clones that tip before
 > applying your changes.
 
 ### Apply a pre-generated diff
@@ -501,7 +520,7 @@ const patch = await fs.readFile('build/generated.patch', 'utf8');
 
 const diffResult = await repo.createCommitFromDiff({
   targetBranch: 'feature/apply-diff',
-  expectedHeadSha: 'abc123def4567890abc123def4567890abc12345',
+  expectedTargetSha: 'abc123def4567890abc123def4567890abc12345',
   commitMessage: 'Apply generated API changes',
   author: { name: 'Diff Bot', email: 'diff@example.com' },
   diff: patch,
@@ -528,7 +547,7 @@ import { createReadStream } from 'node:fs';
 await repo
   .createCommit({
     targetBranch: 'assets',
-    expectedHeadSha: 'abc123def4567890abc123def4567890abc12345',
+    expectedTargetSha: 'abc123def4567890abc123def4567890abc12345',
     commitMessage: 'Upload latest design bundle',
     author: { name: 'Assets Uploader', email: 'assets@example.com' },
   })
@@ -747,8 +766,8 @@ interface ListFilesWithMetadataResult {
 }
 
 interface GetNoteOptions {
-  sha: string; // Commit SHA to look up notes for
-  ref?: string; // Notes ref (default refs/notes/commits; bare names go under refs/notes/)
+  objectRef: string; // Git object revision to look up notes for
+  notesRef?: string; // Notes ref (default refs/notes/commits; bare names go under refs/notes/)
   ttl?: number;
 }
 
@@ -759,34 +778,34 @@ interface GetNoteResult {
 }
 
 interface CreateNoteOptions {
-  sha: string;
+  objectRef: string;
   note: string;
-  expectedRefSha?: string;
+  expectedNotesRefSha?: string;
   author?: { name: string; email: string };
-  ref?: string; // Notes ref to target (default refs/notes/commits)
+  notesRef?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
 interface AppendNoteOptions {
-  sha: string;
+  objectRef: string;
   note: string;
-  expectedRefSha?: string;
+  expectedNotesRefSha?: string;
   author?: { name: string; email: string };
-  ref?: string; // Notes ref to target (default refs/notes/commits)
+  notesRef?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
 interface DeleteNoteOptions {
-  sha: string;
-  expectedRefSha?: string;
+  objectRef: string;
+  expectedNotesRefSha?: string;
   author?: { name: string; email: string };
-  ref?: string; // Notes ref to target (default refs/notes/commits)
+  notesRef?: string; // Notes ref to target (default refs/notes/commits)
   ttl?: number;
 }
 
 interface NoteWriteResult {
   sha: string;
-  targetRef: string; // Resolved notes ref the write targeted
+  notesRef: string; // Resolved notes ref the write targeted
   baseCommit?: string;
   newRefSha: string;
   result: {
@@ -843,7 +862,7 @@ interface BranchInfo {
 }
 
 interface ListCommitsOptions {
-  branch?: string;
+  ref?: string;
   cursor?: string;
   limit?: number;
   ephemeral?: boolean;
@@ -880,7 +899,7 @@ interface CommitInfo {
 }
 
 interface GetCommitOptions {
-  sha: string;
+  ref: string;
   ttl?: number;
 }
 
@@ -934,8 +953,10 @@ interface GetBranchDiffOptions {
 }
 
 interface GetCommitDiffOptions {
-  sha: string;
-  baseSha?: string;
+  ref: string;
+  baseRef?: string;
+  refIsEphemeral?: boolean;
+  baseIsEphemeral?: boolean;
   gitApplyCompatible?: boolean; // default false; generate raw diffs for use with git apply
   paths?: string[];
   ttl?: number;
@@ -959,6 +980,7 @@ interface GetBranchDiffResult {
 
 interface GetCommitDiffResponse {
   sha: string;
+  baseSha?: string;
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];
@@ -966,6 +988,7 @@ interface GetCommitDiffResponse {
 
 interface GetCommitDiffResult {
   sha: string;
+  baseSha?: string;
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];
@@ -1009,7 +1032,7 @@ interface PreviewMergeResult {
 }
 
 interface MergeOptions {
-  sourceBranch: string;
+  sourceRef: string;
   sourceIsEphemeral?: boolean;
   targetBranch: string;
   targetIsEphemeral?: boolean;
@@ -1029,7 +1052,7 @@ interface MergeResult {
   result: MergeResultLabel;
   commitSha: string;
   treeSha: string;
-  source: { branch: string; ephemeral: boolean; sha: string };
+  source: { ref: string; branch: string; ephemeral: boolean; sha: string };
   target: {
     branch: string;
     ephemeral: boolean;
@@ -1088,6 +1111,7 @@ interface FilteredFile {
 }
 
 interface RefUpdate {
+  targetBranch: string;
   branch: string;
   oldSha: string;
   newSha: string;
@@ -1104,9 +1128,9 @@ interface CommitResult {
 
 interface RestoreCommitOptions {
   targetBranch: string;
-  targetCommitSha: string;
+  baseRef: string;
   commitMessage?: string;
-  expectedHeadSha?: string;
+  expectedTargetSha?: string;
   author: CommitSignature;
   committer?: CommitSignature;
   ttl?: number;
@@ -1119,6 +1143,7 @@ interface RestoreCommitResult {
   targetBranch: string;
   packBytes: number;
   refUpdate: {
+    targetBranch: string;
     branch: string;
     oldSha: string;
     newSha: string;

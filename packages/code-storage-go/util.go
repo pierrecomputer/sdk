@@ -13,6 +13,31 @@ func itoa(value int) string {
 	return strconv.Itoa(value)
 }
 
+func preferredString(preferred string, deprecated string) string {
+	if value := strings.TrimSpace(preferred); value != "" {
+		return value
+	}
+	return strings.TrimSpace(deprecated)
+}
+
+func preferredBool(preferred *bool, deprecated bool) *bool {
+	if preferred != nil {
+		return preferred
+	}
+	if deprecated {
+		value := true
+		return &value
+	}
+	return nil
+}
+
+func preferredResponseString(preferred *string, deprecated string) string {
+	if preferred != nil {
+		return *preferred
+	}
+	return deprecated
+}
+
 func decodeJSON(resp *http.Response, target interface{}) error {
 	decoder := json.NewDecoder(resp.Body)
 	return decoder.Decode(target)
@@ -99,7 +124,8 @@ func transformBranchDiff(raw branchDiffResponse) GetBranchDiffResult {
 
 func transformCommitDiff(raw commitDiffResponse) GetCommitDiffResult {
 	result := GetCommitDiffResult{
-		SHA: raw.SHA,
+		SHA:     raw.SHA,
+		BaseSHA: raw.BaseSHA,
 		Stats: DiffStats{
 			Files:     raw.Stats.Files,
 			Additions: raw.Stats.Additions,
@@ -151,9 +177,11 @@ func parseNoteWriteResponse(resp *http.Response, method string) (NoteWriteResult
 	if strings.Contains(contentType, "application/json") && len(rawBody) > 0 {
 		var payload noteWriteResponse
 		if err := json.Unmarshal(rawBody, &payload); err == nil && payload.SHA != "" {
+			notesRef := preferredResponseString(payload.NotesRef, payload.TargetRef)
 			return NoteWriteResult{
 				SHA:        payload.SHA,
-				TargetRef:  payload.TargetRef,
+				NotesRef:   notesRef,
+				TargetRef:  notesRef,
 				BaseCommit: payload.BaseCommit,
 				NewRefSHA:  payload.NewRefSHA,
 				Result: NoteResult{
@@ -214,7 +242,7 @@ func parseRestoreCommitPayload(body []byte) (*restoreCommitAck, *restoreCommitFa
 		return nil, &restoreCommitFailure{
 			Status:    strings.TrimSpace(failure.Result.Status),
 			Message:   strings.TrimSpace(failure.Result.Message),
-			RefUpdate: partialRefUpdate(failure.Result.Branch, failure.Result.OldSHA, failure.Result.NewSHA),
+			RefUpdate: partialRefUpdate(preferredResponseString(failure.Result.TargetBranch, failure.Result.Branch), failure.Result.OldSHA, failure.Result.NewSHA),
 		}
 	}
 
@@ -222,10 +250,12 @@ func parseRestoreCommitPayload(body []byte) (*restoreCommitAck, *restoreCommitFa
 }
 
 func buildRestoreCommitResult(ack restoreCommitAck) (RestoreCommitResult, error) {
+	targetBranch := preferredResponseString(ack.Result.TargetBranch, ack.Result.Branch)
 	refUpdate := RefUpdate{
-		Branch: ack.Result.Branch,
-		OldSHA: ack.Result.OldSHA,
-		NewSHA: ack.Result.NewSHA,
+		TargetBranch: targetBranch,
+		Branch:       targetBranch,
+		OldSHA:       ack.Result.OldSHA,
+		NewSHA:       ack.Result.NewSHA,
 	}
 
 	if !ack.Result.Success {

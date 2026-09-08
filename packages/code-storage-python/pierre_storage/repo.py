@@ -86,7 +86,7 @@ class StreamingResponse:
         self,
         response: httpx.Response,
         client: httpx.AsyncClient,
-        stream_context: Optional[contextlib.AbstractAsyncContextManager] = None,
+        stream_context: Optional[contextlib.AbstractAsyncContextManager[Any]] = None,
     ) -> None:
         self._response = response
         self._client = client
@@ -161,6 +161,27 @@ def normalize_optional_string(value: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
+def preferred_input(preferred: Optional[str], deprecated: Optional[str]) -> Optional[str]:
+    """Return a normalized preferred value, with a deprecated fallback."""
+    return normalize_optional_string(preferred) or normalize_optional_string(deprecated)
+
+
+def preferred_response(data: Dict[str, Any], preferred: str, deprecated: str) -> str:
+    """Read a standard response field before its deprecated alias."""
+    value = data[preferred] if preferred in data else data.get(deprecated, "")
+    return str(value) if value is not None else ""
+
+
+def warn_deprecated(value: Any, deprecated: str, preferred: str) -> None:
+    """Warn when a caller supplies a deprecated public argument."""
+    if value is not None:
+        warnings.warn(
+            f"{deprecated} is deprecated; use {preferred} instead",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+
 _CONDITIONAL_HEADER_NAMES = {
     "range": "Range",
     "if_match": "If-Match",
@@ -181,7 +202,7 @@ def build_conditional_headers(
         return {}
     out: Dict[str, str] = {}
     for key, http_name in _CONDITIONAL_HEADER_NAMES.items():
-        value = headers.get(key)  # type: ignore[call-overload]
+        value = headers.get(key)
         if isinstance(value, str) and value:
             out[http_name] = value
     return out
@@ -894,7 +915,8 @@ class RepoImpl:
     async def delete_branch(
         self,
         *,
-        name: str,
+        target_branch: Optional[str] = None,
+        name: Optional[str] = None,
         ephemeral: Optional[bool] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
@@ -904,11 +926,12 @@ class RepoImpl:
         When ``ephemeral`` is true, the branch is resolved and removed under the
         repository's ephemeral namespace rather than the persistent one.
         """
-        name_clean = name.strip()
-        if not name_clean:
-            raise ValueError("delete_branch name is required")
-        if name_clean.startswith("refs/"):
-            raise ValueError("delete_branch name must not start with refs/")
+        warn_deprecated(name, "name", "target_branch")
+        target_branch_clean = preferred_input(target_branch, name)
+        if not target_branch_clean:
+            raise ValueError("delete_branch target_branch is required")
+        if target_branch_clean.startswith("refs/"):
+            raise ValueError("delete_branch target_branch must not start with refs/")
 
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
@@ -918,7 +941,7 @@ class RepoImpl:
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/branches"
 
-        body: dict[str, object] = {"name": name_clean}
+        body: dict[str, object] = {"target_branch": target_branch_clean}
         if ephemeral is not None:
             body["ephemeral"] = bool(ephemeral)
 
@@ -950,8 +973,10 @@ class RepoImpl:
                 raise ApiError(message, status_code=response.status_code, response=response)
 
             data = response.json()
+            result_branch = preferred_response(data, "target_branch", "name")
             return {
-                "name": data["name"],
+                "target_branch": result_branch,
+                "name": result_branch,
                 "message": data["message"],
                 "ephemeral": bool(data.get("ephemeral", False)),
             }
@@ -959,9 +984,10 @@ class RepoImpl:
     async def merge(
         self,
         *,
-        source_branch: str,
         target_branch: str,
         strategy: MergeStrategy,
+        source_ref: Optional[str] = None,
+        source_branch: Optional[str] = None,
         source_is_ephemeral: Optional[bool] = None,
         target_is_ephemeral: Optional[bool] = None,
         expected_target_sha: Optional[str] = None,
@@ -980,12 +1006,13 @@ class RepoImpl:
         targets may retry stale target/repository movement while preserving the
         resolved source commit.
         """
-        source_branch_clean = source_branch.strip()
+        warn_deprecated(source_branch, "source_branch", "source_ref")
+        source_ref_clean = preferred_input(source_ref, source_branch)
         target_branch_clean = target_branch.strip()
         strategy_clean = strategy.strip()
 
-        if not source_branch_clean:
-            raise ValueError("merge source_branch is required")
+        if not source_ref_clean:
+            raise ValueError("merge source_ref is required")
         if not target_branch_clean:
             raise ValueError("merge target_branch is required")
         if not strategy_clean:
@@ -996,7 +1023,7 @@ class RepoImpl:
             raise ValueError("merge squash is incompatible with the ff_only strategy")
 
         payload: Dict[str, Any] = {
-            "source_branch": source_branch_clean,
+            "source_ref": source_ref_clean,
             "target_branch": target_branch_clean,
             "strategy": strategy_clean,
         }
@@ -1062,12 +1089,14 @@ class RepoImpl:
                 raise ApiError(message, status_code=response.status_code, response=response)
 
             data = response.json()
+            source_ref_value = preferred_response(data["source"], "ref", "branch")
             result: MergeBranchesResult = {
                 "result": data["result"],
                 "commit_sha": data["commit_sha"],
                 "tree_sha": data["tree_sha"],
                 "source": {
-                    "branch": data["source"]["branch"],
+                    "ref": source_ref_value,
+                    "branch": source_ref_value,
                     "ephemeral": data["source"]["ephemeral"],
                     "sha": data["source"]["sha"],
                 },
@@ -1207,7 +1236,8 @@ class RepoImpl:
         self,
         *,
         name: str,
-        target: str,
+        ref: Optional[str] = None,
+        target: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> CreateTagResult:
@@ -1218,9 +1248,10 @@ class RepoImpl:
         if name_clean.startswith("refs/"):
             raise ValueError("create_tag name must not start with refs/")
 
-        target_clean = target.strip()
-        if not target_clean:
-            raise ValueError("create_tag target is required")
+        warn_deprecated(target, "target", "ref")
+        ref_clean = preferred_input(ref, target)
+        if not ref_clean:
+            raise ValueError("create_tag ref is required")
 
         ttl_value = resolve_invocation_ttl_seconds({"ttl": ttl} if ttl is not None else None)
         jwt = self.generate_jwt(
@@ -1228,7 +1259,7 @@ class RepoImpl:
             _build_jwt_options(["git:write"], ttl_value, ref_policies),
         )
 
-        payload = {"name": name_clean, "target": target_clean}
+        payload = {"name": name_clean, "ref": ref_clean}
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/tags"
 
         async with httpx.AsyncClient() as client:
@@ -1344,6 +1375,7 @@ class RepoImpl:
     async def list_commits(
         self,
         *,
+        ref: Optional[str] = None,
         branch: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
@@ -1354,10 +1386,11 @@ class RepoImpl:
         """List commits in repository.
 
         Args:
-            branch: Branch name to list commits from
+            ref: Revision to list commits from.
+            branch: Deprecated alias for ``ref``.
             cursor: Pagination cursor
             limit: Maximum number of commits to return
-            ephemeral: When true, resolve `branch` under the ephemeral namespace
+            ephemeral: When true, resolve ``ref`` under the ephemeral namespace.
             path: Optional repository-relative path to scope the history to
                 commits that touched that file or subtree.
             ttl: Token TTL in seconds
@@ -1368,9 +1401,11 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
+        warn_deprecated(branch, "branch", "ref")
+        ref_clean = preferred_input(ref, branch)
         params = {}
-        if branch:
-            params["branch"] = branch
+        if ref_clean:
+            params["ref"] = ref_clean
         if cursor:
             params["cursor"] = cursor
         if limit is not None:
@@ -1422,29 +1457,31 @@ class RepoImpl:
     async def get_commit(
         self,
         *,
-        sha: str,
+        ref: Optional[str] = None,
+        sha: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> GetCommitResult:
         """Get metadata for a single commit, without computing its diff.
 
         Args:
-            sha: Commit SHA (or any revision git can resolve, e.g. branch
-                name or short SHA).
+            ref: Revision to resolve, such as a branch name or commit SHA.
+            sha: Deprecated alias for ``ref``.
             ttl: Token TTL in seconds.
 
         Returns:
             Commit metadata under the ``commit`` key.
         """
-        sha_clean = sha.strip()
-        if not sha_clean:
-            raise ValueError("get_commit sha is required")
+        warn_deprecated(sha, "sha", "ref")
+        ref_clean = preferred_input(ref, sha)
+        if not ref_clean:
+            raise ValueError("get_commit ref is required")
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
         url = (
             f"{self.api_base_url}/api/v{self.api_version}/repos/commit"
-            f"?{urlencode({'sha': sha_clean})}"
+            f"?{urlencode({'ref': ref_clean})}"
         )
 
         async with httpx.AsyncClient() as client:
@@ -1575,30 +1612,37 @@ class RepoImpl:
     async def get_note(
         self,
         *,
-        sha: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> NoteReadResult:
         """Read a git note.
 
         Args:
-            sha: Git object SHA whose note to read.
-            ref: Notes ref to read from. A bare name like ``reviews`` is placed
+            object_ref: Git object revision whose note to read.
+            sha: Deprecated alias for ``object_ref``.
+            notes_ref: Notes ref to read from. A bare name like ``reviews`` is placed
                 under ``refs/notes/``; a fully-qualified ``refs/notes/*`` ref is
                 also accepted. Defaults to ``refs/notes/commits``. Custom refs
                 require the feature to be enabled server-side.
+            ref: Deprecated alias for ``notes_ref``.
             ttl: Token TTL in seconds.
         """
-        sha_clean = sha.strip()
-        if not sha_clean:
-            raise ValueError("get_note sha is required")
+        warn_deprecated(sha, "sha", "object_ref")
+        warn_deprecated(ref, "ref", "notes_ref")
+        object_ref_clean = preferred_input(object_ref, sha)
+        if not object_ref_clean:
+            raise ValueError("get_note object_ref is required")
+        notes_ref_clean = preferred_input(notes_ref, ref)
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params = {"sha": sha_clean}
-        if ref and ref.strip():
-            params["ref"] = ref.strip()
+        params = {"object_ref": object_ref_clean}
+        if notes_ref_clean:
+            params["notes_ref"] = notes_ref_clean
 
         url = f"{self.api_base_url}/api/v{self.api_version}/repos/notes?{urlencode(params)}"
 
@@ -1622,30 +1666,36 @@ class RepoImpl:
     async def create_note(
         self,
         *,
-        sha: str,
         note: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Create a git note.
 
-        Set ``ref`` to target a notes ref other than ``refs/notes/commits``. A
+        Set ``notes_ref`` to target a notes ref other than ``refs/notes/commits``. A
         bare name like ``reviews`` is placed under ``refs/notes/``; a
         fully-qualified ``refs/notes/*`` ref is also accepted. Custom refs
         require the feature to be enabled server-side, and the JWT
         ``ref_policies`` must permit writing to the target ref.
         """
+        warn_deprecated(sha, "sha", "object_ref")
+        warn_deprecated(ref, "ref", "notes_ref")
+        warn_deprecated(expected_ref_sha, "expected_ref_sha", "expected_notes_ref_sha")
         return await self._write_note(
             action_label="create_note",
             action="add",
-            sha=sha,
+            object_ref=preferred_input(object_ref, sha),
             note=note,
-            expected_ref_sha=expected_ref_sha,
+            expected_notes_ref_sha=preferred_input(expected_notes_ref_sha, expected_ref_sha),
             author=author,
-            ref=ref,
+            notes_ref=preferred_input(notes_ref, ref),
             ttl=ttl,
             ref_policies=ref_policies,
         )
@@ -1653,26 +1703,32 @@ class RepoImpl:
     async def append_note(
         self,
         *,
-        sha: str,
         note: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Append to a git note.
 
-        See :meth:`create_note` for how ``ref`` selects the notes ref.
+        See :meth:`create_note` for how ``notes_ref`` selects the notes ref.
         """
+        warn_deprecated(sha, "sha", "object_ref")
+        warn_deprecated(ref, "ref", "notes_ref")
+        warn_deprecated(expected_ref_sha, "expected_ref_sha", "expected_notes_ref_sha")
         return await self._write_note(
             action_label="append_note",
             action="append",
-            sha=sha,
+            object_ref=preferred_input(object_ref, sha),
             note=note,
-            expected_ref_sha=expected_ref_sha,
+            expected_notes_ref_sha=preferred_input(expected_notes_ref_sha, expected_ref_sha),
             author=author,
-            ref=ref,
+            notes_ref=preferred_input(notes_ref, ref),
             ttl=ttl,
             ref_policies=ref_policies,
         )
@@ -1680,30 +1736,38 @@ class RepoImpl:
     async def delete_note(
         self,
         *,
-        sha: str,
+        object_ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        expected_notes_ref_sha: Optional[str] = None,
         expected_ref_sha: Optional[str] = None,
         author: Optional[CommitSignature] = None,
+        notes_ref: Optional[str] = None,
         ref: Optional[str] = None,
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
         """Delete a git note.
 
-        Set ``ref`` to target a notes ref other than ``refs/notes/commits``; a
+        Set ``notes_ref`` to target a notes ref other than ``refs/notes/commits``; a
         bare name like ``reviews`` is placed under ``refs/notes/``.
         """
-        sha_clean = sha.strip()
-        if not sha_clean:
-            raise ValueError("delete_note sha is required")
+        warn_deprecated(sha, "sha", "object_ref")
+        warn_deprecated(ref, "ref", "notes_ref")
+        warn_deprecated(expected_ref_sha, "expected_ref_sha", "expected_notes_ref_sha")
+        object_ref_clean = preferred_input(object_ref, sha)
+        if not object_ref_clean:
+            raise ValueError("delete_note object_ref is required")
+        notes_ref_clean = preferred_input(notes_ref, ref)
+        expected_notes_ref_sha_clean = preferred_input(expected_notes_ref_sha, expected_ref_sha)
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
-        payload: Dict[str, Any] = {"sha": sha_clean}
-        if ref and ref.strip():
-            payload["ref"] = ref.strip()
-        if expected_ref_sha and expected_ref_sha.strip():
-            payload["expected_ref_sha"] = expected_ref_sha.strip()
+        payload: Dict[str, Any] = {"object_ref": object_ref_clean}
+        if notes_ref_clean:
+            payload["notes_ref"] = notes_ref_clean
+        if expected_notes_ref_sha_clean:
+            payload["expected_notes_ref_sha"] = expected_notes_ref_sha_clean
         if author:
             author_name = author.get("name", "").strip()
             author_email = author.get("email", "").strip()
@@ -1891,8 +1955,12 @@ class RepoImpl:
     async def get_commit_diff(
         self,
         *,
-        sha: str,
+        ref: Optional[str] = None,
+        sha: Optional[str] = None,
+        base_ref: Optional[str] = None,
         base_sha: Optional[str] = None,
+        ref_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         git_apply_compatible: Optional[bool] = None,
         paths: Optional[list[str]] = None,
         ttl: Optional[int] = None,
@@ -1900,8 +1968,12 @@ class RepoImpl:
         """Get diff for a specific commit.
 
         Args:
-            sha: Commit SHA
-            base_sha: Optional base commit SHA to compare against
+            ref: Revision to compare.
+            sha: Deprecated alias for ``ref``.
+            base_ref: Optional base revision.
+            base_sha: Deprecated alias for ``base_ref``.
+            ref_is_ephemeral: Resolve ``ref`` in the ephemeral namespace.
+            base_is_ephemeral: Resolve ``base_ref`` in the ephemeral namespace.
             git_apply_compatible: Generate raw diffs that can be applied to the base tree. Defaults to
                 False.
             paths: Optional paths to filter the diff to specific files
@@ -1913,11 +1985,22 @@ class RepoImpl:
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(self._id, {"permissions": ["git:read"], "ttl": ttl})
 
-        params: list[tuple[str, str]] = [("sha", sha)]
-        if base_sha:
-            params.append(("baseSha", base_sha))
+        warn_deprecated(sha, "sha", "ref")
+        warn_deprecated(base_sha, "base_sha", "base_ref")
+        ref_clean = preferred_input(ref, sha)
+        if not ref_clean:
+            raise ValueError("get_commit_diff ref is required")
+        base_ref_clean = preferred_input(base_ref, base_sha)
+
+        params: list[tuple[str, str]] = [("ref", ref_clean)]
+        if base_ref_clean:
+            params.append(("base_ref", base_ref_clean))
+        if ref_is_ephemeral is not None:
+            params.append(("ref_is_ephemeral", str(ref_is_ephemeral).lower()))
+        if base_is_ephemeral is not None:
+            params.append(("base_is_ephemeral", str(base_is_ephemeral).lower()))
         if git_apply_compatible is not None:
-            params.append(("gitApplyCompatible", str(git_apply_compatible).lower()))
+            params.append(("git_apply_compatible", str(git_apply_compatible).lower()))
         if paths:
             for p in paths:
                 params.append(("path", p))
@@ -1965,12 +2048,15 @@ class RepoImpl:
                     }
                 )
 
-            return {
+            result: GetCommitDiffResult = {
                 "sha": data["sha"],
                 "stats": data["stats"],
                 "files": files,
                 "filtered_files": filtered_files,
             }
+            if "base_sha" in data:
+                result["base_sha"] = data["base_sha"]
+            return result
 
     async def grep(
         self,
@@ -2127,9 +2213,11 @@ class RepoImpl:
         self,
         *,
         target_branch: str,
-        target_commit_sha: str,
         author: CommitSignature,
+        base_ref: Optional[str] = None,
+        target_commit_sha: Optional[str] = None,
         commit_message: Optional[str] = None,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         committer: Optional[CommitSignature] = None,
         ttl: Optional[int] = None,
@@ -2139,10 +2227,12 @@ class RepoImpl:
 
         Args:
             target_branch: Target branch name
-            target_commit_sha: Commit SHA to restore
+            base_ref: Revision to restore.
+            target_commit_sha: Deprecated alias for ``base_ref``.
             author: Author signature (name and email)
             commit_message: Optional commit message
-            expected_head_sha: Expected HEAD SHA for optimistic locking
+            expected_target_sha: Expected target SHA for optimistic locking.
+            expected_head_sha: Deprecated alias for ``expected_target_sha``.
             committer: Optional committer signature (name and email)
             ttl: Token TTL in seconds
 
@@ -2159,9 +2249,12 @@ class RepoImpl:
         if target_branch.startswith("refs/"):
             raise ValueError("restoreCommit target_branch must not include refs/ prefix")
 
-        target_commit_sha = target_commit_sha.strip()
-        if not target_commit_sha:
-            raise ValueError("restoreCommit target_commit_sha is required")
+        warn_deprecated(target_commit_sha, "target_commit_sha", "base_ref")
+        warn_deprecated(expected_head_sha, "expected_head_sha", "expected_target_sha")
+        base_ref_clean = preferred_input(base_ref, target_commit_sha)
+        if not base_ref_clean:
+            raise ValueError("restoreCommit base_ref is required")
+        expected_target_sha_clean = preferred_input(expected_target_sha, expected_head_sha)
 
         author_name = author.get("name", "").strip()
         author_email = author.get("email", "").strip()
@@ -2173,15 +2266,15 @@ class RepoImpl:
 
         metadata: Dict[str, Any] = {
             "target_branch": target_branch,
-            "target_commit_sha": target_commit_sha,
+            "base_ref": base_ref_clean,
             "author": {"name": author_name, "email": author_email},
         }
 
         if commit_message:
             metadata["commit_message"] = commit_message.strip()
 
-        if expected_head_sha:
-            metadata["expected_head_sha"] = expected_head_sha.strip()
+        if expected_target_sha_clean:
+            metadata["expected_target_sha"] = expected_target_sha_clean
 
         if committer:
             committer_name = committer.get("name", "").strip()
@@ -2267,8 +2360,11 @@ class RepoImpl:
         target_branch: str,
         commit_message: str,
         author: CommitSignature,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
@@ -2281,10 +2377,13 @@ class RepoImpl:
             target_branch: Target branch name
             commit_message: Commit message
             author: Author signature (name and email)
-            expected_head_sha: Expected HEAD SHA for optimistic locking
+            expected_target_sha: Expected target SHA for optimistic locking.
+            expected_head_sha: Deprecated alias for ``expected_target_sha``.
             base_branch: Base branch to branch off from
-            ephemeral: Whether to mark the target branch as ephemeral
-            ephemeral_base: Whether the base branch is ephemeral
+            target_is_ephemeral: Whether the target branch is ephemeral.
+            base_is_ephemeral: Whether the base branch is ephemeral.
+            ephemeral: Deprecated alias for ``target_is_ephemeral``.
+            ephemeral_base: Deprecated alias for ``base_is_ephemeral``.
             committer: Optional committer signature (name and email)
             ttl: Token TTL in seconds
 
@@ -2296,14 +2395,22 @@ class RepoImpl:
             "commit_message": commit_message,
             "author": author,
         }
-        if expected_head_sha:
-            options["expected_head_sha"] = expected_head_sha
+        warn_deprecated(expected_head_sha, "expected_head_sha", "expected_target_sha")
+        warn_deprecated(ephemeral, "ephemeral", "target_is_ephemeral")
+        warn_deprecated(ephemeral_base, "ephemeral_base", "base_is_ephemeral")
+        expected_target_sha_clean = preferred_input(expected_target_sha, expected_head_sha)
+        if expected_target_sha_clean:
+            options["expected_target_sha"] = expected_target_sha_clean
         if base_branch:
             options["base_branch"] = base_branch
-        if ephemeral is not None:
-            options["ephemeral"] = bool(ephemeral)
-        if ephemeral_base is not None:
-            options["ephemeral_base"] = bool(ephemeral_base)
+        if target_is_ephemeral is not None:
+            options["target_is_ephemeral"] = bool(target_is_ephemeral)
+        elif ephemeral is not None:
+            options["target_is_ephemeral"] = bool(ephemeral)
+        if base_is_ephemeral is not None:
+            options["base_is_ephemeral"] = bool(base_is_ephemeral)
+        elif ephemeral_base is not None:
+            options["base_is_ephemeral"] = bool(ephemeral_base)
         if committer:
             options["committer"] = committer
 
@@ -2330,8 +2437,11 @@ class RepoImpl:
         commit_message: str,
         diff: FileSource,
         author: CommitSignature,
+        expected_target_sha: Optional[str] = None,
         expected_head_sha: Optional[str] = None,
         base_branch: Optional[str] = None,
+        target_is_ephemeral: Optional[bool] = None,
+        base_is_ephemeral: Optional[bool] = None,
         ephemeral: Optional[bool] = None,
         ephemeral_base: Optional[bool] = None,
         committer: Optional[CommitSignature] = None,
@@ -2347,14 +2457,22 @@ class RepoImpl:
             "commit_message": commit_message,
             "author": author,
         }
-        if expected_head_sha:
-            options["expected_head_sha"] = expected_head_sha
+        warn_deprecated(expected_head_sha, "expected_head_sha", "expected_target_sha")
+        warn_deprecated(ephemeral, "ephemeral", "target_is_ephemeral")
+        warn_deprecated(ephemeral_base, "ephemeral_base", "base_is_ephemeral")
+        expected_target_sha_clean = preferred_input(expected_target_sha, expected_head_sha)
+        if expected_target_sha_clean:
+            options["expected_target_sha"] = expected_target_sha_clean
         if base_branch:
             options["base_branch"] = base_branch
-        if ephemeral is not None:
-            options["ephemeral"] = bool(ephemeral)
-        if ephemeral_base is not None:
-            options["ephemeral_base"] = bool(ephemeral_base)
+        if target_is_ephemeral is not None:
+            options["target_is_ephemeral"] = bool(target_is_ephemeral)
+        elif ephemeral is not None:
+            options["target_is_ephemeral"] = bool(ephemeral)
+        if base_is_ephemeral is not None:
+            options["base_is_ephemeral"] = bool(base_is_ephemeral)
+        elif ephemeral_base is not None:
+            options["base_is_ephemeral"] = bool(ephemeral_base)
         if committer:
             options["committer"] = committer
 
@@ -2380,17 +2498,16 @@ class RepoImpl:
         *,
         action_label: str,
         action: str,
-        sha: str,
+        object_ref: Optional[str],
         note: str,
-        expected_ref_sha: Optional[str],
+        expected_notes_ref_sha: Optional[str],
         author: Optional[CommitSignature],
-        ref: Optional[str] = None,
+        notes_ref: Optional[str] = None,
         ttl: Optional[int],
         ref_policies: Optional[Refs] = None,
     ) -> NoteWriteResult:
-        sha_clean = sha.strip()
-        if not sha_clean:
-            raise ValueError(f"{action_label} sha is required")
+        if not object_ref:
+            raise ValueError(f"{action_label} object_ref is required")
 
         note_clean = note.strip()
         if not note_clean:
@@ -2400,14 +2517,14 @@ class RepoImpl:
         jwt = self.generate_jwt(self._id, _build_jwt_options(["git:write"], ttl, ref_policies))
 
         payload: Dict[str, Any] = {
-            "sha": sha_clean,
+            "object_ref": object_ref,
             "action": action,
             "note": note_clean,
         }
-        if ref and ref.strip():
-            payload["ref"] = ref.strip()
-        if expected_ref_sha and expected_ref_sha.strip():
-            payload["expected_ref_sha"] = expected_ref_sha.strip()
+        if notes_ref:
+            payload["notes_ref"] = notes_ref
+        if expected_notes_ref_sha:
+            payload["expected_notes_ref_sha"] = expected_notes_ref_sha
         if author:
             author_name = author.get("name", "").strip()
             author_email = author.get("email", "").strip()
@@ -2464,9 +2581,11 @@ class RepoImpl:
             raise ApiError(message, status_code=response.status_code, response=response)
 
         result = payload.get("result", {})
+        notes_ref = preferred_response(payload, "notes_ref", "target_ref")
         note_result: NoteWriteResult = {
             "sha": payload.get("sha", ""),
-            "target_ref": payload.get("target_ref", ""),
+            "notes_ref": notes_ref,
+            "target_ref": notes_ref,
             "new_ref_sha": payload.get("new_ref_sha", ""),
             "result": {
                 "success": bool(result.get("success")),
@@ -2488,7 +2607,8 @@ class RepoImpl:
                 ),
                 status=result.get("status"),
                 ref_update={
-                    "branch": payload.get("target_ref", ""),
+                    "target_branch": notes_ref,
+                    "branch": notes_ref,
                     "old_sha": payload.get("base_commit", ""),
                     "new_sha": payload.get("new_ref_sha", ""),
                 },
@@ -2498,8 +2618,10 @@ class RepoImpl:
 
     def _to_ref_update(self, result: Dict[str, Any]) -> RefUpdate:
         """Convert result to ref update."""
+        target_branch = preferred_response(result, "target_branch", "branch")
         return {
-            "branch": result.get("branch", ""),
+            "target_branch": target_branch,
+            "branch": target_branch,
             "old_sha": result.get("old_sha", ""),
             "new_sha": result.get("new_sha", ""),
         }
