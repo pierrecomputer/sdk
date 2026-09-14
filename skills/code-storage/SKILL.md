@@ -15,6 +15,17 @@ Official SDKs (in this repository):
 - Python: `pierre-storage` (PyPI; import `pierre_storage`)
 - Go: `github.com/pierrecomputer/sdk/packages/code-storage-go`
 
+## TypeScript custom HTTP transport
+
+`new GitStorage({ name, key, fetch })` (also `CodeStorage` and `createClient`)
+accepts an optional `fetch: typeof globalThis.fetch`. It applies to all SDK HTTP
+calls, including repository handles, downloads, and streaming commit uploads.
+The default is global fetch; the SDK adds no automatic retries. Callers own retry
+limits, backoff, cancellation, and safe body replay. Do not blindly retry writes
+or reuse consumed streaming request bodies. This option does not affect Git CLI
+traffic. See `packages/code-storage-typescript/README.md` for a read-only retry
+example. Python and Go do not use this TypeScript option.
+
 # ENVIRONMENT SETUP
 
 ## Required Environment Variables
