@@ -43,6 +43,44 @@ const store = new GitStorage({
 });
 ```
 
+### Custom Fetch and Retries
+
+Pass an optional `fetch` implementation to configure HTTP behavior for one client.
+It must have the same signature as `globalThis.fetch`. The SDK uses it for all
+HTTP requests, including file/archive downloads and streaming commit uploads.
+`createClient` and `CodeStorage` accept the same option. If omitted, the SDK uses
+the global fetch implementation and does not retry requests automatically.
+
+For example, this wrapper retries a read once on HTTP 503:
+
+```typescript
+const retryingFetch: typeof globalThis.fetch = async (input, init) => {
+  const response = await globalThis.fetch(input, init);
+  if (
+    response.status === 503 &&
+    (init?.method === 'GET' || init?.method === 'HEAD')
+  ) {
+    await response.body?.cancel();
+    return globalThis.fetch(input, init);
+  }
+  return response;
+};
+
+const store = new GitStorage({
+  name: 'your-name',
+  key: 'your-key',
+  fetch: retryingFetch,
+});
+```
+
+Choose retry limits, backoff, and `Retry-After` handling for your application.
+Preserve request headers, body, and abort signal in your wrapper. A failed write
+can have succeeded on the server, so do not retry writes unless replay is safe.
+Streaming bodies used by `createCommit().send()` and `createCommitFromDiff()` are
+one-shot: a retry wrapper must not reuse a consumed body. The SDK does not buffer
+or replay uploads. This option does not affect Git CLI traffic to generated remote
+URLs.
+
 ### Creating a Repository
 
 ```typescript
@@ -554,6 +592,7 @@ class GitStorage {
 
 ```typescript
 interface GitStorageOptions {
+  fetch?: typeof globalThis.fetch; // Custom HTTP implementation; defaults to global fetch
   name: string; // Your identifier
   key?: string; // Your ES256 private key, used to mint a JWT per call (required unless `token` is set)
   token?: string; // A pre-minted JWT sent on every request instead of signing one from `key`

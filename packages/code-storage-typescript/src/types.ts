@@ -39,6 +39,11 @@ import type {
 } from './schemas';
 
 export interface OverrideableGitStorageOptions {
+  /**
+   * Fetch implementation for all SDK HTTP requests, including streaming uploads.
+   * Defaults to globalThis.fetch. Retry policy and body replay are caller-owned.
+   */
+  fetch?: typeof globalThis.fetch;
   apiBaseUrl?: string;
   storageBaseUrl?: string;
   apiVersion?: ValidAPIVersion;

@@ -180,7 +180,6 @@ const API_BASE_URL = __API_BASE_URL__;
 const STORAGE_BASE_URL = __STORAGE_BASE_URL__;
 const API_VERSION: ValidAPIVersion = 1;
 
-const apiInstanceMap = new Map<string, ApiFetcher>();
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
 const RESTORE_COMMIT_ALLOWED_STATUS = [
   400, // Bad Request - validation errors
@@ -324,16 +323,6 @@ function httpStatusToRestoreStatus(status: number): string {
     default:
       return `${status}`;
   }
-}
-
-function getApiInstance(baseUrl: string, version: ValidAPIVersion) {
-  if (!apiInstanceMap.has(`${baseUrl}--${version}`)) {
-    apiInstanceMap.set(
-      `${baseUrl}--${version}`,
-      new ApiFetcher(baseUrl, version)
-    );
-  }
-  return apiInstanceMap.get(`${baseUrl}--${version}`)!;
 }
 
 function transformBranchInfo(raw: RawBranchInfo): BranchInfo {
@@ -927,9 +916,10 @@ class RepoImpl implements Repo {
       options?: GetRemoteURLOptions
     ) => Promise<string>
   ) {
-    this.api = getApiInstance(
+    this.api = new ApiFetcher(
       this.options.apiBaseUrl ?? GitStorage.getDefaultAPIBaseUrl(options.name),
-      this.options.apiVersion ?? API_VERSION
+      this.options.apiVersion ?? API_VERSION,
+      this.options.fetch
     );
   }
 
@@ -2055,7 +2045,11 @@ class RepoImpl implements Repo {
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchCommitTransport({ baseUrl, version });
+    const transport = new FetchCommitTransport({
+      baseUrl,
+      version,
+      fetch: this.options.fetch,
+    });
     const ttl = resolveCommitTtlSeconds(options);
     const builderOptions: CreateCommitOptions = {
       ...options,
@@ -2082,7 +2076,11 @@ class RepoImpl implements Repo {
     const baseUrl =
       this.options.apiBaseUrl ??
       GitStorage.getDefaultAPIBaseUrl(this.options.name);
-    const transport = new FetchDiffCommitTransport({ baseUrl, version });
+    const transport = new FetchDiffCommitTransport({
+      baseUrl,
+      version,
+      fetch: this.options.fetch,
+    });
     const ttl = resolveCommitTtlSeconds(options);
     const requestOptions: CreateCommitFromDiffOptions = {
       ...options,
@@ -2147,9 +2145,14 @@ export class GitStorage {
       GitStorage.getDefaultStorageBaseUrl(options.name);
     const resolvedDefaultTtl = options.defaultTTL;
 
-    this.api = getApiInstance(resolvedApiBaseUrl, resolvedApiVersion);
+    this.api = new ApiFetcher(
+      resolvedApiBaseUrl,
+      resolvedApiVersion,
+      options.fetch
+    );
 
     this.options = {
+      fetch: options.fetch,
       key: options.key,
       token: options.token,
       name: options.name,

@@ -179,8 +179,14 @@ class DiffCommitExecutor {
 
 export class FetchDiffCommitTransport implements DiffCommitTransport {
   private readonly url: string;
+  private readonly fetchImpl?: typeof globalThis.fetch;
 
-  constructor(config: { baseUrl: string; version: number }) {
+  constructor(config: {
+    baseUrl: string;
+    version: number;
+    fetch?: typeof globalThis.fetch;
+  }) {
+    this.fetchImpl = config.fetch;
     const trimmedBase = config.baseUrl.replace(/\/+$/, '');
     this.url = `${trimmedBase}/api/v${config.version}/repos/diff-commit`;
   }
@@ -208,6 +214,7 @@ export class FetchDiffCommitTransport implements DiffCommitTransport {
       (init as RequestInit & { duplex: 'half' }).duplex = 'half';
     }
 
+    const fetch = this.fetchImpl ?? globalThis.fetch;
     const response = await fetch(this.url, init);
     if (!response.ok) {
       const fallbackMessage = `createCommitFromDiff request failed (${response.status} ${response.statusText})`;

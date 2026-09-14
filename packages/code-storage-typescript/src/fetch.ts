@@ -36,7 +36,8 @@ export class ApiError extends Error {
 export class ApiFetcher {
   constructor(
     private readonly API_BASE_URL: string,
-    private readonly version: ValidAPIVersion
+    private readonly version: ValidAPIVersion,
+    private readonly fetchImpl?: typeof globalThis.fetch
   ) {}
 
   private getBaseUrl() {
@@ -99,6 +100,7 @@ export class ApiFetcher {
       requestOptions.body = JSON.stringify(path.body);
     }
 
+    const fetch = this.fetchImpl ?? globalThis.fetch;
     const response = await fetch(requestUrl, requestOptions);
 
     if (!response.ok) {
