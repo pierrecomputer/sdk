@@ -1287,6 +1287,109 @@ func TestCommitDiffQuery(t *testing.T) {
 	}
 }
 
+func TestDiffAncestryMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		metadata map[string]string
+	}{
+		{"present", map[string]string{"base_sha": "resolved-base", "merge_base_sha": "common-ancestor"}},
+		{"omitted", map[string]string{}},
+		{"empty", map[string]string{"base_sha": "", "merge_base_sha": ""}},
+		{"base only", map[string]string{"base_sha": "resolved-base"}},
+		{"merge base only", map[string]string{"merge_base_sha": "common-ancestor"}},
+	} {
+		for _, kind := range []string{"commit", "branch"} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				payload := map[string]interface{}{
+					"stats": map[string]int{"files": 2, "additions": 3, "deletions": 1, "changes": 4},
+					"files": []map[string]interface{}{{
+						"path": "new.txt", "old_path": "old.txt", "state": "R", "raw": "@@",
+						"bytes": 10, "is_eof": true, "additions": 3, "deletions": 1,
+					}},
+					"filtered_files": []map[string]interface{}{{
+						"path": "image.png", "state": "M", "bytes": 100, "is_eof": true,
+					}},
+				}
+				for key, value := range tc.metadata {
+					if kind == "commit" || key == "merge_base_sha" {
+						payload[key] = value
+					}
+				}
+				endpoint := "/api/repos/repo/diff"
+				query := map[string][]string{
+					"ref": {"head-ref"}, "base_ref": {"base-ref"},
+					"git_apply_compatible": {"true"}, "path": {"new.txt", "image.png"},
+				}
+				if kind == "branch" {
+					payload["branch"], payload["base"] = "feature", "main"
+					endpoint = "/api/repos/repo/branches/diff"
+					query = map[string][]string{
+						"branch": {"feature"}, "base": {"main"}, "ephemeral": {"false"},
+						"ephemeral_base": {"true"}, "path": {"new.txt", "image.png"},
+					}
+				} else {
+					payload["sha"] = "resolved-head"
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodGet || r.URL.Path != endpoint || !reflect.DeepEqual(map[string][]string(r.URL.Query()), query) {
+						t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+					}
+					w.Header().Set("Content-Type", "application/json")
+					if err := json.NewEncoder(w).Encode(payload); err != nil {
+						t.Errorf("encode response: %v", err)
+					}
+				}))
+				defer server.Close()
+				client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+				if err != nil {
+					t.Fatal(err)
+				}
+				repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+				stats := DiffStats{Files: 2, Additions: 3, Deletions: 1, Changes: 4}
+				files := []FileDiff{{
+					Path: "new.txt", OldPath: "old.txt", State: DiffStateRenamed, RawState: "R",
+					Raw: "@@", Bytes: 10, IsEOF: true, Additions: 3, Deletions: 1,
+				}}
+				filteredFiles := []FilteredFile{{
+					Path: "image.png", State: DiffStateModified, RawState: "M", Bytes: 100, IsEOF: true,
+				}}
+				if kind == "branch" {
+					ephemeral, ephemeralBase := false, true
+					result, err := repo.GetBranchDiff(context.Background(), GetBranchDiffOptions{
+						Branch: "feature", Base: "main", Ephemeral: &ephemeral,
+						EphemeralBase: &ephemeralBase, Paths: []string{"new.txt", "image.png"},
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := GetBranchDiffResult{
+						Branch: "feature", Base: "main", MergeBaseSHA: tc.metadata["merge_base_sha"],
+						Stats: stats, Files: files, FilteredFiles: filteredFiles,
+					}
+					if !reflect.DeepEqual(result, want) {
+						t.Fatalf("got %+v, want %+v", result, want)
+					}
+				} else {
+					result, err := repo.GetCommitDiff(context.Background(), GetCommitDiffOptions{
+						SHA: "head-ref", BaseSHA: "base-ref", GitApplyCompatible: true,
+						Paths: []string{"new.txt", "image.png"},
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := GetCommitDiffResult{
+						SHA: "resolved-head", BaseSHA: tc.metadata["base_sha"], MergeBaseSHA: tc.metadata["merge_base_sha"],
+						Stats: stats, Files: files, FilteredFiles: filteredFiles,
+					}
+					if !reflect.DeepEqual(result, want) {
+						t.Fatalf("got %+v, want %+v", result, want)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestRemoteURLPermissionsAndTTL(t *testing.T) {
 	client, err := NewClient(Options{Name: "acme", Key: testKey, StorageBaseURL: "acme.code.storage"})
 	if err != nil {

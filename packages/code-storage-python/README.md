@@ -402,6 +402,7 @@ branch_diff = await repo.get_branch_diff(
 )
 print(branch_diff["stats"])
 print(branch_diff["files"])
+print(branch_diff.get("merge_base_sha"))
 
 # Get commit diff
 commit_diff = await repo.get_commit_diff(
@@ -411,7 +412,15 @@ commit_diff = await repo.get_commit_diff(
 )
 print(commit_diff["stats"])
 print(commit_diff["files"])
+print(commit_diff["sha"], commit_diff.get("base_sha"), commit_diff.get("merge_base_sha"))
 ```
+
+`sha` is the resolved head commit. `base_sha` identifies the resolved base
+commit, while `merge_base_sha` identifies the common ancestor used for
+comparison; these two values can differ. Branch diffs also expose
+`merge_base_sha`. These optional keys are omitted when absent from older API
+responses; use `.get()` to receive `None` in that case. Empty strings returned
+by the API (for example, for single-commit diffs) are preserved.
 
 ### Creating Commits
 

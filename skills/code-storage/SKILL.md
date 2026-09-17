@@ -15,6 +15,17 @@ Official SDKs (in this repository):
 - Python: `pierre-storage` (PyPI; import `pierre_storage`)
 - Go: `github.com/pierrecomputer/sdk/packages/code-storage-go`
 
+## TypeScript custom HTTP transport
+
+`new GitStorage({ name, key, fetch })` (also `CodeStorage` and `createClient`)
+accepts an optional `fetch: typeof globalThis.fetch`. It applies to all SDK HTTP
+calls, including repository handles, downloads, and streaming commit uploads.
+The default is global fetch; the SDK adds no automatic retries. Callers own retry
+limits, backoff, cancellation, and safe body replay. Do not blindly retry writes
+or reuse consumed streaming request bodies. This option does not affect Git CLI
+traffic. See `packages/code-storage-typescript/README.md` for a read-only retry
+example. Python and Go do not use this TypeScript option.
+
 # ENVIRONMENT SETUP
 
 ## Required Environment Variables
@@ -368,7 +379,11 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/branches/diff?branch=BRANC
 ```
 
 Params: `branch`(required), `base`, `ephemeral`, `ephemeral_base`, `path` (repeatable)
-Response: `{ "branch", "base", "stats": {files,additions,deletions,changes}, "files": [...], "filtered_files": [...] }`
+Response: `{ "branch", "base", "merge_base_sha", "stats": {files,additions,deletions,changes}, "files": [...], "filtered_files": [...] }`
+`merge_base_sha` is the common ancestor used for comparison. SDK results expose it
+as `mergeBaseSha` (TypeScript), `merge_base_sha` (Python), or `MergeBaseSHA` (Go).
+Older responses that omit it yield `undefined` in TypeScript, an omitted key in
+Python, and an empty string in Go.
 State codes in `files[].state`: `A`=added, `M`=modified, `D`=deleted, `R`=renamed
 
 ## POST /repos/{repo_name}/merge — Merge Branches
@@ -514,7 +529,14 @@ The default suppresses changes in the amount of whitespace for review readabilit
 changes consistently in file discovery, raw diffs, and stats. When `filtered_files` is empty and
 every changed file has non-empty `raw`, concatenating `files[].raw` in response order produces a
 patch for the exact base tree.
-Response: `{ "sha", "base_sha", "stats", "files": [...], "filtered_files": [...] }`
+Response: `{ "sha", "base_sha?", "merge_base_sha?", "stats", "files": [...], "filtered_files": [...] }`
+`sha` is the resolved head commit. `base_sha` is the resolved base commit;
+`merge_base_sha` is the common ancestor used for comparison. Base and merge-base
+SHAs can differ. SDK results expose these as `baseSha`/`mergeBaseSha` (TypeScript),
+`base_sha`/`merge_base_sha` (Python), and `BaseSHA`/`MergeBaseSHA` (Go). Omitted
+ancestry fields yield `undefined` in TypeScript, omitted keys in Python, and empty
+strings in Go. Empty strings returned by the API for single-commit diffs are
+preserved.
 Large files (>500KB) or binary files appear in `filtered_files` without diff content.
 
 ## POST /repos/{repo_name}/restore-commit — Restore Branch to Commit

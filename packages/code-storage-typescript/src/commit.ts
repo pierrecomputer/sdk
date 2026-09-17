@@ -285,8 +285,14 @@ export class CommitBuilderImpl implements CommitBuilder {
 
 export class FetchCommitTransport implements CommitTransport {
   private readonly url: string;
+  private readonly fetchImpl?: typeof globalThis.fetch;
 
-  constructor(config: { baseUrl: string; repoId: string }) {
+  constructor(config: {
+    baseUrl: string;
+    repoId: string;
+    fetch?: typeof globalThis.fetch;
+  }) {
+    this.fetchImpl = config.fetch;
     const trimmedBase = config.baseUrl.replace(/\/+$/, '');
     this.url = `${trimmedBase}/api/repos/${encodeURIComponent(config.repoId)}/commit-pack`;
   }
@@ -311,6 +317,7 @@ export class FetchCommitTransport implements CommitTransport {
       (init as RequestInit & { duplex: 'half' }).duplex = 'half';
     }
 
+    const fetch = this.fetchImpl ?? globalThis.fetch;
     const response = await fetch(this.url, init);
 
     if (!response.ok) {

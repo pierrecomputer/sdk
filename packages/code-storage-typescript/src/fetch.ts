@@ -36,9 +36,10 @@ export class ApiError extends Error {
 export class ApiFetcher {
   constructor(
     private readonly API_BASE_URL: string,
-    // Retained as a cache-key discriminator in getApiInstance; no longer
-    // affects request URLs (the API is served on unversioned /api paths).
-    _version: ValidAPIVersion
+    // The version no longer affects request URLs. The API is served on
+    // unversioned /api paths.
+    _version: ValidAPIVersion,
+    private readonly fetchImpl?: typeof globalThis.fetch
   ) {}
 
   private getBaseUrl() {
@@ -101,6 +102,7 @@ export class ApiFetcher {
       requestOptions.body = JSON.stringify(path.body);
     }
 
+    const fetch = this.fetchImpl ?? globalThis.fetch;
     const response = await fetch(requestUrl, requestOptions);
 
     if (!response.ok) {

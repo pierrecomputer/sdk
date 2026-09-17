@@ -41,6 +41,11 @@ import type {
 } from './schemas';
 
 export interface OverrideableGitStorageOptions {
+  /**
+   * Fetch implementation for all SDK HTTP requests, including streaming uploads.
+   * Defaults to globalThis.fetch. Retry policy and body replay are caller-owned.
+   */
+  fetch?: typeof globalThis.fetch;
   apiBaseUrl?: string;
   storageBaseUrl?: string;
   /**
@@ -806,6 +811,8 @@ export type GetBranchDiffResponse = GetBranchDiffResponseRaw;
 export interface GetBranchDiffResult {
   branch: string;
   base: string;
+  /** Common ancestor used for comparison; undefined when omitted by the API. */
+  mergeBaseSha?: string;
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];
@@ -831,7 +838,10 @@ export type GetCommitDiffResponse = GetCommitDiffResponseRaw;
 
 export interface GetCommitDiffResult {
   sha: string;
+  /** Resolved base commit; undefined when omitted by the API. */
   baseSha?: string;
+  /** Common ancestor used for comparison; may differ from baseSha. Undefined when omitted. */
+  mergeBaseSha?: string;
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];

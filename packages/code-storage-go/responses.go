@@ -193,6 +193,7 @@ type filteredFileRaw struct {
 type branchDiffResponse struct {
 	Branch        string            `json:"branch"`
 	Base          string            `json:"base"`
+	MergeBaseSHA  string            `json:"merge_base_sha"`
 	Stats         diffStatsRaw      `json:"stats"`
 	Files         []fileDiffRaw     `json:"files"`
 	FilteredFiles []filteredFileRaw `json:"filtered_files"`
@@ -201,6 +202,7 @@ type branchDiffResponse struct {
 type commitDiffResponse struct {
 	SHA           string            `json:"sha"`
 	BaseSHA       string            `json:"base_sha"`
+	MergeBaseSHA  string            `json:"merge_base_sha"`
 	Stats         diffStatsRaw      `json:"stats"`
 	Files         []fileDiffRaw     `json:"files"`
 	FilteredFiles []filteredFileRaw `json:"filtered_files"`

@@ -2018,13 +2018,16 @@ class RepoImpl:
                     }
                 )
 
-            return {
+            result: GetBranchDiffResult = {
                 "branch": data["branch"],
                 "base": data["base"],
                 "stats": data["stats"],
                 "files": files,
                 "filtered_files": filtered_files,
             }
+            if "merge_base_sha" in data:
+                result["merge_base_sha"] = data["merge_base_sha"]
+            return result
 
     async def get_commit_diff(
         self,
@@ -2130,6 +2133,8 @@ class RepoImpl:
             }
             if "base_sha" in data:
                 result["base_sha"] = data["base_sha"]
+            if "merge_base_sha" in data:
+                result["merge_base_sha"] = data["merge_base_sha"]
             return result
 
     async def grep(
