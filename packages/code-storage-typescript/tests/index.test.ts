@@ -2886,88 +2886,185 @@ describe('GitStorage', () => {
   });
 
   describe('Repo getBranchDiff', () => {
-    it('forwards ephemeralBase flag to the API params', async () => {
-      const store = new GitStorage({ name: 'v0', key });
-      const repo = await store.createRepo({
-        id: 'repo-branch-diff-ephemeral-base',
-      });
+    it.each([{ merge_base_sha: 'common-ancestor' }, {}, { merge_base_sha: '' }])(
+      'preserves branch diff metadata and request params: %j',
+      async (metadata) => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = await store.createRepo({
+          id: 'repo-branch-diff-ephemeral-base',
+        });
 
-      mockFetch.mockImplementationOnce((url) => {
-        const requestUrl = new URL(url as string);
-        expect(requestUrl.searchParams.get('branch')).toBe(
-          'refs/heads/feature/demo'
-        );
-        expect(requestUrl.searchParams.get('base')).toBe('refs/heads/main');
-        expect(requestUrl.searchParams.get('ephemeral_base')).toBe('true');
+        mockFetch.mockImplementationOnce((url) => {
+          const requestUrl = new URL(url as string);
+          expect(requestUrl.pathname).toBe('/api/v1/repos/branches/diff');
+          expect(requestUrl.searchParams.get('ephemeral')).toBe('false');
+          expect(requestUrl.searchParams.getAll('path')).toEqual([
+            'README.md',
+            'image.png',
+          ]);
+          expect(requestUrl.searchParams.get('branch')).toBe(
+            'refs/heads/feature/demo'
+          );
+          expect(requestUrl.searchParams.get('base')).toBe('refs/heads/main');
+          expect(requestUrl.searchParams.get('ephemeral_base')).toBe('true');
 
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: async () => ({
-            branch: 'refs/heads/feature/demo',
-            base: 'refs/heads/main',
-            stats: { files: 1, additions: 1, deletions: 0, changes: 1 },
-            files: [
-              {
-                path: 'README.md',
-                state: 'modified',
-                old_path: null,
-                raw: '@@',
-                bytes: 10,
-                is_eof: true,
-                additions: 3,
-                deletions: 1,
-              },
-            ],
-            filtered_files: [],
-          }),
-        } as any);
-      });
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => ({
+              ...metadata,
+              branch: 'refs/heads/feature/demo',
+              base: 'refs/heads/main',
+              stats: { files: 1, additions: 1, deletions: 0, changes: 1 },
+              files: [
+                {
+                  path: 'README.md',
+                  state: 'modified',
+                  old_path: null,
+                  raw: '@@',
+                  bytes: 10,
+                  is_eof: true,
+                  additions: 3,
+                  deletions: 1,
+                },
+              ],
+              filtered_files: [
+                { path: 'image.png', state: 'M', bytes: 100, is_eof: true },
+              ],
+            }),
+          } as any);
+        });
 
-      const result = await repo.getBranchDiff({
-        branch: 'refs/heads/feature/demo',
-        base: 'refs/heads/main',
-        ephemeralBase: true,
-      });
+        const result = await repo.getBranchDiff({
+          branch: 'refs/heads/feature/demo',
+          base: 'refs/heads/main',
+          ephemeral: false,
+          ephemeralBase: true,
+          paths: ['README.md', 'image.png'],
+        });
 
-      expect(result.branch).toBe('refs/heads/feature/demo');
-      expect(result.base).toBe('refs/heads/main');
-      expect(result.files[0]?.additions).toBe(3);
-      expect(result.files[0]?.deletions).toBe(1);
-    });
+        expect(result.branch).toBe('refs/heads/feature/demo');
+        expect(result.base).toBe('refs/heads/main');
+        expect(result.files[0]?.additions).toBe(3);
+        expect(result.files[0]?.deletions).toBe(1);
+        expect(result.mergeBaseSha).toBe(metadata.merge_base_sha);
+        expect(result).not.toHaveProperty('baseSha');
+        expect(result.stats).toEqual({
+          files: 1,
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+        });
+        expect(result.files[0]).toMatchObject({
+          path: 'README.md',
+          state: 'modified',
+          rawState: 'modified',
+          raw: '@@',
+        });
+        expect(result.filteredFiles).toEqual([
+          {
+            path: 'image.png',
+            state: 'modified',
+            rawState: 'M',
+            oldPath: undefined,
+            bytes: 100,
+            isEof: true,
+          },
+        ]);
+      }
+    );
   });
 
   describe('Repo getCommitDiff', () => {
-    it('forwards gitApplyCompatible to the API params', async () => {
-      const store = new GitStorage({ name: 'v0', key });
-      const repo = await store.createRepo({ id: 'repo-commit-diff' });
+    it.each([
+      { base_sha: 'resolved-base', merge_base_sha: 'common-ancestor' },
+      {},
+      { base_sha: '', merge_base_sha: '' },
+      { base_sha: 'resolved-base' },
+      { merge_base_sha: 'common-ancestor' },
+    ])(
+      'preserves commit diff metadata and request params: %j',
+      async (metadata) => {
+        const store = new GitStorage({ name: 'v0', key });
+        const repo = await store.createRepo({ id: 'repo-commit-diff' });
 
-      mockFetch.mockImplementationOnce((url) => {
-        const requestUrl = new URL(url as string);
-        expect(requestUrl.searchParams.get('sha')).toBe('head');
-        expect(requestUrl.searchParams.get('baseSha')).toBe('base');
-        expect(requestUrl.searchParams.get('gitApplyCompatible')).toBe('true');
+        mockFetch.mockImplementationOnce((url) => {
+          const requestUrl = new URL(url as string);
+          expect(requestUrl.pathname).toBe('/api/v1/repos/diff');
+          expect(requestUrl.searchParams.getAll('path')).toEqual([
+            'new.txt',
+            'image.png',
+          ]);
+          expect(requestUrl.searchParams.get('sha')).toBe('head');
+          expect(requestUrl.searchParams.get('baseSha')).toBe('base');
+          expect(requestUrl.searchParams.get('gitApplyCompatible')).toBe('true');
 
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: async () => ({
-            sha: 'head',
-            stats: { files: 0, additions: 0, deletions: 0, changes: 0 },
-            files: [],
-            filtered_files: [],
-          }),
-        } as any);
-      });
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => ({
+              ...metadata,
+              sha: 'resolved-head',
+              stats: { files: 2, additions: 3, deletions: 1, changes: 4 },
+              files: [
+                {
+                  path: 'new.txt',
+                  old_path: 'old.txt',
+                  state: 'R',
+                  raw: '@@',
+                  bytes: 10,
+                  is_eof: true,
+                  additions: 3,
+                  deletions: 1,
+                },
+              ],
+              filtered_files: [
+                { path: 'image.png', state: 'M', bytes: 100, is_eof: true },
+              ],
+            }),
+          } as any);
+        });
 
-      await repo.getCommitDiff({
-        sha: 'head',
-        baseSha: 'base',
-        gitApplyCompatible: true,
-      });
-    });
+        const result = await repo.getCommitDiff({
+          sha: 'head',
+          baseSha: 'base',
+          gitApplyCompatible: true,
+          paths: ['new.txt', 'image.png'],
+        });
+
+        expect(result).toEqual({
+          sha: 'resolved-head',
+          baseSha: metadata.base_sha,
+          mergeBaseSha: metadata.merge_base_sha,
+          stats: { files: 2, additions: 3, deletions: 1, changes: 4 },
+          files: [
+            {
+              path: 'new.txt',
+              oldPath: 'old.txt',
+              state: 'renamed',
+              rawState: 'R',
+              raw: '@@',
+              bytes: 10,
+              isEof: true,
+              additions: 3,
+              deletions: 1,
+            },
+          ],
+          filteredFiles: [
+            {
+              path: 'image.png',
+              state: 'modified',
+              rawState: 'M',
+              oldPath: undefined,
+              bytes: 100,
+              isEof: true,
+            },
+          ],
+        });
+      }
+    );
   });
 
   describe('Repo restoreCommit', () => {

@@ -352,7 +352,11 @@ curl "$CODE_STORAGE_BASE_URL/repos/branches/diff?branch=BRANCH&base=main&path=sr
 ```
 
 Params: `branch`(required), `base`, `ephemeral`, `ephemeral_base`, `path` (repeatable)
-Response: `{ "branch", "base", "stats": {files,additions,deletions,changes}, "files": [...], "filtered_files": [...] }`
+Response: `{ "branch", "base", "merge_base_sha", "stats": {files,additions,deletions,changes}, "files": [...], "filtered_files": [...] }`
+`merge_base_sha` is the common ancestor used for comparison. SDK results expose it
+as `mergeBaseSha` (TypeScript), `merge_base_sha` (Python), or `MergeBaseSHA` (Go).
+Older responses that omit it yield `undefined` in TypeScript, an omitted key in
+Python, and an empty string in Go.
 State codes in `files[].state`: `A`=added, `M`=modified, `D`=deleted, `R`=renamed
 
 ## POST /repos/merge — Merge Branches
@@ -497,7 +501,14 @@ The default suppresses changes in the amount of whitespace for review readabilit
 changes consistently in file discovery, raw diffs, and stats. When `filtered_files` is empty and
 every changed file has non-empty `raw`, concatenating `files[].raw` in response order produces a
 patch for the exact base tree.
-Response: `{ "sha", "stats", "files": [...], "filtered_files": [...] }`
+Response: `{ "sha", "base_sha?", "merge_base_sha?", "stats", "files": [...], "filtered_files": [...] }`
+`sha` is the resolved head commit. `base_sha` is the resolved base commit;
+`merge_base_sha` is the common ancestor used for comparison. Base and merge-base
+SHAs can differ. SDK results expose these as `baseSha`/`mergeBaseSha` (TypeScript),
+`base_sha`/`merge_base_sha` (Python), and `BaseSHA`/`MergeBaseSHA` (Go). Omitted
+ancestry fields yield `undefined` in TypeScript, omitted keys in Python, and empty
+strings in Go. Empty strings returned by the API for single-commit diffs are
+preserved.
 Large files (>500KB) or binary files appear in `filtered_files` without diff content.
 
 ## POST /repos/restore-commit — Restore Branch to Commit

@@ -186,6 +186,7 @@ export const filteredFileRawSchema = z.object({
 export const branchDiffResponseSchema = z.object({
   branch: z.string(),
   base: z.string(),
+  merge_base_sha: z.string().optional(),
   stats: diffStatsSchema,
   files: z.array(diffFileRawSchema),
   filtered_files: z.array(filteredFileRawSchema),
@@ -193,6 +194,8 @@ export const branchDiffResponseSchema = z.object({
 
 export const commitDiffResponseSchema = z.object({
   sha: z.string(),
+  base_sha: z.string().optional(),
+  merge_base_sha: z.string().optional(),
   stats: diffStatsSchema,
   files: z.array(diffFileRawSchema),
   filtered_files: z.array(filteredFileRawSchema),

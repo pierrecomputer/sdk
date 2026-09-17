@@ -59,8 +59,9 @@ func normalizeDiffState(raw string) DiffFileState {
 
 func transformBranchDiff(raw branchDiffResponse) GetBranchDiffResult {
 	result := GetBranchDiffResult{
-		Branch: raw.Branch,
-		Base:   raw.Base,
+		Branch:       raw.Branch,
+		Base:         raw.Base,
+		MergeBaseSHA: raw.MergeBaseSHA,
 		Stats: DiffStats{
 			Files:     raw.Stats.Files,
 			Additions: raw.Stats.Additions,
@@ -99,7 +100,9 @@ func transformBranchDiff(raw branchDiffResponse) GetBranchDiffResult {
 
 func transformCommitDiff(raw commitDiffResponse) GetCommitDiffResult {
 	result := GetCommitDiffResult{
-		SHA: raw.SHA,
+		SHA:          raw.SHA,
+		BaseSHA:      raw.BaseSHA,
+		MergeBaseSHA: raw.MergeBaseSHA,
 		Stats: DiffStats{
 			Files:     raw.Stats.Files,
 			Additions: raw.Stats.Additions,

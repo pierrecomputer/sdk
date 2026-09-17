@@ -856,8 +856,10 @@ type GetBranchDiffOptions struct {
 
 // GetBranchDiffResult describes branch diff.
 type GetBranchDiffResult struct {
-	Branch        string
-	Base          string
+	Branch string
+	Base   string
+	// MergeBaseSHA is the common ancestor used for comparison; empty when omitted.
+	MergeBaseSHA  string
 	Stats         DiffStats
 	Files         []FileDiff
 	FilteredFiles []FilteredFile
@@ -874,7 +876,12 @@ type GetCommitDiffOptions struct {
 
 // GetCommitDiffResult describes commit diff.
 type GetCommitDiffResult struct {
-	SHA           string
+	SHA string
+	// BaseSHA is the resolved base commit; empty when omitted.
+	BaseSHA string
+	// MergeBaseSHA is the common ancestor used for comparison.
+	// It may differ from BaseSHA and is empty when omitted.
+	MergeBaseSHA  string
 	Stats         DiffStats
 	Files         []FileDiff
 	FilteredFiles []FilteredFile

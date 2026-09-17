@@ -459,10 +459,14 @@ class FilteredFile(TypedDict):
 
 
 class GetBranchDiffResult(TypedDict):
-    """Result from getting branch diff."""
+    """Branch diff; merge_base_sha is the common ancestor used for comparison.
+
+    Ancestry metadata is omitted when absent from the API response.
+    """
 
     branch: str
     base: str
+    merge_base_sha: NotRequired[str]
     stats: DiffStats
     files: List[FileDiff]
     filtered_files: List[FilteredFile]
@@ -472,9 +476,16 @@ class GetBranchDiffResult(TypedDict):
 
 
 class GetCommitDiffResult(TypedDict):
-    """Result from getting commit diff."""
+    """Commit diff with the resolved head sha.
+
+    base_sha is the resolved base commit. merge_base_sha is the common ancestor
+    used for comparison and may differ from base_sha. These keys are omitted
+    when absent from the API response.
+    """
 
     sha: str
+    base_sha: NotRequired[str]
+    merge_base_sha: NotRequired[str]
     stats: DiffStats
     files: List[FileDiff]
     filtered_files: List[FilteredFile]

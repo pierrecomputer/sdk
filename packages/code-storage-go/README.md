@@ -298,6 +298,12 @@ if err != nil {
 }
 ```
 
+`diff.SHA` is the resolved head commit. `diff.BaseSHA` is the resolved base
+commit, while `diff.MergeBaseSHA` is the common ancestor used for comparison;
+these two values can differ. `GetBranchDiff` also returns `MergeBaseSHA`.
+Ancestry fields are empty strings when omitted by older API responses. The API
+also returns empty ancestry values for single-commit diffs.
+
 `GitApplyCompatible` generates raw diffs for use with `git apply`. When no files are filtered and every
 changed file has non-empty `Raw`, concatenate each `diff.Files[i].Raw` in response order to produce
 a patch for the exact base tree.
