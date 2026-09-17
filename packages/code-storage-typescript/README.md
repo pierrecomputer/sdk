@@ -373,6 +373,7 @@ const branchDiff = await repo.getBranchDiff({
 });
 console.log(branchDiff.stats);
 console.log(branchDiff.files);
+console.log(branchDiff.mergeBaseSha);
 
 // Get commit diff
 const commitDiff = await repo.getCommitDiff({
@@ -382,6 +383,7 @@ const commitDiff = await repo.getCommitDiff({
 });
 console.log(commitDiff.stats);
 console.log(commitDiff.files);
+console.log(commitDiff.sha, commitDiff.baseSha, commitDiff.mergeBaseSha);
 
 // Create a new branch from an existing ref
 const branch = await repo.createBranch({
@@ -963,6 +965,11 @@ interface BlameResult {
   lines: BlameLine[];
 }
 
+// Commit diff sha is the resolved head commit. baseSha is the resolved base
+// commit; mergeBaseSha is the common ancestor used for comparison. They can
+// differ. Branch diffs also expose mergeBaseSha. These fields are undefined
+// when absent from older API responses; empty strings from the API (such as
+// for single-commit diffs) are preserved.
 interface GetBranchDiffOptions {
   branch: string;
   base?: string; // Defaults to 'main'
@@ -983,14 +990,16 @@ interface GetCommitDiffOptions {
 interface GetBranchDiffResponse {
   branch: string;
   base: string;
+  merge_base_sha?: string; // common ancestor used for comparison
   stats: DiffStats;
   files: FileDiff[];
-  filteredFiles: FilteredFile[];
+  filtered_files: FilteredFile[];
 }
 
 interface GetBranchDiffResult {
   branch: string;
   base: string;
+  mergeBaseSha?: string; // common ancestor used for comparison
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];
@@ -998,13 +1007,17 @@ interface GetBranchDiffResult {
 
 interface GetCommitDiffResponse {
   sha: string;
+  base_sha?: string; // resolved base commit
+  merge_base_sha?: string; // common ancestor used for comparison
   stats: DiffStats;
   files: FileDiff[];
-  filteredFiles: FilteredFile[];
+  filtered_files: FilteredFile[];
 }
 
 interface GetCommitDiffResult {
   sha: string;
+  baseSha?: string; // resolved base commit
+  mergeBaseSha?: string; // common ancestor used for comparison
   stats: DiffStats;
   files: FileDiff[];
   filteredFiles: FilteredFile[];

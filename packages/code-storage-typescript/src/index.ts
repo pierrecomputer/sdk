@@ -513,6 +513,7 @@ function transformBranchDiffResult(
   return {
     branch: raw.branch,
     base: raw.base,
+    mergeBaseSha: raw.merge_base_sha,
     stats: raw.stats,
     files: raw.files.map(transformFileDiff),
     filteredFiles: raw.filtered_files.map(transformFilteredFile),
@@ -524,6 +525,8 @@ function transformCommitDiffResult(
 ): GetCommitDiffResult {
   return {
     sha: raw.sha,
+    baseSha: raw.base_sha,
+    mergeBaseSha: raw.merge_base_sha,
     stats: raw.stats,
     files: raw.files.map(transformFileDiff),
     filteredFiles: raw.filtered_files.map(transformFilteredFile),

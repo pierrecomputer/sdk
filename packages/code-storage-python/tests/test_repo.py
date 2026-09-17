@@ -2724,8 +2724,11 @@ class TestRepoTagOperations:
 class TestRepoDiffOperations:
     """Tests for diff operations."""
 
+    @pytest.mark.parametrize(
+        "metadata", [{"merge_base_sha": "common-ancestor"}, {}, {"merge_base_sha": ""}]
+    )
     @pytest.mark.asyncio
-    async def test_get_branch_diff(self, git_storage_options: dict) -> None:
+    async def test_get_branch_diff(self, git_storage_options: dict, metadata: dict) -> None:
         """Test getting branch diff."""
         storage = GitStorage(git_storage_options)
 
@@ -2738,6 +2741,7 @@ class TestRepoDiffOperations:
         diff_response.status_code = 200
         diff_response.is_success = True
         diff_response.json.return_value = {
+            **metadata,
             "branch": "feature",
             "base": "main",
             "stats": {"additions": 10, "deletions": 5, "files_changed": 2},
@@ -2761,7 +2765,7 @@ class TestRepoDiffOperations:
                     "deletions": 0,
                 },
             ],
-            "filtered_files": [],
+            "filtered_files": [{"path": "image.png", "state": "M", "bytes": 100, "is_eof": True}],
         }
 
         with patch("httpx.AsyncClient") as mock_client:
@@ -2773,7 +2777,13 @@ class TestRepoDiffOperations:
             )
 
             repo = await storage.create_repo(id="test-repo")
-            result = await repo.get_branch_diff(branch="feature", base="main")
+            result = await repo.get_branch_diff(
+                branch="feature",
+                base="main",
+                ephemeral=False,
+                ephemeral_base=True,
+                paths=["README.md", "image.png"],
+            )
 
             assert result is not None
             assert "stats" in result
@@ -2781,6 +2791,37 @@ class TestRepoDiffOperations:
             assert len(result["files"]) == 2
             assert result["files"][0]["additions"] == 7
             assert result["files"][0]["deletions"] == 2
+
+            assert result["branch"] == "feature"
+            assert result["base"] == "main"
+            assert "base_sha" not in result
+            if "merge_base_sha" in metadata:
+                assert result["merge_base_sha"] == metadata["merge_base_sha"]
+            else:
+                assert "merge_base_sha" not in result
+            assert result["files"][0]["state"] == "modified"
+            assert result["files"][0]["raw_state"] == "modified"
+            assert result["files"][0]["raw"] == "diff --git ..."
+            assert result["filtered_files"] == [
+                {
+                    "path": "image.png",
+                    "state": "modified",
+                    "raw_state": "M",
+                    "old_path": None,
+                    "bytes": 100,
+                    "is_eof": True,
+                }
+            ]
+            mock_get = mock_client.return_value.__aenter__.return_value.get
+            parsed = urlparse(mock_get.call_args[0][0])
+            assert parsed.path == "/api/v1/repos/branches/diff"
+            assert parse_qs(parsed.query) == {
+                "branch": ["feature"],
+                "base": ["main"],
+                "ephemeral": ["false"],
+                "ephemeral_base": ["true"],
+                "path": ["README.md", "image.png"],
+            }
 
     @pytest.mark.asyncio
     async def test_get_branch_diff_with_ephemeral(self, git_storage_options: dict) -> None:
@@ -3012,8 +3053,20 @@ class TestRepoDiffOperations:
             assert result["files"][0]["additions"] == 3
             assert result["files"][0]["deletions"] == 1
 
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"base_sha": "resolved-base", "merge_base_sha": "common-ancestor"},
+            {},
+            {"base_sha": "", "merge_base_sha": ""},
+            {"base_sha": "resolved-base"},
+            {"merge_base_sha": "common-ancestor"},
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_get_commit_diff_with_base_sha(self, git_storage_options: dict) -> None:
+    async def test_get_commit_diff_with_base_sha(
+        self, git_storage_options: dict, metadata: dict
+    ) -> None:
         """Test getting commit diff with base_sha parameter."""
         storage = GitStorage(git_storage_options)
 
@@ -3026,7 +3079,8 @@ class TestRepoDiffOperations:
         diff_response.status_code = 200
         diff_response.is_success = True
         diff_response.json.return_value = {
-            "sha": "abc123",
+            **metadata,
+            "sha": "resolved-head",
             "stats": {"additions": 5, "deletions": 2, "files_changed": 2},
             "files": [
                 {
@@ -3044,7 +3098,7 @@ class TestRepoDiffOperations:
                     "is_eof": True,
                 },
             ],
-            "filtered_files": [],
+            "filtered_files": [{"path": "image.png", "state": "M", "bytes": 100, "is_eof": True}],
         }
 
         with patch("httpx.AsyncClient") as mock_client:
@@ -3056,7 +3110,10 @@ class TestRepoDiffOperations:
 
             repo = await storage.create_repo(id="test-repo")
             result = await repo.get_commit_diff(
-                sha="abc123", base_sha="def456", git_apply_compatible=True
+                sha="abc123",
+                base_sha="def456",
+                git_apply_compatible=True,
+                paths=["file1.py", "image.png"],
             )
 
             assert result is not None
@@ -3071,6 +3128,36 @@ class TestRepoDiffOperations:
             assert params["sha"] == ["abc123"]
             assert params["baseSha"] == ["def456"]
             assert params["gitApplyCompatible"] == ["true"]
+
+            assert parsed.path == "/api/v1/repos/diff"
+            assert params["path"] == ["file1.py", "image.png"]
+            assert result["sha"] == "resolved-head"
+            for field in ("base_sha", "merge_base_sha"):
+                if field in metadata:
+                    assert result[field] == metadata[field]
+                else:
+                    assert field not in result
+            assert result["files"][0] == {
+                "path": "file1.py",
+                "state": "modified",
+                "raw_state": "modified",
+                "old_path": None,
+                "raw": "diff --git ...",
+                "bytes": 100,
+                "is_eof": True,
+                "additions": 0,
+                "deletions": 0,
+            }
+            assert result["filtered_files"] == [
+                {
+                    "path": "image.png",
+                    "state": "modified",
+                    "raw_state": "M",
+                    "old_path": None,
+                    "bytes": 100,
+                    "is_eof": True,
+                }
+            ]
 
 
 class TestRepoUpstreamOperations:
