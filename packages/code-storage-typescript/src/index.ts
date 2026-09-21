@@ -28,6 +28,7 @@ import {
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
   deploymentResponseSchema,
+  deploymentDomainSchema,
   errorEnvelopeSchema,
   blameResponseSchema,
   getCommitResponseSchema,
@@ -80,6 +81,9 @@ import type {
   DeleteRepoOptions,
   DeleteRepoResult,
   DeploymentResponse,
+  DeploymentDomainOptions,
+  DeploymentDomainResult,
+  SetDeploymentDomainOptions,
   DeploymentResult,
   DeploymentSettings,
   DeployOptions,
@@ -1792,6 +1796,57 @@ class RepoImpl implements Repo {
     }
 
     return;
+  }
+
+  /** Read the production hostname and its current DNS readiness. */
+  async getDeploymentDomain(
+    options: DeploymentDomainOptions = {}
+  ): Promise<DeploymentDomainResult> {
+    return this.requestDeploymentDomain('get', options);
+  }
+
+  /** Begin custom hostname setup. Publish the returned DNS records. */
+  async setDeploymentDomain(
+    options: SetDeploymentDomainOptions
+  ): Promise<DeploymentDomainResult> {
+    const hostname = options?.hostname?.trim();
+    if (!hostname) {
+      throw new Error('setDeploymentDomain hostname is required');
+    }
+    return this.requestDeploymentDomain('put', options, hostname);
+  }
+
+  /** Remove the custom hostname. A 503 means cleanup is pending; retry deletion. */
+  async deleteDeploymentDomain(
+    options: DeploymentDomainOptions = {}
+  ): Promise<DeploymentDomainResult> {
+    return this.requestDeploymentDomain('delete', options);
+  }
+
+  private async requestDeploymentDomain(
+    method: 'get' | 'put' | 'delete',
+    options: DeploymentDomainOptions,
+    hostname?: string
+  ): Promise<DeploymentDomainResult> {
+    const jwt = await this.generateJWT(this.id, {
+      permissions: [method === 'get' ? 'deployment:read' : 'deployment:write'],
+      ttl: resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS),
+    });
+    const response = await this.api[method](
+      {
+        path: `repos/${encodeURIComponent(this.id)}/domain`,
+        body: hostname === undefined ? undefined : { hostname },
+      },
+      jwt,
+      { apiRoot: true, signal: options.signal }
+    );
+    const raw = deploymentDomainSchema.parse(await response.json());
+    return {
+      hostname: raw.hostname,
+      status: raw.status,
+      effectiveUrl: raw.effective_url,
+      records: raw.records,
+    };
   }
 
   async createDeployment(

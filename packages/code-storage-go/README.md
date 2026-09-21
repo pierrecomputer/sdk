@@ -107,6 +107,38 @@ An empty `Target` uses the server default, `production`.
 10m end-to-end timeout by default). `CreateDeployment` returns immediately with
 the current state. Reuse the same idempotency key when retrying creation.
 
+Manage the production domain separately from the deployment list:
+
+```go
+domain, err := repo.GetDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(domain.EffectiveURL)
+pending, err := repo.SetDeploymentDomain(ctx, storage.SetDeploymentDomainOptions{
+	Hostname: "www.example.com",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(pending.Records) // Publish and retain these DNS records.
+updated, err := repo.GetDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+// To remove the custom hostname:
+managed, err := repo.DeleteDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+```
+
+Domain methods use `/api/repos/{repo_name}/domain`. Reads require
+`deployment:read`; set/delete require `deployment:write`. Setting returns
+`202` while verification proceeds. Status is `pending_verification`,
+`pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
+`EffectiveURL` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL, which remains available.
+DNS records contain `Type`, `Name` (relative to the apex zone), and `Value`.
+A missing hosting project returns `*APIError` with status `404`. If deletion
+returns `503`, retry deletion after the `Retry-After` delay in `APIError.Header`;
+cleanup has not finished. Domain methods honor context cancellation and
+`InvocationOptions.TTL`.
+
 ### Inspect file metadata
 
 ```go

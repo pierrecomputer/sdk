@@ -210,6 +210,30 @@ budget expires. `createDeployment` returns immediately with the current
 state. Reuse the same idempotency key when retrying a create request. The SDK
 mints the required repository and deployment scopes automatically.
 
+Manage the production domain separately from the deployment list:
+
+```typescript
+const domain = await repo.getDeploymentDomain();
+console.log(domain.effectiveUrl);
+const pending = await repo.setDeploymentDomain({ hostname: 'www.example.com' });
+console.log(pending.records); // Publish and retain these DNS records.
+const updated = await repo.getDeploymentDomain(); // Check status after configuring DNS.
+// To remove the custom hostname:
+const managed = await repo.deleteDeploymentDomain();
+```
+
+Domain methods use `/api/repos/{repo_name}/domain`. Reads require
+`deployment:read`; set/delete require `deployment:write`. Setting returns
+`202` while verification proceeds. Status is `pending_verification`,
+`pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
+`effectiveUrl` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL, which remains available.
+DNS records contain `type`, `name` (relative to the apex zone), and `value`.
+`getDeploymentDomain` returns an `ApiError` with status `404` if no hosting
+project exists. If deletion returns `503`, retry deletion after the
+`Retry-After` delay in `error.headers`; cleanup has not finished.
+All domain methods accept `ttl` and an abort `signal`.
+
 ### Getting Remote URLs
 
 The SDK generates secure URLs with JWT authentication for Git operations:

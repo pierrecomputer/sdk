@@ -93,7 +93,7 @@ func (f *apiFetcher) request(ctx context.Context, method string, path string, pa
 		var parsed interface{}
 		message := ""
 		contentType := resp.Header.Get("content-type")
-		if strings.Contains(contentType, "application/json") {
+		if strings.Contains(contentType, "application/json") || strings.Contains(contentType, "application/problem+json") {
 			var payload map[string]interface{}
 			if err := json.Unmarshal(bodyBytes, &payload); err == nil {
 				parsed = payload

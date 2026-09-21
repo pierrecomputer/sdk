@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 import jwt
 import pytest
 
@@ -3640,6 +3641,7 @@ class TestRepositoryDeployments:
         assert claims["scopes"] == ["deployment:read"]
         assert result["next_cursor"] == "page-3"
         assert result["deployments"][0]["error_code"] == "build_failed"
+        assert "domain" not in result
 
     @pytest.mark.asyncio
     async def test_get_encodes_path_segments(self, git_storage_options: dict) -> None:
@@ -3785,4 +3787,126 @@ class TestDeploy:
                 await repo.deploy(target="preview", timeout=-1)
             with pytest.raises(ValueError, match="poll_interval must be a positive finite"):
                 await repo.deploy(target="preview", poll_interval=float("nan"))
+            mock_client.assert_not_called()
+
+
+class TestDeploymentDomains:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "operation,method,scope,status",
+        [
+            ("get_deployment_domain", "GET", "deployment:read", 200),
+            ("set_deployment_domain", "PUT", "deployment:write", 202),
+            ("delete_deployment_domain", "DELETE", "deployment:write", 200),
+        ],
+    )
+    async def test_domain_contract(
+        self, git_storage_options, operation, method, scope, status
+    ):
+        repo = GitStorage(git_storage_options).repo(id="owner/repo")
+        payload = {
+            "hostname": "www.example.com",
+            "status": "pending_verification",
+            "effective_url": "https://website-acme.code.host",
+            "records": [
+                {"type": "TXT", "name": "_vercel", "value": "verification-token"}
+            ],
+        }
+        with patch("httpx.AsyncClient") as mock_client:
+            request = AsyncMock(return_value=httpx.Response(status, json=payload))
+            mock_client.return_value.__aenter__.return_value.request = request
+            kwargs = {"ttl": 120}
+            if method == "PUT":
+                kwargs["hostname"] = " www.example.com "
+            result = await getattr(repo, operation)(**kwargs)
+        assert result == payload
+        request.assert_awaited_once()
+        call = request.await_args
+        assert call.args == (
+            method,
+            f"{repo.api_base_url}/api/repos/owner%2Frepo/domain",
+        )
+        assert call.kwargs["json"] == (
+            {"hostname": "www.example.com"} if method == "PUT" else None
+        )
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["repo"] == "owner/repo"
+        assert claims["scopes"] == [scope]
+        assert claims["exp"] - claims["iat"] == 120
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["ready", "error", "future_status"])
+    async def test_domain_without_records(self, git_storage_options, status):
+        repo = GitStorage(git_storage_options).repo(id="owner/repo")
+        payload = {
+            "hostname": "website-acme.code.host",
+            "status": status,
+            "effective_url": "https://website-acme.code.host",
+        }
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.request = AsyncMock(
+                return_value=httpx.Response(200, json=payload)
+            )
+            assert await repo.get_deployment_domain() == payload
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "operation,status,message",
+        [
+            ("get_deployment_domain", 404, "repository has no hosting project"),
+            ("set_deployment_domain", 409, "hostname is already attached"),
+            (
+                "delete_deployment_domain",
+                503,
+                "domain cleanup is not complete; retry deletion",
+            ),
+        ],
+    )
+    async def test_domain_problem_details(
+        self, git_storage_options, operation, status, message
+    ):
+        repo = GitStorage(git_storage_options).repo(id="owner/repo")
+        payload = {
+            "type": "about:blank",
+            "status": status,
+            "detail": message,
+            "error": message,
+        }
+        response = httpx.Response(
+            status,
+            json=payload,
+            headers={
+                "Content-Type": "application/problem+json",
+                "Retry-After": "1",
+            },
+            request=httpx.Request(
+                "GET",
+                "https://example.test",
+                headers={"Authorization": "Bearer secret"},
+            ),
+        )
+        with patch("httpx.AsyncClient") as mock_client:
+            request = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.request = request
+            kwargs = (
+                {"hostname": "www.example.com"}
+                if operation == "set_deployment_domain"
+                else {}
+            )
+            with pytest.raises(ApiError) as error:
+                await getattr(repo, operation)(**kwargs)
+        assert str(error.value) == message
+        assert error.value.status_code == status
+        assert error.value.response.json() == payload
+        assert error.value.response.headers["Retry-After"] == "1"
+        assert "Authorization" not in error.value.response.request.headers
+        request.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_blank_hostname(self, git_storage_options):
+        repo = GitStorage(git_storage_options).repo(id="owner/repo")
+        with patch("httpx.AsyncClient") as mock_client:
+            with pytest.raises(ValueError, match="hostname is required"):
+                await repo.set_deployment_domain(hostname=" ")
             mock_client.assert_not_called()

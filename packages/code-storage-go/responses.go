@@ -133,6 +133,13 @@ type deploymentResponse struct {
 	UpdatedAt    string           `json:"updated_at"`
 }
 
+type deploymentDomainResponse struct {
+	Hostname     string                `json:"hostname"`
+	Status       string                `json:"status"`
+	EffectiveURL string                `json:"effective_url"`
+	Records      []DeploymentDNSRecord `json:"records,omitempty"`
+}
+
 type listDeploymentsResponse struct {
 	Deployments []deploymentResponse `json:"deployments"`
 	NextCursor  string               `json:"next_cursor,omitempty"`

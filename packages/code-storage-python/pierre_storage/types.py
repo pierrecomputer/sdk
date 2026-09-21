@@ -200,6 +200,27 @@ class CreateDeploymentResult(DeploymentResult):
     idempotent_replayed: bool
 
 
+class DeploymentDNSRecord(TypedDict):
+    """DNS record to publish and retain after activation; name is relative to the apex zone."""
+
+    type: str
+    name: str
+    value: str
+
+
+class DeploymentDomain(TypedDict):
+    """Production domain for a repository's deployments.
+
+    ``status`` is one of ``pending_verification``, ``pending_dns``, ``ready``,
+    ``error``, or ``unknown``; newer values pass through unchanged.
+    """
+
+    hostname: str
+    status: str
+    effective_url: str
+    records: NotRequired[List[DeploymentDNSRecord]]
+
+
 class ListDeploymentsResult(TypedDict):
     """Paginated repository deployments."""
 
@@ -1171,6 +1192,20 @@ class Repo(Protocol):
         ref_policies: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository."""
+        ...
+
+    async def get_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Read the production hostname and its DNS readiness."""
+        ...
+
+    async def set_deployment_domain(
+        self, *, hostname: str, ttl: Optional[int] = None
+    ) -> DeploymentDomain:
+        """Begin custom hostname setup and return DNS records to publish."""
+        ...
+
+    async def delete_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Remove the custom hostname. Retry deletion on 503 while cleanup is pending."""
         ...
 
     async def create_deployment(

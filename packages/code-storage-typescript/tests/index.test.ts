@@ -4396,6 +4396,76 @@ describe('GitStorage', () => {
     });
   });
 
+  describe('deployment domains', () => {
+    const records = [{ type: 'TXT', name: '_vercel', value: 'verification-token' }];
+
+    it.each([
+      ['getDeploymentDomain', 'GET', 'deployment:read', 200, 'ready'],
+      ['setDeploymentDomain', 'PUT', 'deployment:write', 202, 'pending_verification'],
+      ['deleteDeploymentDomain', 'DELETE', 'deployment:write', 200, 'ready'],
+    ] as const)('%s uses the domain resource and correct scope', async (operation, method, scope, status, domainStatus) => {
+      const signal = new AbortController().signal;
+      const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        expect(new URL(String(_url)).pathname).toBe('/api/repos/owner%2Frepo/domain');
+        expect(init?.method).toBe(method);
+        expect(init?.signal).toBe(signal);
+        expect(init?.body).toBe(method === 'PUT' ? JSON.stringify({ hostname: 'www.example.com' }) : undefined);
+        const headers = init?.headers as Record<string, string>;
+        const claims = decodeJwtPayload(stripBearer(headers.Authorization));
+        expect(claims.repo).toBe('owner/repo');
+        expect(claims.scopes).toEqual([scope]);
+        expect(claims.exp - claims.iat).toBe(120);
+        return new Response(JSON.stringify({
+          hostname: 'www.example.com', status: domainStatus,
+          effective_url: 'https://website-acme.code.host', records,
+        }), { status, headers: { 'content-type': 'application/json' } });
+      });
+      const repo = new GitStorage({ name: 'v0', key, fetch: fetchImpl }).repo({ id: 'owner/repo' });
+      const result = await repo[operation]({ hostname: ' www.example.com ', ttl: 120, signal });
+      expect(result).toEqual({
+        hostname: 'www.example.com', status: domainStatus,
+        effectiveUrl: 'https://website-acme.code.host', records,
+      });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['ready', 'error', 'future_status'])('accepts %s without DNS records', async (status) => {
+      const repo = new GitStorage({ name: 'v0', token: 'existing-token' }).repo({ id: 'owner/repo' });
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+        hostname: 'website-acme.code.host', status,
+        effective_url: 'https://website-acme.code.host',
+      })));
+      await expect(repo.getDeploymentDomain()).resolves.toEqual({
+        hostname: 'website-acme.code.host', status,
+        effectiveUrl: 'https://website-acme.code.host', records: undefined,
+      });
+      expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer existing-token');
+    });
+
+    it.each([
+      ['getDeploymentDomain', 404, 'repository has no hosting project'],
+      ['setDeploymentDomain', 409, 'hostname is already attached'],
+      ['deleteDeploymentDomain', 503, 'domain cleanup is not complete; retry deletion'],
+    ] as const)('%s preserves problem details and recovery headers', async (operation, status, message) => {
+      const repo = new GitStorage({ name: 'v0', key }).repo({ id: 'owner/repo' });
+      const body = { type: 'about:blank', status, detail: message, error: message };
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify(body), {
+        status, headers: { 'content-type': 'application/problem+json', 'retry-after': '1' },
+      }));
+      const error = await repo[operation]({ hostname: 'www.example.com' }).catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ status, message, body });
+      expect((error as ApiError).headers.get('retry-after')).toBe('1');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a blank hostname before making a request', async () => {
+      const repo = new GitStorage({ name: 'v0', key }).repo({ id: 'owner/repo' });
+      await expect(repo.setDeploymentDomain({ hostname: ' ' })).rejects.toThrow('hostname is required');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('repository deployments', () => {
     const rawDeployment = {
       id: 'deployment-1',
@@ -4555,6 +4625,7 @@ describe('GitStorage', () => {
         cursor: 'page-2',
         limit: 10,
       });
+      expect(result).not.toHaveProperty('domain');
       expect(result.nextCursor).toBe('page-3');
       expect(result.hasMore).toBe(true);
       expect(result.deployments[0].errorCode).toBe('build_failed');

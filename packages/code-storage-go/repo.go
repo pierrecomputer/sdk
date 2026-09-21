@@ -1101,6 +1101,55 @@ func deploymentResult(payload deploymentResponse) DeploymentResult {
 	}
 }
 
+// GetDeploymentDomain reads the production hostname and its DNS readiness.
+func (r *Repo) GetDeploymentDomain(ctx context.Context, options DeploymentDomainOptions) (DeploymentDomain, error) {
+	return r.requestDeploymentDomain(ctx, http.MethodGet, options.InvocationOptions, nil)
+}
+
+// SetDeploymentDomain begins custom hostname setup. Publish the returned DNS records.
+func (r *Repo) SetDeploymentDomain(ctx context.Context, options SetDeploymentDomainOptions) (DeploymentDomain, error) {
+	hostname := strings.TrimSpace(options.Hostname)
+	if hostname == "" {
+		return DeploymentDomain{}, errors.New("set deployment domain hostname is required")
+	}
+	return r.requestDeploymentDomain(ctx, http.MethodPut, options.InvocationOptions, map[string]string{"hostname": hostname})
+}
+
+// DeleteDeploymentDomain removes the custom hostname. Retry deletion on 503 while cleanup is pending.
+func (r *Repo) DeleteDeploymentDomain(ctx context.Context, options DeploymentDomainOptions) (DeploymentDomain, error) {
+	return r.requestDeploymentDomain(ctx, http.MethodDelete, options.InvocationOptions, nil)
+}
+
+func (r *Repo) requestDeploymentDomain(ctx context.Context, method string, options InvocationOptions, body interface{}) (DeploymentDomain, error) {
+	permission := PermissionDeploymentWrite
+	if method == http.MethodGet {
+		permission = PermissionDeploymentRead
+	}
+	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
+		Permissions: []Permission{permission},
+		TTL:         resolveInvocationTTL(options, defaultTokenTTL),
+	})
+	if err != nil {
+		return DeploymentDomain{}, err
+	}
+	path := "repos/" + url.PathEscape(r.ID) + "/domain"
+	resp, err := r.client.api.request(ctx, method, path, nil, body, jwtToken, &requestOptions{apiRoot: true})
+	if err != nil {
+		return DeploymentDomain{}, err
+	}
+	defer resp.Body.Close()
+	var payload deploymentDomainResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return DeploymentDomain{}, err
+	}
+	return DeploymentDomain{
+		Hostname:     payload.Hostname,
+		Status:       DeploymentDomainStatus(payload.Status),
+		EffectiveURL: payload.EffectiveURL,
+		Records:      payload.Records,
+	}, nil
+}
+
 // CreateDeployment creates a deployment for a repository revision.
 func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOptions) (CreateDeploymentResult, error) {
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)

@@ -39,6 +39,7 @@ from pierre_storage.types import (
     CreateTagResult,
     DeleteBranchResult,
     DeleteTagResult,
+    DeploymentDomain,
     DeploymentResult,
     DeploymentStatus,
     DeploymentTarget,
@@ -2182,6 +2183,85 @@ class RepoImpl:
             if response.status_code != 202:
                 text = await response.aread()
                 raise Exception(f"Pull Upstream failed: {response.status_code} {text.decode()}")
+
+    async def get_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Read the production hostname and its DNS readiness.
+
+        Raises:
+            ApiError: If the repository has no hosting project (404) or the request fails.
+        """
+        return await self._request_deployment_domain("GET", ttl=ttl)
+
+    async def set_deployment_domain(
+        self, *, hostname: str, ttl: Optional[int] = None
+    ) -> DeploymentDomain:
+        """Begin custom hostname setup; publish and retain the returned DNS records.
+
+        Args:
+            hostname: Custom production hostname, such as www.example.com.
+            ttl: Token TTL in seconds.
+
+        Raises:
+            ValueError: If hostname is blank.
+            ApiError: If domain setup fails.
+        """
+        hostname = hostname.strip()
+        if not hostname:
+            raise ValueError("set_deployment_domain hostname is required")
+        return await self._request_deployment_domain("PUT", ttl=ttl, hostname=hostname)
+
+    async def delete_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Remove the custom hostname and return the managed domain.
+
+        Raises:
+            ApiError: If cleanup is pending (503; retry deletion) or the request fails.
+        """
+        return await self._request_deployment_domain("DELETE", ttl=ttl)
+
+    async def _request_deployment_domain(
+        self,
+        method: Literal["GET", "PUT", "DELETE"],
+        *,
+        ttl: Optional[int],
+        hostname: Optional[str] = None,
+    ) -> DeploymentDomain:
+        jwt = self.generate_jwt(
+            self._id,
+            {
+                "permissions": ["deployment:read" if method == "GET" else "deployment:write"],
+                "ttl": ttl or DEFAULT_TOKEN_TTL_SECONDS,
+            },
+        )
+        repo_name = quote(self._id, safe="")
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                method,
+                f"{self.api_base_url}/api/repos/{repo_name}/domain",
+                headers={
+                    "Authorization": f"Bearer {jwt}",
+                    "Code-Storage-Agent": get_user_agent(),
+                },
+                json={"hostname": hostname} if hostname is not None else None,
+                timeout=30.0,
+            )
+            if not response.is_success:
+                raise _deployment_api_error(response, "Deployment domain request failed")
+            data = response.json()
+        result: DeploymentDomain = {
+            "hostname": str(data["hostname"]),
+            "status": str(data["status"]),
+            "effective_url": str(data["effective_url"]),
+        }
+        if "records" in data:
+            result["records"] = [
+                {
+                    "type": str(record["type"]),
+                    "name": str(record["name"]),
+                    "value": str(record["value"]),
+                }
+                for record in data["records"]
+            ]
+        return result
 
     async def create_deployment(
         self,

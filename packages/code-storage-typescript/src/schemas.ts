@@ -145,6 +145,21 @@ export const deploymentResponseSchema = z.object({
   updated_at: z.string(),
 });
 
+export const deploymentDomainSchema = z.object({
+  hostname: z.string(),
+  status: z.string(),
+  effective_url: z.string(),
+  records: z.array(
+    z.object({
+      type: z.string(),
+      name: z.string(),
+      value: z.string(),
+    })
+  ).optional(),
+});
+
+export type DeploymentDomainResponseRaw = z.infer<typeof deploymentDomainSchema>;
+
 export const listDeploymentsResponseSchema = z.object({
   deployments: z.array(deploymentResponseSchema),
   next_cursor: z.string().optional(),

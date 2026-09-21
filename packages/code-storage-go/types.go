@@ -297,6 +297,45 @@ type ListDeploymentsOptions struct {
 	Limit  int
 }
 
+// DeploymentDomainStatus is the production domain readiness.
+type DeploymentDomainStatus string
+
+const (
+	DeploymentDomainStatusPendingVerification DeploymentDomainStatus = "pending_verification"
+	DeploymentDomainStatusPendingDNS          DeploymentDomainStatus = "pending_dns"
+	DeploymentDomainStatusReady               DeploymentDomainStatus = "ready"
+	DeploymentDomainStatusError               DeploymentDomainStatus = "error"
+	DeploymentDomainStatusUnknown             DeploymentDomainStatus = "unknown"
+)
+
+// DeploymentDomainOptions controls a domain read or deletion.
+type DeploymentDomainOptions struct {
+	InvocationOptions
+}
+
+// SetDeploymentDomainOptions selects a custom production hostname.
+type SetDeploymentDomainOptions struct {
+	InvocationOptions
+	Hostname string
+}
+
+// DeploymentDNSRecord is a DNS record to publish and retain after activation.
+// Name is relative to the apex zone, such as "www", "@", or "_vercel".
+type DeploymentDNSRecord struct {
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// DeploymentDomain describes the production domain for a repository's deployments.
+type DeploymentDomain struct {
+	Hostname string
+	Status   DeploymentDomainStatus
+	// EffectiveURL is the custom URL once ready, otherwise the managed code.host URL.
+	EffectiveURL string
+	Records      []DeploymentDNSRecord
+}
+
 // ListDeploymentsResult returns a page of deployments.
 type ListDeploymentsResult struct {
 	Deployments []DeploymentResult

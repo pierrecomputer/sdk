@@ -122,7 +122,10 @@ export class ApiFetcher {
       const contentType = response.headers.get('content-type') ?? '';
 
       try {
-        if (contentType.includes('application/json')) {
+        if (
+          contentType.includes('application/json') ||
+          contentType.includes('application/problem+json')
+        ) {
           errorBody = await response.json();
         } else {
           const text = await response.text();

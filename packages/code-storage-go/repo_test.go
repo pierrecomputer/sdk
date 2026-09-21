@@ -2862,3 +2862,150 @@ func TestDeployValidation(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestDeploymentDomain(t *testing.T) {
+	records := []DeploymentDNSRecord{{Type: "TXT", Name: "_vercel", Value: "verification-token"}}
+	for _, test := range []struct {
+		name, method string
+		scope        Permission
+		status       int
+		call         func(*Repo, context.Context) (DeploymentDomain, error)
+	}{
+		{"get", http.MethodGet, PermissionDeploymentRead, 200, func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.GetDeploymentDomain(ctx, DeploymentDomainOptions{InvocationOptions: InvocationOptions{TTL: 120 * time.Second}})
+		}},
+		{"set", http.MethodPut, PermissionDeploymentWrite, 202, func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.SetDeploymentDomain(ctx, SetDeploymentDomainOptions{Hostname: " www.example.com ", InvocationOptions: InvocationOptions{TTL: 120 * time.Second}})
+		}},
+		{"delete", http.MethodDelete, PermissionDeploymentWrite, 200, func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.DeleteDeploymentDomain(ctx, DeploymentDomainOptions{InvocationOptions: InvocationOptions{TTL: 120 * time.Second}})
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != test.method || r.URL.EscapedPath() != "/api/repos/owner%2Frepo/domain" {
+					t.Errorf("request = %s %s", r.Method, r.URL.EscapedPath())
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+				}
+				wantBody := ""
+				if test.method == http.MethodPut {
+					wantBody = `{"hostname":"www.example.com"}`
+				}
+				if string(body) != wantBody {
+					t.Errorf("body = %s, want %s", body, wantBody)
+				}
+				claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+				if !reflect.DeepEqual(claims["scopes"], []interface{}{string(test.scope)}) || claims["repo"] != "owner/repo" || claims["exp"].(float64)-claims["iat"].(float64) != 120 {
+					t.Error("incorrect domain token claims")
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(test.status)
+				_ = json.NewEncoder(w).Encode(deploymentDomainResponse{
+					Hostname: "www.example.com", Status: "pending_verification",
+					EffectiveURL: "https://website-acme.code.host", Records: records,
+				})
+			}))
+			defer server.Close()
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := test.call(repo, t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := DeploymentDomain{Hostname: "www.example.com", Status: DeploymentDomainStatusPendingVerification, EffectiveURL: "https://website-acme.code.host", Records: records}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("domain = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestDeploymentDomainWithoutRecords(t *testing.T) {
+	for _, status := range []DeploymentDomainStatus{DeploymentDomainStatusReady, DeploymentDomainStatusError, "future_status"} {
+		t.Run(string(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(deploymentDomainResponse{Hostname: "website-acme.code.host", Status: string(status), EffectiveURL: "https://website-acme.code.host"})
+			}))
+			defer server.Close()
+			client, err := NewClient(Options{Name: "acme", Token: "existing-token", APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := repo.GetDeploymentDomain(t.Context(), DeploymentDomainOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := DeploymentDomain{Hostname: "website-acme.code.host", Status: status, EffectiveURL: "https://website-acme.code.host"}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("domain = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestDeploymentDomainProblemDetails(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		status  int
+		message string
+		call    func(*Repo, context.Context) (DeploymentDomain, error)
+	}{
+		{"get_missing_project", 404, "repository has no hosting project", func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.GetDeploymentDomain(ctx, DeploymentDomainOptions{})
+		}},
+		{"set_conflict", 409, "hostname is already attached", func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.SetDeploymentDomain(ctx, SetDeploymentDomainOptions{Hostname: "www.example.com"})
+		}},
+		{"delete_pending", 503, "domain cleanup is not complete; retry deletion", func(r *Repo, ctx context.Context) (DeploymentDomain, error) {
+			return r.DeleteDeploymentDomain(ctx, DeploymentDomainOptions{})
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := map[string]interface{}{"type": "about:blank", "status": float64(test.status), "detail": test.message, "error": test.message}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/problem+json")
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(test.status)
+				_ = json.NewEncoder(w).Encode(payload)
+			}))
+			defer server.Close()
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo, err := client.Repo(RepoOptions{ID: "owner/repo"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = test.call(repo, t.Context())
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("error = %v, want APIError", err)
+			}
+			if apiErr.Message != test.message || apiErr.Status != test.status || !reflect.DeepEqual(apiErr.Body, payload) || apiErr.Header.Get("Retry-After") != "1" {
+				t.Fatalf("incorrect problem details: %#v", apiErr)
+			}
+		})
+	}
+}
+
+func TestSetDeploymentDomainRequiresHostname(t *testing.T) {
+	repo := &Repo{}
+	if _, err := repo.SetDeploymentDomain(t.Context(), SetDeploymentDomainOptions{Hostname: " "}); err == nil {
+		t.Fatal("expected blank hostname error")
+	}
+}

@@ -192,6 +192,9 @@ Username is always `t`. Password is the JWT.
 | Create deployment           | POST     | `/api/repos/{repo_name}/deployments` | `deployment:write` |
 | List deployments            | GET      | `/api/repos/{repo_name}/deployments` | `deployment:read` |
 | Get deployment              | GET      | `/api/repos/{repo_name}/deployments/{deployment_id}` | `deployment:read` |
+| Get production domain       | GET      | `/api/repos/{repo_name}/domain` | `deployment:read` |
+| Set custom domain           | PUT      | `/api/repos/{repo_name}/domain` | `deployment:write` |
+| Delete custom domain        | DELETE   | `/api/repos/{repo_name}/domain` | `deployment:write` |
 
 Versioned endpoints use `BASE_URL = https://api.{org}.code.storage/api/v1`.
 Deployment lifecycle endpoints use `API_ORIGIN = https://api.{org}.code.storage`
@@ -361,6 +364,54 @@ server-side and surfaces as `400` with the reason in `error`.
 
 List query parameters: `cursor`, `limit` (default 20, maximum 100). The response
 contains `deployments`, optional `next_cursor`, and `has_more`.
+The production domain is a separate resource; it is not included in this list.
+
+## GET/PUT/DELETE /api/repos/{repo_name}/domain — Production Domain
+
+Use `CODE_STORAGE_API_ORIGIN` (without `/api/v1`) and URL-encode the repository
+name as one path segment. GET requires `deployment:read`; PUT and DELETE
+require `deployment:write`.
+
+```bash
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/domain" \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/domain" -X PUT \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"hostname":"www.example.com"}'
+
+curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/domain" -X DELETE \
+  -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
+```
+
+All three return `hostname`, `status`, `effective_url`, and optional `records`.
+Each DNS record has `type`, `name` relative to the apex zone (`@`, `www`,
+`_vercel`, etc.), and `value`. Publish and retain these records, including
+when the domain is ready. Statuses are `pending_verification`, `pending_dns`,
+`ready`, `error`, and `unknown`; SDKs preserve future values.
+`effective_url` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL. The managed domain keeps serving
+alongside the custom hostname.
+
+PUT returns `202`; read with GET (`200`) to check DNS readiness. GET returns
+`404` if no hosting project exists. DELETE returns `200` only after provider
+cleanup, with the managed domain; on `503`, honor `Retry-After` and retry
+deletion. PUT can return `400` for invalid hostnames, `409` for an attached
+hostname or pending cleanup, or `503` if saved but reconciliation has not
+started. Errors use `application/problem+json` with `error`/`detail`.
+
+SDK methods:
+- TypeScript: `getDeploymentDomain`, `setDeploymentDomain({ hostname })`,
+  `deleteDeploymentDomain`; return `DeploymentDomainResult` with
+  `effectiveUrl` and optional `DeploymentDNSRecord[]`.
+- Python: `get_deployment_domain`, `set_deployment_domain(hostname=...)`,
+  `delete_deployment_domain`; return `DeploymentDomain` with `effective_url`
+  and optional `DeploymentDNSRecord` records.
+- Go: `GetDeploymentDomain(ctx, DeploymentDomainOptions{})`,
+  `SetDeploymentDomain(ctx, SetDeploymentDomainOptions{Hostname: ...})`,
+  `DeleteDeploymentDomain(ctx, DeploymentDomainOptions{})`; return
+  `DeploymentDomain` with `EffectiveURL` and `[]DeploymentDNSRecord`.
 
 
 ## POST/PUT/DELETE /repos/git-credentials — Manage Generic Git Sync Credentials

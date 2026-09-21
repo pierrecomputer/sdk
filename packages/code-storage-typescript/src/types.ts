@@ -8,6 +8,7 @@ import type {
   DeleteTagResponseRaw,
   BlameResponseRaw,
   DeploymentResponseRaw,
+  DeploymentDomainResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
   GetCommitResponseRaw,
@@ -160,6 +161,15 @@ export interface Repo {
     options?: ListDeploymentsOptions,
   ): Promise<ListDeploymentsResult>;
   getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
+  getDeploymentDomain(
+    options?: DeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
+  setDeploymentDomain(
+    options: SetDeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
+  deleteDeploymentDomain(
+    options?: DeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
@@ -391,6 +401,42 @@ export interface ListDeploymentsOptions extends GitStorageInvocationOptions {
 }
 
 export type ListDeploymentsResponse = ListDeploymentsResponseRaw;
+
+/** Known domain statuses plus any newer value the server may return. */
+export type DeploymentDomainStatus =
+  | 'pending_verification'
+  | 'pending_dns'
+  | 'error'
+  | 'ready'
+  | 'unknown'
+  | (string & {});
+
+export interface DeploymentDomainOptions extends GitStorageInvocationOptions {
+  signal?: AbortSignal;
+}
+
+export interface SetDeploymentDomainOptions extends DeploymentDomainOptions {
+  hostname: string;
+}
+
+export type DeploymentDomainResponse = DeploymentDomainResponseRaw;
+
+/** DNS record to publish and retain, including after the domain becomes ready. */
+export interface DeploymentDNSRecord {
+  type: string;
+  /** Name relative to the apex zone, e.g. www, @, or _vercel. */
+  name: string;
+  value: string;
+}
+
+/** Production domain for the repository's deployments. */
+export interface DeploymentDomainResult {
+  hostname: string;
+  status: DeploymentDomainStatus;
+  /** Custom URL once ready; otherwise the managed code.host URL. */
+  effectiveUrl: string;
+  records?: DeploymentDNSRecord[];
+}
 
 export interface ListDeploymentsResult {
   deployments: DeploymentResult[];
