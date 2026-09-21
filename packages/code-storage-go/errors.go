@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"net/http"
 	"strings"
 )
 
@@ -35,12 +36,106 @@ const (
 	RefUpdateReasonUnknown            RefUpdateReason = "unknown"
 )
 
+// MergeGuard identifies the ref protected by a failed merge guard.
+type MergeGuard string
+
+const (
+	MergeGuardTarget MergeGuard = "target"
+	MergeGuardSource MergeGuard = "source"
+)
+
 // RefUpdateError describes failed ref updates.
 type RefUpdateError struct {
-	Message   string
-	Status    string
-	Reason    RefUpdateReason
-	RefUpdate *RefUpdate
+	Message       string
+	Status        string
+	Reason        RefUpdateReason
+	RefUpdate     *RefUpdate
+	Guard         MergeGuard
+	ExpectedSHA   string
+	ActualSHA     string
+	ConflictPaths []string
+	MergeBaseSHA  string
+}
+
+func parseMergeRefUpdateError(apiErr *APIError) *RefUpdateError {
+	if apiErr == nil || apiErr.Status != http.StatusConflict {
+		return nil
+	}
+	body, ok := apiErr.Body.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	code, ok := body["code"].(string)
+	if !ok {
+		return nil
+	}
+
+	switch code {
+	case "merge_conflict":
+		paths, ok := mergeErrorStringSlice(body, "conflict_paths")
+		if !ok {
+			return nil
+		}
+		mergeBaseSHA, ok := mergeErrorOptionalString(body, "merge_base_sha")
+		if !ok {
+			return nil
+		}
+		return &RefUpdateError{
+			Message:       apiErr.Message,
+			Status:        code,
+			Reason:        RefUpdateReasonConflict,
+			ConflictPaths: paths,
+			MergeBaseSHA:  mergeBaseSHA,
+		}
+	case "precondition_failed":
+		guard, ok := body["guard"].(string)
+		if !ok || (guard != string(MergeGuardTarget) && guard != string(MergeGuardSource)) {
+			return nil
+		}
+		expectedSHA, expectedOK := body["expected_sha"].(string)
+		actualSHA, actualOK := body["actual_sha"].(string)
+		if !expectedOK || !actualOK {
+			return nil
+		}
+		return &RefUpdateError{
+			Message:     apiErr.Message,
+			Status:      code,
+			Reason:      RefUpdateReasonPreconditionFailed,
+			Guard:       MergeGuard(guard),
+			ExpectedSHA: expectedSHA,
+			ActualSHA:   actualSHA,
+		}
+	default:
+		return nil
+	}
+}
+
+func mergeErrorStringSlice(body map[string]interface{}, key string) ([]string, bool) {
+	value, exists := body[key]
+	if !exists {
+		return []string{}, true
+	}
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, false
+	}
+	result := make([]string, len(items))
+	for i, item := range items {
+		result[i], ok = item.(string)
+		if !ok {
+			return nil, false
+		}
+	}
+	return result, true
+}
+
+func mergeErrorOptionalString(body map[string]interface{}, key string) (string, bool) {
+	value, exists := body[key]
+	if !exists {
+		return "", true
+	}
+	result, ok := value.(string)
+	return result, ok
 }
 
 func (e *RefUpdateError) Error() string {

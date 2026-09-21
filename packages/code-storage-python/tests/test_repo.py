@@ -1487,8 +1487,64 @@ class TestRepoBranchOperations:
             }
 
     @pytest.mark.asyncio
-    async def test_merge_conflict_keeps_response_body(self, git_storage_options: dict) -> None:
-        """Merge conflicts should surface the API error and retain the response body."""
+    @pytest.mark.parametrize(
+        ("body", "expected"),
+        [
+            (
+                {
+                    "error": "merge conflict",
+                    "code": "merge_conflict",
+                    "conflict_paths": ["README.md"],
+                    "merge_base_sha": "base123",
+                },
+                {
+                    "message": "merge conflict",
+                    "status": "merge_conflict",
+                    "reason": "conflict",
+                    "conflict_paths": ["README.md"],
+                    "merge_base_sha": "base123",
+                },
+            ),
+            (
+                {
+                    "error": "target branch moved",
+                    "code": "precondition_failed",
+                    "guard": "target",
+                    "expected_sha": "expected-target",
+                    "actual_sha": "actual-target",
+                },
+                {
+                    "message": "target branch moved",
+                    "status": "precondition_failed",
+                    "reason": "precondition_failed",
+                    "guard": "target",
+                    "expected_sha": "expected-target",
+                    "actual_sha": "actual-target",
+                },
+            ),
+            (
+                {
+                    "error": "source ref no longer contains the expected commit",
+                    "code": "precondition_failed",
+                    "guard": "source",
+                    "expected_sha": "expected-source",
+                    "actual_sha": "actual-source",
+                },
+                {
+                    "message": "source ref no longer contains the expected commit",
+                    "status": "precondition_failed",
+                    "reason": "precondition_failed",
+                    "guard": "source",
+                    "expected_sha": "expected-source",
+                    "actual_sha": "actual-source",
+                },
+            ),
+        ],
+    )
+    async def test_merge_returns_typed_ref_update_errors(
+        self, git_storage_options: dict, body: dict, expected: dict
+    ) -> None:
+        """Stable merge 409 codes should become typed ref update errors."""
         storage = GitStorage(git_storage_options)
 
         create_repo_response = MagicMock()
@@ -1496,15 +1552,10 @@ class TestRepoBranchOperations:
         create_repo_response.is_success = True
         create_repo_response.json.return_value = {"repo_id": "test-repo"}
 
-        conflict_body = {
-            "error": "merge conflict",
-            "conflict_paths": ["README.md"],
-            "merge_base_sha": "base123",
-        }
         merge_response = MagicMock()
         merge_response.status_code = 409
         merge_response.is_success = False
-        merge_response.json.return_value = conflict_body
+        merge_response.json.return_value = body
 
         with patch("httpx.AsyncClient") as mock_client:
             client_instance = mock_client.return_value.__aenter__.return_value
@@ -1512,12 +1563,64 @@ class TestRepoBranchOperations:
 
             repo = await storage.create_repo(id="test-repo")
 
-            with pytest.raises(ApiError, match="merge conflict") as exc_info:
-                await repo.merge(source_branch="feature", target_branch="main", strategy="merge")
+            with pytest.raises(RefUpdateError) as exc_info:
+                await repo.merge(source_ref="feature", target_branch="main", strategy="merge")
 
-            assert exc_info.value.status_code == 409
+            for field, value in expected.items():
+                assert getattr(exc_info.value, field) == value
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status_code", "body"),
+        [
+            (
+                409,
+                {
+                    "error": "merge conflict in README.md",
+                    "code": "future_merge_error",
+                },
+            ),
+            (403, {"error": "merge conflict", "code": "merge_conflict"}),
+            (
+                500,
+                {
+                    "error": "target branch moved",
+                    "code": "precondition_failed",
+                    "guard": "target",
+                    "expected_sha": "expected-target",
+                    "actual_sha": "actual-target",
+                },
+            ),
+        ],
+    )
+    async def test_merge_keeps_other_api_errors(
+        self, git_storage_options: dict, status_code: int, body: dict
+    ) -> None:
+        """Unknown codes and non-409 statuses should remain API errors."""
+        storage = GitStorage(git_storage_options)
+
+        create_repo_response = MagicMock()
+        create_repo_response.status_code = 200
+        create_repo_response.is_success = True
+        create_repo_response.json.return_value = {"repo_id": "test-repo"}
+
+        merge_response = MagicMock()
+        merge_response.status_code = status_code
+        merge_response.is_success = False
+        merge_response.json.return_value = body
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_instance = mock_client.return_value.__aenter__.return_value
+            client_instance.post = AsyncMock(side_effect=[create_repo_response, merge_response])
+
+            repo = await storage.create_repo(id="test-repo")
+
+            with pytest.raises(ApiError) as exc_info:
+                await repo.merge(source_ref="feature", target_branch="main", strategy="merge")
+
+            assert type(exc_info.value) is ApiError
+            assert exc_info.value.status_code == status_code
             assert exc_info.value.response is merge_response
-            assert exc_info.value.response.json() == conflict_body
 
     @pytest.mark.asyncio
     async def test_merge_validation(self, git_storage_options: dict) -> None:

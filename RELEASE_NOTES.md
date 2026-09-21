@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Typed merge errors
+
+- Changed stable merge conflict and guard 409 responses to return
+  `RefUpdateError` in the TypeScript, Python, and Go SDKs.
+- Added typed conflict paths, merge base, guard, expected SHA, and actual SHA
+  fields. Unknown 409 codes and non-409 failures remain API errors.
+- This changes merge error behavior and requires a coordinated non-patch SDK
+  release.
+
 ### Ephemeral merge previews
 
 - Added source and target ephemeral namespace flags to merge previews in the TypeScript, Python, and Go SDKs.

@@ -300,10 +300,23 @@ result, err := repo.Merge(context.Background(), storage.MergeOptions{
 	Author:            &storage.CommitSignature{Name: "Merge Bot", Email: "merge@example.com"},
 })
 if err != nil {
+	if refErr, ok := err.(*storage.RefUpdateError); ok {
+		switch {
+		case refErr.Reason == storage.RefUpdateReasonConflict:
+			fmt.Println(refErr.ConflictPaths, refErr.MergeBaseSHA)
+		case refErr.Reason == storage.RefUpdateReasonPreconditionFailed && refErr.Guard == storage.MergeGuardTarget:
+			fmt.Println("Target moved", refErr.ExpectedSHA, refErr.ActualSHA)
+		case refErr.Reason == storage.RefUpdateReasonPreconditionFailed && refErr.Guard == storage.MergeGuardSource:
+			fmt.Println("Source moved", refErr.ExpectedSHA, refErr.ActualSHA)
+		}
+	}
 	log.Fatal(err)
 }
 fmt.Println(result.Result, result.Target.NewSHA)
 ```
+
+Known merge 409 responses return `*RefUpdateError`. An unknown merge 409 code
+and every non-409 merge failure return `*APIError`.
 
 ### Create a commit
 

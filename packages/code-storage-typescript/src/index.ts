@@ -28,6 +28,7 @@ import {
   deleteBranchResponseSchema,
   deleteTagResponseSchema,
   errorEnvelopeSchema,
+  mergeErrorResponseSchema,
   blameResponseSchema,
   getCommitResponseSchema,
   getBranchResponseSchema,
@@ -2024,7 +2025,32 @@ class RepoImpl implements Repo {
       body.squash = options.squash;
     }
 
-    const response = await this.api.post({ path: this.repoPath('merge'), body }, jwt);
+    let response: Response;
+    try {
+      response = await this.api.post({ path: this.repoPath('merge'), body }, jwt);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const parsed = mergeErrorResponseSchema.safeParse(error.body);
+        if (parsed.success) {
+          if (parsed.data.code === 'merge_conflict') {
+            throw new RefUpdateError(error.message, {
+              status: parsed.data.code,
+              reason: 'conflict',
+              conflictPaths: parsed.data.conflict_paths,
+              mergeBaseSha: parsed.data.merge_base_sha,
+            });
+          }
+          throw new RefUpdateError(error.message, {
+            status: parsed.data.code,
+            reason: 'precondition_failed',
+            guard: parsed.data.guard,
+            expectedSha: parsed.data.expected_sha,
+            actualSha: parsed.data.actual_sha,
+          });
+        }
+      }
+      throw error;
+    }
     const raw = mergeResponseSchema.parse(await response.json());
     return transformMergeResult(raw);
   }

@@ -1145,38 +1145,159 @@ func TestMergeValidation(t *testing.T) {
 	}
 }
 
-func TestMergeConflictPreservesBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/repos/repo/merge" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(`{"error":"merge conflict","conflict_paths":["README.md"],"merge_base_sha":"base123"}`))
-	}))
-	defer server.Close()
+func TestMergeReturnsTypedRefUpdateErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     map[string]interface{}
+		expected RefUpdateError
+	}{
+		{
+			name: "merge conflict",
+			body: map[string]interface{}{
+				"error":          "merge conflict",
+				"code":           "merge_conflict",
+				"conflict_paths": []string{"README.md"},
+				"merge_base_sha": "base123",
+			},
+			expected: RefUpdateError{
+				Message:       "merge conflict",
+				Status:        "merge_conflict",
+				Reason:        RefUpdateReasonConflict,
+				ConflictPaths: []string{"README.md"},
+				MergeBaseSHA:  "base123",
+			},
+		},
+		{
+			name: "stale target guard",
+			body: map[string]interface{}{
+				"error":        "target branch moved",
+				"code":         "precondition_failed",
+				"guard":        "target",
+				"expected_sha": "expected-target",
+				"actual_sha":   "actual-target",
+			},
+			expected: RefUpdateError{
+				Message:     "target branch moved",
+				Status:      "precondition_failed",
+				Reason:      RefUpdateReasonPreconditionFailed,
+				Guard:       MergeGuardTarget,
+				ExpectedSHA: "expected-target",
+				ActualSHA:   "actual-target",
+			},
+		},
+		{
+			name: "stale source guard",
+			body: map[string]interface{}{
+				"error":        "source ref no longer contains the expected commit",
+				"code":         "precondition_failed",
+				"guard":        "source",
+				"expected_sha": "expected-source",
+				"actual_sha":   "actual-source",
+			},
+			expected: RefUpdateError{
+				Message:     "source ref no longer contains the expected commit",
+				Status:      "precondition_failed",
+				Reason:      RefUpdateReasonPreconditionFailed,
+				Guard:       MergeGuardSource,
+				ExpectedSHA: "expected-source",
+				ActualSHA:   "actual-source",
+			},
+		},
+	}
 
-	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
-	if err != nil {
-		t.Fatalf("client error: %v", err)
-	}
-	repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/repos/repo/merge" {
+					t.Fatalf("unexpected path: %s", r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(tc.body)
+			}))
+			defer server.Close()
 
-	_, err = repo.Merge(nil, MergeOptions{SourceBranch: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge})
-	if err == nil {
-		t.Fatalf("expected conflict error")
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatalf("client error: %v", err)
+			}
+			repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+			_, err = repo.Merge(nil, MergeOptions{SourceRef: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge})
+			var refErr *RefUpdateError
+			if !errors.As(err, &refErr) {
+				t.Fatalf("expected RefUpdateError, got %T", err)
+			}
+			if !reflect.DeepEqual(*refErr, tc.expected) {
+				t.Fatalf("unexpected RefUpdateError: %#v", refErr)
+			}
+		})
 	}
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("expected APIError, got %T", err)
+}
+
+func TestMergeKeepsOtherAPIErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       map[string]interface{}
+	}{
+		{
+			name:       "unknown 409 code",
+			statusCode: http.StatusConflict,
+			body: map[string]interface{}{
+				"error": "merge conflict in README.md",
+				"code":  "future_merge_error",
+			},
+		},
+		{
+			name:       "403 response",
+			statusCode: http.StatusForbidden,
+			body: map[string]interface{}{
+				"error": "merge conflict",
+				"code":  "merge_conflict",
+			},
+		},
+		{
+			name:       "500 response",
+			statusCode: http.StatusInternalServerError,
+			body: map[string]interface{}{
+				"error":        "target branch moved",
+				"code":         "precondition_failed",
+				"guard":        "target",
+				"expected_sha": "expected-target",
+				"actual_sha":   "actual-target",
+			},
+		},
 	}
-	body, ok := apiErr.Body.(map[string]interface{})
-	if !ok || body["error"] != "merge conflict" || body["merge_base_sha"] != "base123" {
-		t.Fatalf("unexpected error body: %#v", apiErr.Body)
-	}
-	paths, ok := body["conflict_paths"].([]interface{})
-	if !ok || len(paths) != 1 || paths[0] != "README.md" {
-		t.Fatalf("unexpected conflict paths: %#v", body["conflict_paths"])
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.statusCode)
+				_ = json.NewEncoder(w).Encode(tc.body)
+			}))
+			defer server.Close()
+
+			client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+			if err != nil {
+				t.Fatalf("client error: %v", err)
+			}
+			repo := &Repo{ID: "repo", DefaultBranch: "main", client: client}
+
+			_, err = repo.Merge(nil, MergeOptions{SourceRef: "feature", TargetBranch: "main", Strategy: MergeStrategyMerge})
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("expected APIError, got %T", err)
+			}
+			if apiErr.Status != tc.statusCode || !reflect.DeepEqual(apiErr.Body, tc.body) {
+				t.Fatalf("unexpected APIError: %#v", apiErr)
+			}
+			var refErr *RefUpdateError
+			if errors.As(err, &refErr) {
+				t.Fatalf("expected APIError only, got RefUpdateError: %#v", refErr)
+			}
+		})
 	}
 }
 

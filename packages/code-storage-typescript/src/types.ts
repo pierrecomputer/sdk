@@ -1097,6 +1097,8 @@ export type RefUpdateReason =
   | "failed"
   | "unknown";
 
+export type MergeGuard = "target" | "source";
+
 export interface CommitResult {
   commitSha: string;
   treeSha: string;

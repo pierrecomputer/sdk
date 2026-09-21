@@ -56,7 +56,7 @@ accepted but does not select request routes.
 ### Basic Setup
 
 ```typescript
-import { GitStorage } from '@pierre/storage';
+import { GitStorage, RefUpdateError } from '@pierre/storage';
 
 // Initialize the client with your name and key
 const store = new GitStorage({
@@ -465,27 +465,39 @@ console.log(preview.conflictPaths, preview.conflicts, preview.filteredConflicts)
 
 // Merge one branch into another. Source and target can independently be
 // ephemeral branches.
-const mergeResult = await repo.merge({
-  sourceRef: 'feature/demo',
-  sourceIsEphemeral: true,
-  targetBranch: 'main',
-  targetIsEphemeral: false,
-  expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional; 409 if target moved
-  strategy: 'merge', // 'merge' | 'ff_only' | 'ff_prefer'
-  commitMessage: 'Merge feature/demo', // optional
-  author: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
-  committer: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
-  allowUnrelatedHistories: false, // optional
-  squash: false, // optional; incompatible with ff_only
-});
-console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', 'squash', or 'unknown'
-console.log(mergeResult.commitSha, mergeResult.target.newSha);
+try {
+  const mergeResult = await repo.merge({
+    sourceRef: 'feature/demo',
+    sourceIsEphemeral: true,
+    targetBranch: 'main',
+    targetIsEphemeral: false,
+    expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional; 409 if target moved
+    strategy: 'merge', // 'merge' | 'ff_only' | 'ff_prefer'
+    commitMessage: 'Merge feature/demo', // optional
+    author: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
+    committer: { name: 'Merge Bot', email: 'merge@example.com' }, // optional
+    allowUnrelatedHistories: false, // optional
+    squash: false, // optional; incompatible with ff_only
+  });
+  console.log(mergeResult.result); // 'merge_commit', 'fast_forward', 'no_op', 'squash', or 'unknown'
+  console.log(mergeResult.commitSha, mergeResult.target.newSha);
+} catch (error) {
+  if (!(error instanceof RefUpdateError)) throw error;
+
+  if (error.reason === 'conflict') {
+    console.log(error.conflictPaths, error.mergeBaseSha);
+  } else if (error.reason === 'precondition_failed' && error.guard === 'target') {
+    console.log('Target moved', error.expectedSha, error.actualSha);
+  } else if (error.reason === 'precondition_failed' && error.guard === 'source') {
+    console.log('Source moved', error.expectedSha, error.actualSha);
+  }
+}
 
 // repo.merge() requires sourceRef, targetBranch, and strategy. It returns
 // camelCase metadata for the source tip, target update, merge base (when
-// reported), and number of promoted commits. A backend conflict response
-// (HTTP 409) is surfaced as an API error with the response body preserved for
-// callers that need conflict_paths or merge_base_sha.
+// reported), and number of promoted commits. Stable merge conflict and guard
+// responses throw RefUpdateError with typed, camelCase fields. Unknown 409
+// codes and non-409 responses remain ApiError values.
 // Target-tip modes:
 // - Provide expectedTargetSha when targetBranch must still point at that commit.
 // - Omit expectedTargetSha to merge into the current target tip. For native
@@ -1295,9 +1307,14 @@ try {
 -
 ```
 
-- Mutating operations (commit builder, `restoreCommit`) throw `RefUpdateError`
+- Mutating operations (commit builder, `restoreCommit`, and known merge 409s)
+  throw `RefUpdateError`
   when the backend reports a ref failure. Inspect `error.status`,
-  `error.reason`, `error.message`, and `error.refUpdate` for details.
+  `error.reason`, and `error.message`. Merge conflicts also provide
+  `error.conflictPaths` and `error.mergeBaseSha`. Failed merge guards provide
+  `error.guard`, `error.expectedSha`, and `error.actualSha`. Other ref updates
+  provide `error.refUpdate`.
+- An unknown merge 409 code and every non-409 merge failure remain `ApiError`.
 
 ## License
 

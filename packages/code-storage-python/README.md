@@ -54,7 +54,7 @@ option is still accepted but does not select request routes.
 ### Basic Setup
 
 ```python
-from pierre_storage import GitStorage
+from pierre_storage import GitStorage, RefUpdateError
 
 # Initialize the client with your name and key
 storage = GitStorage({
@@ -283,21 +283,30 @@ print(preview["status"], preview["result"])
 print(preview["conflict_paths"], preview["filtered_conflicts"])
 
 # Merge one branch into another
-merge_result = await repo.merge(
-    source_ref="feature/preview",
-    source_is_ephemeral=True,   # optional; source branch can live in ephemeral namespace
-    target_branch="main",
-    target_is_ephemeral=False,  # optional; target branch can independently be ephemeral
-    strategy="merge",           # one of: "merge", "ff_only", "ff_prefer"
-    expected_target_sha="abc123",  # optional; 409 if target moved
-    commit_message="Merge feature/preview",  # optional
-    author={"name": "Bot", "email": "bot@example.com"},  # optional
-    committer={"name": "Bot", "email": "bot@example.com"},  # optional
-    allow_unrelated_histories=False,  # optional
-    ttl=900,  # optional JWT TTL in seconds
-)
-print(merge_result["result"], merge_result["commit_sha"])
-print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
+try:
+    merge_result = await repo.merge(
+        source_ref="feature/preview",
+        source_is_ephemeral=True,   # optional; source can be ephemeral
+        target_branch="main",
+        target_is_ephemeral=False,  # optional; target can be ephemeral
+        strategy="merge",           # "merge", "ff_only", or "ff_prefer"
+        expected_target_sha="abc123",  # optional; 409 if target moved
+        commit_message="Merge feature/preview",  # optional
+        author={"name": "Bot", "email": "bot@example.com"},  # optional
+        committer={"name": "Bot", "email": "bot@example.com"},  # optional
+        allow_unrelated_histories=False,  # optional
+        ttl=900,  # optional JWT TTL in seconds
+    )
+except RefUpdateError as error:
+    if error.reason == "conflict":
+        print(error.conflict_paths, error.merge_base_sha)
+    elif error.reason == "precondition_failed" and error.guard == "target":
+        print("Target moved", error.expected_sha, error.actual_sha)
+    elif error.reason == "precondition_failed" and error.guard == "source":
+        print("Source moved", error.expected_sha, error.actual_sha)
+else:
+    print(merge_result["result"], merge_result["commit_sha"])
+    print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
 # Target-tip modes:
 # - Provide expected_target_sha when target_branch must still point at that commit.
 # - Omit expected_target_sha to merge into the current target tip. For native
@@ -1270,6 +1279,11 @@ except RefUpdateError as e:
     print(f"Reason: {e.reason}")
     print(f"Ref update: {e.ref_update}")
 ```
+
+Known merge 409 responses also raise `RefUpdateError`. A conflict provides
+`conflict_paths` and `merge_base_sha`. A failed guard provides `guard`,
+`expected_sha`, and `actual_sha`. An unknown merge 409 code and every non-409
+merge failure remain `ApiError`.
 
 ## Development
 
