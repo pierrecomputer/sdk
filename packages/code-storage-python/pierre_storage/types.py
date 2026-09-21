@@ -151,6 +151,84 @@ class ListReposResult(TypedDict):
     has_more: bool
 
 
+DeploymentTarget = Literal["preview", "production"]
+DeploymentStatus = Literal["queued", "building", "ready", "error", "canceled"]
+
+
+class DeploymentSettings(TypedDict, total=False):
+    """Repository deployment settings."""
+
+    deploy_on_push: bool
+    production_branch: str
+    project_name: str
+    framework: Optional[str]
+    root_directory: Optional[str]
+    build_command: Optional[str]
+    install_command: Optional[str]
+    output_directory: Optional[str]
+    serverless_function_region: Optional[str]
+    env: Dict[str, Optional[str]]
+
+
+class UpdateRepoResult(TypedDict):
+    """Result from updating repository metadata or deployment settings."""
+
+    repo_name: str
+    default_branch: str
+
+
+class DeploymentResult(TypedDict):
+    """A durable repository deployment."""
+
+    id: str
+    target: DeploymentTarget
+    ref: str
+    commit_sha: str
+    status: DeploymentStatus
+    created_at: str
+    updated_at: str
+    url: NotRequired[str]
+    error_code: NotRequired[str]
+    error_message: NotRequired[str]
+
+
+class CreateDeploymentResult(DeploymentResult):
+    """Deployment creation result with response metadata."""
+
+    location: str
+    idempotency_key: str
+    idempotent_replayed: bool
+
+
+class DeploymentDNSRecord(TypedDict):
+    """DNS record to publish and retain after activation; name is relative to the apex zone."""
+
+    type: str
+    name: str
+    value: str
+
+
+class DeploymentDomain(TypedDict):
+    """Production domain for a repository's deployments.
+
+    ``status`` is one of ``pending_verification``, ``pending_dns``, ``ready``,
+    ``error``, or ``unknown``; newer values pass through unchanged.
+    """
+
+    hostname: str
+    status: str
+    effective_url: str
+    records: NotRequired[List[DeploymentDNSRecord]]
+
+
+class ListDeploymentsResult(TypedDict):
+    """Paginated repository deployments."""
+
+    deployments: List[DeploymentResult]
+    next_cursor: Optional[str]
+    has_more: bool
+
+
 # Removed: GetRemoteURLOptions - now uses **kwargs
 # Removed: CreateRepoOptions - now uses **kwargs
 # Removed: FindOneOptions - now uses **kwargs
@@ -1114,6 +1192,63 @@ class Repo(Protocol):
         ref_policies: Optional[Refs] = None,
     ) -> None:
         """Pull from upstream repository."""
+        ...
+
+    async def get_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Read the production hostname and its DNS readiness."""
+        ...
+
+    async def set_deployment_domain(
+        self, *, hostname: str, ttl: Optional[int] = None
+    ) -> DeploymentDomain:
+        """Begin custom hostname setup and return DNS records to publish."""
+        ...
+
+    async def delete_deployment_domain(self, *, ttl: Optional[int] = None) -> DeploymentDomain:
+        """Remove the custom hostname. Retry deletion on 503 while cleanup is pending."""
+        ...
+
+    async def create_deployment(
+        self,
+        *,
+        ref: Optional[str] = None,
+        target: Optional[DeploymentTarget] = None,
+        idempotency_key: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateDeploymentResult:
+        """Create a deployment for a repository revision."""
+        ...
+
+    async def deploy(
+        self,
+        *,
+        target: DeploymentTarget,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Create a deployment and wait for it to reach a terminal state."""
+        ...
+
+    async def list_deployments(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> ListDeploymentsResult:
+        """List durable deployments for the repository."""
+        ...
+
+    async def get_deployment(
+        self,
+        *,
+        deployment_id: str,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult:
+        """Get one durable deployment."""
         ...
 
     async def restore_commit(

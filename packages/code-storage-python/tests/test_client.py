@@ -90,12 +90,14 @@ class TestGitStorage:
     async def test_token_sent_verbatim(self) -> None:
         """Test that a pre-minted token is sent verbatim in the Authorization header."""
         expected_token = "my-pre-minted-jwt-token-value"
-        storage = GitStorage({
-            "name": "test-customer",
-            "token": expected_token,
-            "api_base_url": "https://api.test.code.storage",
-            "storage_base_url": "test.code.storage",
-        })
+        storage = GitStorage(
+            {
+                "name": "test-customer",
+                "token": expected_token,
+                "api_base_url": "https://api.test.code.storage",
+                "storage_base_url": "test.code.storage",
+            }
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -672,9 +674,7 @@ class TestGitStorage:
             assert body["username"] == "myuser"
 
     @pytest.mark.asyncio
-    async def test_create_git_credential_without_username(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_create_git_credential_without_username(self, git_storage_options: dict) -> None:
         """Test creating a git credential without a username."""
         storage = GitStorage(git_storage_options)
 
@@ -959,9 +959,7 @@ class TestJWTGeneration:
             assert "test-repo+import.git" in url
 
     @pytest.mark.asyncio
-    async def test_get_import_remote_url_with_permissions(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_get_import_remote_url_with_permissions(self, git_storage_options: dict) -> None:
         """Test import remote URL with custom permissions."""
         storage = GitStorage(git_storage_options)
 
@@ -1431,3 +1429,86 @@ class TestCodeStorageAgentHeader:
             headers = call_kwargs["headers"]
             assert "Code-Storage-Agent" in headers
             assert headers["Code-Storage-Agent"] == get_user_agent()
+
+
+class TestRepositoryDeploymentSettings:
+    """Tests for repository deployment settings."""
+
+    @pytest.mark.asyncio
+    async def test_create_repo_serializes_settings_and_scopes(
+        self, git_storage_options: dict
+    ) -> None:
+        storage = GitStorage(git_storage_options)
+        response = MagicMock(status_code=201, is_success=True)
+        response.json.return_value = {"repo_id": "internal-id"}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            await storage.create_repo(
+                id="owner/repo",
+                deployment={
+                    "deploy_on_push": True,
+                    "framework": "nextjs",
+                    "build_command": None,
+                    "serverless_function_region": "fra1",
+                    "env": {"API_URL": "https://example.com", "DELETE_ME": None},
+                },
+            )
+
+        call = mock_post.await_args
+        assert call.args[0].endswith("/api/v1/repos")
+        assert call.kwargs["json"]["deployment"] == {
+            "deploy_on_push": True,
+            "framework": "nextjs",
+            "build_command": None,
+            "serverless_function_region": "fra1",
+            "env": {"API_URL": "https://example.com", "DELETE_ME": None},
+        }
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["scopes"] == ["repo:write", "deployment:write"]
+
+    @pytest.mark.asyncio
+    async def test_update_repo_patches_nullable_settings(self, git_storage_options: dict) -> None:
+        storage = GitStorage(git_storage_options)
+        response = MagicMock(status_code=200, is_success=True)
+        response.json.return_value = {
+            "repo_id": "internal-id",
+            "id": "internal-id",
+            "repo_name": "owner/repo",
+            "url": "owner/repo",
+            "default_branch": "release",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_patch = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.patch = mock_patch
+
+            result = await storage.update_repo(
+                id="owner/repo",
+                default_branch="release",
+                deployment={
+                    "framework": None,
+                    "serverless_function_region": None,
+                },
+            )
+
+        call = mock_patch.await_args
+        assert call.args[0].endswith("/api/v1/repo")
+        assert call.kwargs["json"] == {
+            "default_branch": "release",
+            "deployment": {
+                "framework": None,
+                "serverless_function_region": None,
+            },
+        }
+        token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
+        claims = jwt.decode(token, options={"verify_signature": False})
+        assert claims["scopes"] == ["repo:write"]
+        assert result == {
+            "repo_name": "owner/repo",
+            "default_branch": "release",
+        }
+

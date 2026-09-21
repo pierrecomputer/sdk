@@ -149,6 +149,91 @@ const result = await foundRepo.grep({
 console.log(result.matches);
 ```
 
+### Repository Deployments
+
+Configure hosting when creating or updating a repository:
+
+```typescript
+const repo = await store.createRepo({
+  id: 'my-custom-repo',
+  deployment: {
+    deployOnPush: true,
+    productionBranch: 'main',
+    framework: 'nextjs',
+    rootDirectory: 'apps/web',
+    serverlessFunctionRegion: 'fra1',
+    env: {
+      API_URL: 'https://example.com',
+    },
+  },
+});
+
+await store.updateRepo({
+  id: repo.id,
+  deployment: {
+    framework: null, // Reset to automatic detection.
+    serverlessFunctionRegion: null, // Reset to the platform default.
+    env: {
+      OLD_SECRET: null, // Delete this variable.
+    },
+  },
+});
+```
+
+Nullable build settings distinguish omission from reset. Region codes are at
+most four characters and apply from the next deployment.
+
+Create, list, and inspect durable deployments through the repository handle:
+
+```typescript
+const ready = await repo.deploy({
+  ref: 'main',
+  target: 'production',
+  idempotencyKey: crypto.randomUUID(),
+});
+console.log(ready.url);
+
+const created = await repo.createDeployment({
+  ref: 'feature',
+  target: 'preview',
+});
+const page = await repo.listDeployments({ limit: 20 });
+const current = await repo.getDeployment({
+  deploymentId: created.id,
+});
+```
+
+`deploy` creates and polls until the deployment reaches `ready` (2s interval,
+10m end-to-end timeout by default). It throws `DeploymentFailedError` on
+`error` or `canceled`, and a `DOMException` named `TimeoutError` when the
+budget expires. `createDeployment` returns immediately with the current
+state. Reuse the same idempotency key when retrying a create request. The SDK
+mints the required repository and deployment scopes automatically.
+
+Manage the production domain separately from the deployment list:
+
+```typescript
+const domain = await repo.getDeploymentDomain();
+console.log(domain.effectiveUrl);
+const pending = await repo.setDeploymentDomain({ hostname: 'www.example.com' });
+console.log(pending.records); // Publish and retain these DNS records.
+const updated = await repo.getDeploymentDomain(); // Check status after configuring DNS.
+// To remove the custom hostname:
+const managed = await repo.deleteDeploymentDomain();
+```
+
+Domain methods use `/api/repos/{repo_name}/domain`. Reads require
+`deployment:read`; set/delete require `deployment:write`. Setting returns
+`202` while verification proceeds. Status is `pending_verification`,
+`pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
+`effectiveUrl` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL, which remains available.
+DNS records contain `type`, `name` (relative to the apex zone), and `value`.
+`getDeploymentDomain` returns an `ApiError` with status `404` if no hosting
+project exists. If deletion returns `503`, retry deletion after the
+`Retry-After` delay in `error.headers`; cleanup has not finished.
+All domain methods accept `ttl` and an abort `signal`.
+
 ### Getting Remote URLs
 
 The SDK generates secure URLs with JWT authentication for Git operations:
@@ -584,6 +669,7 @@ await repo
 class GitStorage {
   constructor(options: GitStorageOptions);
   async createRepo(options?: CreateRepoOptions): Promise<Repo>;
+  async updateRepo(options: UpdateRepoOptions): Promise<UpdateRepoResult>;
   async findOne(options: FindOneOptions): Promise<Repo | null>;
   repo(options: RepoOptions): Repo;
   getConfig(): GitStorageOptions;
@@ -619,6 +705,21 @@ interface CreateRepoOptions {
         };
       };
   defaultBranch?: string; // Optional default branch name (defaults to "main")
+  deployment?: DeploymentSettings;
+}
+
+interface DeploymentSettings {
+  deployOnPush?: boolean;
+  productionBranch?: string;
+  projectName?: string;
+  framework?: string | null;
+  rootDirectory?: string | null;
+  buildCommand?: string | null;
+  installCommand?: string | null;
+  outputDirectory?: string | null;
+  serverlessFunctionRegion?: string | null;
+  env?: Record<string, string | null>;
+
 }
 
 interface FindOneOptions {
@@ -664,12 +765,27 @@ interface Repo {
   listNotesRefs(options?: ListNotesRefsOptions): Promise<ListNotesRefsResult>;
   getBranchDiff(options: GetBranchDiffOptions): Promise<GetBranchDiffResult>;
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
+  createDeployment(
+    options?: CreateDeploymentOptions
+  ): Promise<CreateDeploymentResult>;
+  deploy(options: DeployOptions): Promise<DeploymentResult>;
+  listDeployments(
+    options?: ListDeploymentsOptions
+  ): Promise<ListDeploymentsResult>;
+  getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
 }
 
 interface GetRemoteURLOptions {
-  permissions?: ('git:write' | 'git:read' | 'repo:write' | 'org:read')[];
+  permissions?: (
+    | 'git:write'
+    | 'git:read'
+    | 'repo:write'
+    | 'org:read'
+    | 'deployment:read'
+    | 'deployment:write'
+  )[];
   ttl?: number; // Time to live in seconds (default: 31536000 = 1 year)
   refPolicies?: Array<{ pattern: string; ops?: string[] }>;
   /** @deprecated Use refPolicies instead. */

@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -91,8 +93,16 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 		repoID = uuid.NewString()
 	}
 
+	deployment, err := buildDeploymentSettingsRequest(options.Deployment)
+	if err != nil {
+		return nil, err
+	}
+	permissions := []Permission{PermissionRepoWrite}
+	if options.Deployment != nil && options.Deployment.Env != nil {
+		permissions = append(permissions, PermissionDeploymentWrite)
+	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
-	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: []Permission{PermissionRepoWrite}, TTL: ttl})
+	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: permissions, TTL: ttl})
 	if err != nil {
 		return nil, err
 	}
@@ -169,10 +179,11 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 	}
 
 	var body interface{}
-	if baseRepo != nil || resolvedDefaultBranch != "" {
+	if baseRepo != nil || resolvedDefaultBranch != "" || deployment != nil {
 		body = &createRepoRequest{
 			BaseRepo:      baseRepo,
 			DefaultBranch: resolvedDefaultBranch,
+			Deployment:    deployment,
 		}
 	}
 
@@ -182,7 +193,24 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 409 {
-		return nil, errors.New("repository already exists")
+		// Surface the server reason (project name in use, upstream configured, ...)
+		// with a stable fallback for the plain duplicate-repo case.
+		message := "repository already exists"
+		var payload map[string]interface{}
+		if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr == nil {
+			if serverMessage, ok := payload["error"].(string); ok && strings.TrimSpace(serverMessage) != "" {
+				message = strings.TrimSpace(serverMessage)
+			}
+		}
+		return nil, &APIError{
+			Message:    message,
+			Status:     resp.StatusCode,
+			StatusText: resp.Status,
+			Method:     http.MethodPost,
+			URL:        resp.Request.URL.String(),
+			Body:       payload,
+			Header:     resp.Header.Clone(),
+		}
 	}
 
 	if resolvedDefaultBranch == "" {
@@ -193,6 +221,49 @@ func (c *Client) CreateRepo(ctx context.Context, options CreateRepoOptions) (*Re
 		DefaultBranch: resolvedDefaultBranch,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+// UpdateRepo updates repository metadata or deployment settings.
+func (c *Client) UpdateRepo(ctx context.Context, options UpdateRepoOptions) (UpdateRepoResult, error) {
+	repoID := strings.TrimSpace(options.ID)
+	if repoID == "" {
+		return UpdateRepoResult{}, errors.New("update repo id is required")
+	}
+	deployment, err := buildDeploymentSettingsRequest(options.Deployment)
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	defaultBranch := strings.TrimSpace(options.DefaultBranch)
+	if defaultBranch == "" && deployment == nil {
+		return UpdateRepoResult{}, errors.New("update repo requires default branch or deployment settings")
+	}
+
+	permissions := []Permission{PermissionRepoWrite}
+	if options.Deployment != nil && options.Deployment.Env != nil {
+		permissions = append(permissions, PermissionDeploymentWrite)
+	}
+	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
+	jwtToken, err := c.generateJWT(repoID, RemoteURLOptions{Permissions: permissions, TTL: ttl})
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	resp, err := c.api.patch(ctx, "repo", nil, &updateRepoRequest{
+		DefaultBranch: defaultBranch,
+		Deployment:    deployment,
+	}, jwtToken, nil)
+	if err != nil {
+		return UpdateRepoResult{}, err
+	}
+	defer resp.Body.Close()
+
+	var payload updateRepoResponse
+	if err := decodeJSON(resp, &payload); err != nil {
+		return UpdateRepoResult{}, err
+	}
+	return UpdateRepoResult{
+		RepoName:      payload.RepoName,
+		DefaultBranch: payload.DefaultBranch,
+	}, nil
 }
 
 // ListRepos lists repositories for the org.

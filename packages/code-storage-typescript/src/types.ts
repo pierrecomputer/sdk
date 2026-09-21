@@ -7,10 +7,13 @@ import type {
   DeleteBranchResponseRaw,
   DeleteTagResponseRaw,
   BlameResponseRaw,
+  DeploymentResponseRaw,
+  DeploymentDomainResponseRaw,
   GetBranchDiffResponseRaw,
   GetCommitDiffResponseRaw,
   GetCommitResponseRaw,
   ListBranchesResponseRaw,
+  ListDeploymentsResponseRaw,
   ListCommitsResponseRaw,
   ListFilesResponseRaw,
   ListFilesWithMetadataResponseRaw,
@@ -35,6 +38,7 @@ import type {
   RawRepoInfo as SchemaRawRepoInfo,
   RawTagInfo as SchemaRawTagInfo,
   RawTreeEntry as SchemaRawTreeEntry,
+  UpdateRepoResponseRaw,
   TreeEntryTypeRaw as SchemaTreeEntryTypeRaw,
 } from './schemas';
 
@@ -101,7 +105,14 @@ export interface PolicyOptions {
 }
 
 export interface GetRemoteURLOptions extends PolicyOptions {
-  permissions?: ("git:write" | "git:read" | "repo:write" | "org:read")[];
+  permissions?: (
+    | "git:write"
+    | "git:read"
+    | "repo:write"
+    | "org:read"
+    | "deployment:read"
+    | "deployment:write"
+  )[];
   ttl?: number;
   /**
    * Repo-wide policy ops.
@@ -142,6 +153,23 @@ export interface Repo {
   getCommitDiff(options: GetCommitDiffOptions): Promise<GetCommitDiffResult>;
   grep(options: GrepOptions): Promise<GrepResult>;
   pullUpstream(options?: PullUpstreamOptions): Promise<void>;
+  createDeployment(
+    options?: CreateDeploymentOptions,
+  ): Promise<CreateDeploymentResult>;
+  deploy(options: DeployOptions): Promise<DeploymentResult>;
+  listDeployments(
+    options?: ListDeploymentsOptions,
+  ): Promise<ListDeploymentsResult>;
+  getDeployment(options: GetDeploymentOptions): Promise<DeploymentResult>;
+  getDeploymentDomain(
+    options?: DeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
+  setDeploymentDomain(
+    options: SetDeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
+  deleteDeploymentDomain(
+    options?: DeploymentDomainOptions,
+  ): Promise<DeploymentDomainResult>;
   restoreCommit(options: RestoreCommitOptions): Promise<RestoreCommitResult>;
   previewMerge(options: PreviewMergeOptions): Promise<PreviewMergeResult>;
   merge(options: MergeOptions): Promise<MergeResult>;
@@ -153,7 +181,7 @@ export interface Repo {
   ): Promise<CommitResult>;
 }
 
-export type ValidMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD';
+export type ValidMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
 type SimplePath = string;
 type ComplexPath = {
   path: string;
@@ -286,10 +314,139 @@ export interface ListReposResult {
   hasMore: boolean;
 }
 
+export interface DeploymentSettings {
+  deployOnPush?: boolean;
+  productionBranch?: string;
+  projectName?: string;
+  framework?: string | null;
+  rootDirectory?: string | null;
+  buildCommand?: string | null;
+  installCommand?: string | null;
+  outputDirectory?: string | null;
+  serverlessFunctionRegion?: string | null;
+  env?: Record<string, string | null>;
+}
+
 export interface CreateRepoOptions extends GitStorageInvocationOptions {
   id?: string;
   baseRepo?: BaseRepo;
   defaultBranch?: string;
+  deployment?: DeploymentSettings;
+}
+
+export interface UpdateRepoOptions extends GitStorageInvocationOptions {
+  id: string;
+  defaultBranch?: string;
+  deployment?: DeploymentSettings;
+}
+
+export type UpdateRepoResponse = UpdateRepoResponseRaw;
+
+export interface UpdateRepoResult {
+  repoName: string;
+  defaultBranch: string;
+}
+
+export type DeploymentTarget = 'preview' | 'production';
+/** Known statuses plus any newer value the server may return. */
+export type DeploymentStatus =
+  | 'queued'
+  | 'building'
+  | 'ready'
+  | 'error'
+  | 'canceled'
+  | (string & {});
+
+export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
+  ref?: string;
+  target?: DeploymentTarget;
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
+export interface DeployOptions
+  extends Omit<CreateDeploymentOptions, 'target' | 'signal'> {
+  target: DeploymentTarget;
+  /** Delay between status polls in milliseconds. Defaults to 2000. */
+  pollIntervalMs?: number;
+  /** Overall create-and-wait budget in milliseconds. Defaults to 600000. */
+  timeoutMs?: number;
+}
+
+export type DeploymentResponse = DeploymentResponseRaw;
+
+export interface DeploymentResult {
+  id: string;
+  url?: string;
+  target: DeploymentTarget;
+  ref: string;
+  commitSha: string;
+  status: DeploymentStatus;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeploymentResult extends DeploymentResult {
+  location: string;
+  idempotencyKey: string;
+  idempotentReplayed: boolean;
+}
+
+export interface ListDeploymentsOptions extends GitStorageInvocationOptions {
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export type ListDeploymentsResponse = ListDeploymentsResponseRaw;
+
+/** Known domain statuses plus any newer value the server may return. */
+export type DeploymentDomainStatus =
+  | 'pending_verification'
+  | 'pending_dns'
+  | 'error'
+  | 'ready'
+  | 'unknown'
+  | (string & {});
+
+export interface DeploymentDomainOptions extends GitStorageInvocationOptions {
+  signal?: AbortSignal;
+}
+
+export interface SetDeploymentDomainOptions extends DeploymentDomainOptions {
+  hostname: string;
+}
+
+export type DeploymentDomainResponse = DeploymentDomainResponseRaw;
+
+/** DNS record to publish and retain, including after the domain becomes ready. */
+export interface DeploymentDNSRecord {
+  type: string;
+  /** Name relative to the apex zone, e.g. www, @, or _vercel. */
+  name: string;
+  value: string;
+}
+
+/** Production domain for the repository's deployments. */
+export interface DeploymentDomainResult {
+  hostname: string;
+  status: DeploymentDomainStatus;
+  /** Custom URL once ready; otherwise the managed code.host URL. */
+  effectiveUrl: string;
+  records?: DeploymentDNSRecord[];
+}
+
+export interface ListDeploymentsResult {
+  deployments: DeploymentResult[];
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
+export interface GetDeploymentOptions extends GitStorageInvocationOptions {
+  deploymentId: string;
+  signal?: AbortSignal;
 }
 
 export interface DeleteRepoOptions extends GitStorageInvocationOptions {

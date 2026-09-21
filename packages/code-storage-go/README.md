@@ -45,6 +45,100 @@ func main() {
 }
 ```
 
+### Repository deployments
+
+Configure hosting while creating or updating a repository:
+
+```go
+deployOnPush := true
+apiURL := "https://example.com"
+repo, err := client.CreateRepo(ctx, storage.CreateRepoOptions{
+	ID: "my-custom-repo",
+	Deployment: &storage.DeploymentSettings{
+		DeployOnPush:             &deployOnPush,
+		Framework:                storage.SetDeploymentString("nextjs"),
+		RootDirectory:            storage.SetDeploymentString("apps/web"),
+		ServerlessFunctionRegion: storage.SetDeploymentString("fra1"),
+		Env: map[string]*string{
+			"API_URL": &apiURL,
+		},
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+_, err = client.UpdateRepo(ctx, storage.UpdateRepoOptions{
+	ID: repo.ID,
+	Deployment: &storage.DeploymentSettings{
+		Framework:                storage.ResetDeploymentString(),
+		ServerlessFunctionRegion: storage.ResetDeploymentString(),
+	},
+})
+```
+
+Unset fields are omitted. `ResetDeploymentString` sends an explicit null.
+Region codes are at most four characters and apply from the next deployment.
+
+```go
+ready, err := repo.Deploy(ctx, storage.DeployOptions{
+	Ref:            "main",
+	Target:         storage.DeploymentTargetProduction,
+	IdempotencyKey: "release-2026-08-27",
+})
+if err != nil {
+	log.Fatal(err) // *storage.DeploymentFailedError on error/canceled status
+}
+fmt.Println(ready.URL)
+
+created, err := repo.CreateDeployment(ctx, storage.CreateDeploymentOptions{
+	Ref:    "feature",
+	Target: storage.DeploymentTargetPreview,
+})
+page, err := repo.ListDeployments(ctx, storage.ListDeploymentsOptions{Limit: 20})
+current, err := repo.GetDeployment(ctx, storage.GetDeploymentOptions{
+	DeploymentID: created.ID,
+})
+```
+
+An empty `Target` uses the server default, `production`.
+
+`Deploy` creates and polls until the deployment reaches `ready` (2s interval,
+10m end-to-end timeout by default). `CreateDeployment` returns immediately with
+the current state. Reuse the same idempotency key when retrying creation.
+
+Manage the production domain separately from the deployment list:
+
+```go
+domain, err := repo.GetDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(domain.EffectiveURL)
+pending, err := repo.SetDeploymentDomain(ctx, storage.SetDeploymentDomainOptions{
+	Hostname: "www.example.com",
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(pending.Records) // Publish and retain these DNS records.
+updated, err := repo.GetDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+// To remove the custom hostname:
+managed, err := repo.DeleteDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
+```
+
+Domain methods use `/api/repos/{repo_name}/domain`. Reads require
+`deployment:read`; set/delete require `deployment:write`. Setting returns
+`202` while verification proceeds. Status is `pending_verification`,
+`pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
+`EffectiveURL` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL, which remains available.
+DNS records contain `Type`, `Name` (relative to the apex zone), and `Value`.
+A missing hosting project returns `*APIError` with status `404`. If deletion
+returns `503`, retry deletion after the `Retry-After` delay in `APIError.Header`;
+cleanup has not finished. Domain methods honor context cancellation and
+`InvocationOptions.TTL`.
+
 ### Inspect file metadata
 
 ```go
@@ -354,6 +448,7 @@ fmt.Println(repo.ID)
 ## Features
 
 - Create, list, find, and delete repositories.
+- Configure repository hosting and create, list, or inspect durable deployments.
 - Generate authenticated git remote URLs, including import and ephemeral variants.
 - Read files, read file metadata, download archives, list branches/commits, and run grep queries.
 - Create commits via streaming commit-pack or diff-commit endpoints.
