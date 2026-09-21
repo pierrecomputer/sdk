@@ -469,6 +469,10 @@ type MergeOptions struct {
 	// Deprecated: use SourceRef instead.
 	SourceBranch      string
 	SourceIsEphemeral bool
+	// ExpectedSourceSHA, when non-empty, requires the source ref to contain that
+	// commit when the merge starts. The merge uses that exact commit even if the
+	// source ref moves before the target update.
+	ExpectedSourceSHA string
 	TargetBranch      string
 	TargetIsEphemeral bool
 	// ExpectedTargetSHA, when non-empty, requires the target branch to still point at

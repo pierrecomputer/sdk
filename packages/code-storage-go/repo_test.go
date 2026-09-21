@@ -979,7 +979,7 @@ func TestPreviewMergeValidation(t *testing.T) {
 	}
 }
 
-func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
+func TestMergeGuardedRequestAndResponse(t *testing.T) {
 	var captured map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1013,6 +1013,7 @@ func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 	result, err := repo.Merge(nil, MergeOptions{
 		SourceBranch:            " feature ",
 		SourceIsEphemeral:       true,
+		ExpectedSourceSHA:       " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
 		TargetBranch:            " main ",
 		TargetIsEphemeral:       false,
 		ExpectedTargetSHA:       " old123 ",
@@ -1031,6 +1032,9 @@ func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 	}
 	if captured["source_is_ephemeral"] != true {
 		t.Fatalf("unexpected source_is_ephemeral: %v", captured["source_is_ephemeral"])
+	}
+	if captured["expected_source_sha"] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("unexpected expected_source_sha: %v", captured["expected_source_sha"])
 	}
 	if captured["target_branch"] != "main" {
 		t.Fatalf("unexpected target_branch: %v", captured["target_branch"])
@@ -1073,7 +1077,7 @@ func TestMergeGuardedTargetTipRequestAndResponse(t *testing.T) {
 	}
 }
 
-func TestMergeCurrentTargetTipModeOmitsExpectedTargetSHA(t *testing.T) {
+func TestMergeOmitsSourceAndTargetSHAGuards(t *testing.T) {
 	var captured map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/repos/repo/merge" {
@@ -1102,7 +1106,7 @@ func TestMergeCurrentTargetTipModeOmitsExpectedTargetSHA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("merge error: %v", err)
 	}
-	for _, key := range []string{"source_is_ephemeral", "expected_target_sha", "commit_message", "author", "committer", "allow_unrelated_histories"} {
+	for _, key := range []string{"source_is_ephemeral", "expected_source_sha", "expected_target_sha", "commit_message", "author", "committer", "allow_unrelated_histories"} {
 		if _, ok := captured[key]; ok {
 			t.Fatalf("expected %s to be omitted", key)
 		}

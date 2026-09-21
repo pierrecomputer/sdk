@@ -19,7 +19,8 @@ npm install @pierre/storage
 ## Standard vocabulary
 
 New code should use `ref`, `baseRef`, `sourceRef`, `objectRef`, `notesRef`,
-`targetBranch`, and `expectedTargetSha`. Repository list entries expose
+`targetBranch`, `expectedSourceSha`, and `expectedTargetSha`. Repository list
+entries expose
 `repoName`; commit diffs expose `baseSha`; merge sources expose `ref`; note
 writes expose `notesRef`; and ref updates expose `targetBranch`. Deprecated
 result aliases remain populated with the preferred value.
@@ -468,6 +469,7 @@ console.log(preview.conflictPaths, preview.conflicts, preview.filteredConflicts)
 const mergeResult = await repo.merge({
   sourceRef: 'feature/demo',
   sourceIsEphemeral: true,
+  expectedSourceSha: preview.sourceTipSha, // optional; merge this previewed commit
   targetBranch: 'main',
   targetIsEphemeral: false,
   expectedTargetSha: '0123456789abcdef0123456789abcdef01234567', // optional; 409 if target moved
@@ -486,6 +488,10 @@ console.log(mergeResult.commitSha, mergeResult.target.newSha);
 // reported), and number of promoted commits. A backend conflict response
 // (HTTP 409) is surfaced as an API error with the response body preserved for
 // callers that need conflict_paths or merge_base_sha.
+// Source guard:
+// - Provide expectedSourceSha to merge the exact previewed commit. The source
+//   ref must contain it when the merge starts.
+// - Omit expectedSourceSha to resolve and merge the current source tip.
 // Target-tip modes:
 // - Provide expectedTargetSha when targetBranch must still point at that commit.
 // - Omit expectedTargetSha to merge into the current target tip. For native
@@ -1147,6 +1153,9 @@ interface PreviewMergeResult {
 interface MergeOptions {
   sourceRef: string;
   sourceIsEphemeral?: boolean;
+  // Optional source guard. The source ref must contain this commit when the
+  // merge starts, and the merge uses this exact commit.
+  expectedSourceSha?: string;
   targetBranch: string;
   targetIsEphemeral?: boolean;
   // Optional target-tip guard. Omit to merge into the current target tip.

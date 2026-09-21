@@ -1238,6 +1238,9 @@ func (r *Repo) DeleteBranch(ctx context.Context, options DeleteBranchOptions) (D
 }
 
 // Merge merges a source branch into a target branch.
+// Set ExpectedSourceSHA to require the source ref to contain that commit when
+// the merge starts. The merge uses that exact commit even if the source ref moves
+// before the target update.
 // Set ExpectedTargetSHA to require the target branch to still point at that commit.
 // The server returns 409 if it moved. Leave ExpectedTargetSHA empty to merge into the
 // current target tip. Native Code Storage targets may retry stale target/repository
@@ -1270,6 +1273,9 @@ func (r *Repo) Merge(ctx context.Context, options MergeOptions) (MergeResult, er
 		Strategy:                string(strategy),
 		AllowUnrelatedHistories: options.AllowUnrelatedHistories,
 		Squash:                  options.Squash,
+	}
+	if expectedSourceSHA := strings.TrimSpace(options.ExpectedSourceSHA); expectedSourceSHA != "" {
+		body.ExpectedSourceSHA = expectedSourceSHA
 	}
 	if expectedTargetSHA := strings.TrimSpace(options.ExpectedTargetSHA); expectedTargetSHA != "" {
 		body.ExpectedTargetSHA = expectedTargetSHA

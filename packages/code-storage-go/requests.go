@@ -107,6 +107,7 @@ type createBranchRequest struct {
 type mergeRequest struct {
 	SourceRef               string      `json:"source_ref"`
 	SourceIsEphemeral       bool        `json:"source_is_ephemeral,omitempty"`
+	ExpectedSourceSHA       string      `json:"expected_source_sha,omitempty"`
 	TargetBranch            string      `json:"target_branch"`
 	TargetIsEphemeral       bool        `json:"target_is_ephemeral,omitempty"`
 	ExpectedTargetSHA       string      `json:"expected_target_sha,omitempty"`

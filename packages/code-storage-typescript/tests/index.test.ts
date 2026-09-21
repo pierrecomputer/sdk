@@ -2522,7 +2522,7 @@ describe('GitStorage', () => {
   });
 
   describe('Repo merge', () => {
-    it('posts guarded target-tip merge request and returns transformed response', async () => {
+    it('posts guarded merge request and returns transformed response', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge' });
 
@@ -2541,6 +2541,7 @@ describe('GitStorage', () => {
         expect(body).toEqual({
           source_ref: 'feature',
           source_is_ephemeral: true,
+          expected_source_sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           target_branch: 'main',
           target_is_ephemeral: false,
           expected_target_sha: 'abc123',
@@ -2575,6 +2576,7 @@ describe('GitStorage', () => {
       const result = await repo.merge({
         sourceBranch: ' feature ',
         sourceIsEphemeral: true,
+        expectedSourceSha: ' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ',
         targetBranch: ' main ',
         targetIsEphemeral: false,
         expectedTargetSha: ' abc123 ',
@@ -2606,7 +2608,7 @@ describe('GitStorage', () => {
       });
     });
 
-    it('omits expectedTargetSha for current target tip mode', async () => {
+    it('omits source and target SHA guards when absent', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'repo-merge-minimal' });
 

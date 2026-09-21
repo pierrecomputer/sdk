@@ -15,7 +15,8 @@ pip install pierre-storage
 ## Standard vocabulary
 
 New code should use `ref`, `base_ref`, `source_ref`, `object_ref`, `notes_ref`,
-`target_branch`, and `expected_target_sha`. Repository list entries expose
+`target_branch`, `expected_source_sha`, and `expected_target_sha`. Repository
+list entries expose
 `repo_name`; commit diffs expose `base_sha`; merge sources expose `ref`; note
 writes expose `notes_ref`; and ref updates expose `target_branch`. Deprecated
 result aliases remain populated with the preferred value.
@@ -286,6 +287,7 @@ print(preview["conflict_paths"], preview["filtered_conflicts"])
 merge_result = await repo.merge(
     source_ref="feature/preview",
     source_is_ephemeral=True,   # optional; source branch can live in ephemeral namespace
+    expected_source_sha=preview["source_tip_sha"],  # optional; merge this previewed commit
     target_branch="main",
     target_is_ephemeral=False,  # optional; target branch can independently be ephemeral
     strategy="merge",           # one of: "merge", "ff_only", "ff_prefer"
@@ -298,6 +300,10 @@ merge_result = await repo.merge(
 )
 print(merge_result["result"], merge_result["commit_sha"])
 print(merge_result["source"]["sha"], merge_result["target"]["new_sha"])
+# Source guard:
+# - Provide expected_source_sha to merge the exact previewed commit. The source
+#   ref must contain it when the merge starts.
+# - Omit expected_source_sha to resolve and merge the current source tip.
 # Target-tip modes:
 # - Provide expected_target_sha when target_branch must still point at that commit.
 # - Omit expected_target_sha to merge into the current target tip. For native
@@ -896,6 +902,7 @@ class Repo:
         target_branch: str,
         strategy: Literal["merge", "ff_only", "ff_prefer"],
         source_is_ephemeral: Optional[bool] = None,
+        expected_source_sha: Optional[str] = None,
         target_is_ephemeral: Optional[bool] = None,
         expected_target_sha: Optional[str] = None,
         commit_message: Optional[str] = None,

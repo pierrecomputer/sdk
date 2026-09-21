@@ -394,6 +394,7 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/merge" -X POST \
   -H "Content-Type: application/json" \
   -d '{
     "source_ref": "feature/demo",
+    "expected_source_sha": "0123456789abcdef0123456789abcdef01234567",
     "target_branch": "main",
     "strategy": "merge",
     "source_is_ephemeral": false,
@@ -404,8 +405,14 @@ curl "$CODE_STORAGE_BASE_URL/repos/$REPO_NAME_ENCODED/merge" -X POST \
 ```
 
 Required: `source_ref`, `target_branch`, `strategy` (`merge` | `ff_only` | `ff_prefer`).
-Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_target_sha`,
-`commit_message`, `author`, `committer`, `allow_unrelated_histories`, `squash`.
+Optional: `source_is_ephemeral`, `target_is_ephemeral`, `expected_source_sha`,
+`expected_target_sha`, `commit_message`, `author`, `committer`, `allow_unrelated_histories`,
+`squash`.
+
+Source guard:
+- Set `expected_source_sha` to merge the exact previewed commit. The source ref
+  must contain it when the merge starts.
+- Omit `expected_source_sha` to resolve and merge the current source tip.
 
 Target-tip modes:
 - Set `expected_target_sha` when the target branch must still point at a specific
@@ -1167,7 +1174,8 @@ git push origin feature-branch
 | Notes                 | Attach metadata to commits without modifying commit SHA. Default ref `refs/notes/commits`; pass `notes_ref` to target another `refs/notes/*` ref (custom refs must be enabled server-side). List refs via `GET /repos/{repo_name}/notes/refs`. |
 | Pagination            | Cursor-based. Pass `next_cursor` as `cursor` param. Stop when `has_more: false`.       |
 | Blob data encoding    | Always base64. Max 4 MiB per chunk. Use multiple chunks for large files.               |
+| `expected_source_sha` | Exact merge source. Use the SHA from the merge preview.                                 |
 | `expected_target_sha` | Optimistic lock. Provide current branch tip SHA to enforce fast-forward semantics.      |
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
-| Merge endpoint        | `POST /repos/{repo_name}/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
+| Merge endpoint        | `POST /repos/{repo_name}/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_source_sha` pins the previewed source commit. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
 | Merge preview         | `GET /repos/{repo_name}/merge/preview?source_branch=...&source_is_ephemeral=true&target_branch=...&target_is_ephemeral=false&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |

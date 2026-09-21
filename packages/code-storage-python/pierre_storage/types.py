@@ -945,6 +945,7 @@ class Repo(Protocol):
         source_ref: Optional[str] = None,
         source_branch: Optional[str] = None,
         source_is_ephemeral: Optional[bool] = None,
+        expected_source_sha: Optional[str] = None,
         target_is_ephemeral: Optional[bool] = None,
         expected_target_sha: Optional[str] = None,
         commit_message: Optional[str] = None,
