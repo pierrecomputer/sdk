@@ -4417,14 +4417,14 @@ describe('GitStorage', () => {
         expect(claims.exp - claims.iat).toBe(120);
         return new Response(JSON.stringify({
           hostname: 'www.example.com', status: domainStatus,
-          effective_url: 'https://website-acme.code.host', records,
+          production_url: 'https://website-acme.code.host', records,
         }), { status, headers: { 'content-type': 'application/json' } });
       });
       const repo = new GitStorage({ name: 'v0', key, fetch: fetchImpl }).repo({ id: 'owner/repo' });
       const result = await repo[operation]({ hostname: ' www.example.com ', ttl: 120, signal });
       expect(result).toEqual({
         hostname: 'www.example.com', status: domainStatus,
-        effectiveUrl: 'https://website-acme.code.host', records,
+        productionUrl: 'https://website-acme.code.host', records,
       });
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
@@ -4433,11 +4433,11 @@ describe('GitStorage', () => {
       const repo = new GitStorage({ name: 'v0', token: 'existing-token' }).repo({ id: 'owner/repo' });
       mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
         hostname: 'website-acme.code.host', status,
-        effective_url: 'https://website-acme.code.host',
+        production_url: 'https://website-acme.code.host',
       })));
       await expect(repo.getDeploymentDomain()).resolves.toEqual({
         hostname: 'website-acme.code.host', status,
-        effectiveUrl: 'https://website-acme.code.host', records: undefined,
+        productionUrl: 'https://website-acme.code.host', records: undefined,
       });
       expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer existing-token');
     });

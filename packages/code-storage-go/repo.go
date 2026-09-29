@@ -1143,10 +1143,10 @@ func (r *Repo) requestDeploymentDomain(ctx context.Context, method string, optio
 		return DeploymentDomain{}, err
 	}
 	return DeploymentDomain{
-		Hostname:     payload.Hostname,
-		Status:       DeploymentDomainStatus(payload.Status),
-		EffectiveURL: payload.EffectiveURL,
-		Records:      payload.Records,
+		Hostname:      payload.Hostname,
+		Status:        DeploymentDomainStatus(payload.Status),
+		ProductionURL: payload.ProductionURL,
+		Records:       payload.Records,
 	}, nil
 }
 

@@ -1844,7 +1844,7 @@ class RepoImpl implements Repo {
     return {
       hostname: raw.hostname,
       status: raw.status,
-      effectiveUrl: raw.effective_url,
+      productionUrl: raw.production_url,
       records: raw.records,
     };
   }

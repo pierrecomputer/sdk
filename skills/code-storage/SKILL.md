@@ -385,12 +385,12 @@ curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/domain" -X DELETE \
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-All three return `hostname`, `status`, `effective_url`, and optional `records`.
+All three return `hostname`, `status`, `production_url`, and optional `records`.
 Each DNS record has `type`, `name` relative to the apex zone (`@`, `www`,
 `_vercel`, etc.), and `value`. Publish and retain these records, including
 when the domain is ready. Statuses are `pending_verification`, `pending_dns`,
 `ready`, `error`, and `unknown`; SDKs preserve future values.
-`effective_url` is the custom URL once ready, otherwise the managed
+`production_url` is the custom URL once ready, otherwise the managed
 `https://<project>-<tenant>.code.host` URL. The managed domain keeps serving
 alongside the custom hostname.
 
@@ -404,14 +404,14 @@ started. Errors use `application/problem+json` with `error`/`detail`.
 SDK methods:
 - TypeScript: `getDeploymentDomain`, `setDeploymentDomain({ hostname })`,
   `deleteDeploymentDomain`; return `DeploymentDomainResult` with
-  `effectiveUrl` and optional `DeploymentDNSRecord[]`.
+  `productionUrl` and optional `DeploymentDNSRecord[]`.
 - Python: `get_deployment_domain`, `set_deployment_domain(hostname=...)`,
-  `delete_deployment_domain`; return `DeploymentDomain` with `effective_url`
+  `delete_deployment_domain`; return `DeploymentDomain` with `production_url`
   and optional `DeploymentDNSRecord` records.
 - Go: `GetDeploymentDomain(ctx, DeploymentDomainOptions{})`,
   `SetDeploymentDomain(ctx, SetDeploymentDomainOptions{Hostname: ...})`,
   `DeleteDeploymentDomain(ctx, DeploymentDomainOptions{})`; return
-  `DeploymentDomain` with `EffectiveURL` and `[]DeploymentDNSRecord`.
+  `DeploymentDomain` with `ProductionURL` and `[]DeploymentDNSRecord`.
 
 
 ## POST/PUT/DELETE /repos/git-credentials — Manage Generic Git Sync Credentials

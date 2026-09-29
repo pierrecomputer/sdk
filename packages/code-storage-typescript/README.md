@@ -214,7 +214,7 @@ Manage the production domain separately from the deployment list:
 
 ```typescript
 const domain = await repo.getDeploymentDomain();
-console.log(domain.effectiveUrl);
+console.log(domain.productionUrl);
 const pending = await repo.setDeploymentDomain({ hostname: 'www.example.com' });
 console.log(pending.records); // Publish and retain these DNS records.
 const updated = await repo.getDeploymentDomain(); // Check status after configuring DNS.
@@ -226,7 +226,7 @@ Domain methods use `/api/repos/{repo_name}/domain`. Reads require
 `deployment:read`; set/delete require `deployment:write`. Setting returns
 `202` while verification proceeds. Status is `pending_verification`,
 `pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
-`effectiveUrl` is the custom URL once ready, otherwise the managed
+`productionUrl` is the custom URL once ready, otherwise the managed
 `https://<project>-<tenant>.code.host` URL, which remains available.
 DNS records contain `type`, `name` (relative to the apex zone), and `value`.
 `getDeploymentDomain` returns an `ApiError` with status `404` if no hosting

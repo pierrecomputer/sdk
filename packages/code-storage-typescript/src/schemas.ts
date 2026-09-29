@@ -148,7 +148,7 @@ export const deploymentResponseSchema = z.object({
 export const deploymentDomainSchema = z.object({
   hostname: z.string(),
   status: z.string(),
-  effective_url: z.string(),
+  production_url: z.string(),
   records: z.array(
     z.object({
       type: z.string(),

@@ -3807,7 +3807,7 @@ class TestDeploymentDomains:
         payload = {
             "hostname": "www.example.com",
             "status": "pending_verification",
-            "effective_url": "https://website-acme.code.host",
+            "production_url": "https://website-acme.code.host",
             "records": [
                 {"type": "TXT", "name": "_vercel", "value": "verification-token"}
             ],
@@ -3842,7 +3842,7 @@ class TestDeploymentDomains:
         payload = {
             "hostname": "website-acme.code.host",
             "status": status,
-            "effective_url": "https://website-acme.code.host",
+            "production_url": "https://website-acme.code.host",
         }
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value.__aenter__.return_value.request = AsyncMock(
