@@ -2250,7 +2250,7 @@ class RepoImpl:
         result: DeploymentDomain = {
             "hostname": str(data["hostname"]),
             "status": str(data["status"]),
-            "effective_url": str(data["effective_url"]),
+            "production_url": str(data["production_url"]),
         }
         if "records" in data:
             result["records"] = [

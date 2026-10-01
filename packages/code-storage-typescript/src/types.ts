@@ -434,7 +434,7 @@ export interface DeploymentDomainResult {
   hostname: string;
   status: DeploymentDomainStatus;
   /** Custom URL once ready; otherwise the managed code.host URL. */
-  effectiveUrl: string;
+  productionUrl: string;
   records?: DeploymentDNSRecord[];
 }
 

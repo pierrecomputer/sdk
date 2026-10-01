@@ -331,9 +331,9 @@ type DeploymentDNSRecord struct {
 type DeploymentDomain struct {
 	Hostname string
 	Status   DeploymentDomainStatus
-	// EffectiveURL is the custom URL once ready, otherwise the managed code.host URL.
-	EffectiveURL string
-	Records      []DeploymentDNSRecord
+	// ProductionURL is the custom URL once ready, otherwise the managed code.host URL.
+	ProductionURL string
+	Records       []DeploymentDNSRecord
 }
 
 // ListDeploymentsResult returns a page of deployments.

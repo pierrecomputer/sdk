@@ -217,7 +217,7 @@ class DeploymentDomain(TypedDict):
 
     hostname: str
     status: str
-    effective_url: str
+    production_url: str
     records: NotRequired[List[DeploymentDNSRecord]]
 
 

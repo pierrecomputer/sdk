@@ -134,10 +134,10 @@ type deploymentResponse struct {
 }
 
 type deploymentDomainResponse struct {
-	Hostname     string                `json:"hostname"`
-	Status       string                `json:"status"`
-	EffectiveURL string                `json:"effective_url"`
-	Records      []DeploymentDNSRecord `json:"records,omitempty"`
+	Hostname      string                `json:"hostname"`
+	Status        string                `json:"status"`
+	ProductionURL string                `json:"production_url"`
+	Records       []DeploymentDNSRecord `json:"records,omitempty"`
 }
 
 type listDeploymentsResponse struct {

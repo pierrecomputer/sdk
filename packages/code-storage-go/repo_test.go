@@ -2905,7 +2905,7 @@ func TestDeploymentDomain(t *testing.T) {
 				w.WriteHeader(test.status)
 				_ = json.NewEncoder(w).Encode(deploymentDomainResponse{
 					Hostname: "www.example.com", Status: "pending_verification",
-					EffectiveURL: "https://website-acme.code.host", Records: records,
+					ProductionURL: "https://website-acme.code.host", Records: records,
 				})
 			}))
 			defer server.Close()
@@ -2921,7 +2921,7 @@ func TestDeploymentDomain(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := DeploymentDomain{Hostname: "www.example.com", Status: DeploymentDomainStatusPendingVerification, EffectiveURL: "https://website-acme.code.host", Records: records}
+			want := DeploymentDomain{Hostname: "www.example.com", Status: DeploymentDomainStatusPendingVerification, ProductionURL: "https://website-acme.code.host", Records: records}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("domain = %#v, want %#v", got, want)
 			}
@@ -2934,7 +2934,7 @@ func TestDeploymentDomainWithoutRecords(t *testing.T) {
 		t.Run(string(status), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(deploymentDomainResponse{Hostname: "website-acme.code.host", Status: string(status), EffectiveURL: "https://website-acme.code.host"})
+				_ = json.NewEncoder(w).Encode(deploymentDomainResponse{Hostname: "website-acme.code.host", Status: string(status), ProductionURL: "https://website-acme.code.host"})
 			}))
 			defer server.Close()
 			client, err := NewClient(Options{Name: "acme", Token: "existing-token", APIBaseURL: server.URL})
@@ -2949,7 +2949,7 @@ func TestDeploymentDomainWithoutRecords(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := DeploymentDomain{Hostname: "website-acme.code.host", Status: status, EffectiveURL: "https://website-acme.code.host"}
+			want := DeploymentDomain{Hostname: "website-acme.code.host", Status: status, ProductionURL: "https://website-acme.code.host"}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("domain = %#v, want %#v", got, want)
 			}

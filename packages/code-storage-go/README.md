@@ -114,7 +114,7 @@ domain, err := repo.GetDeploymentDomain(ctx, storage.DeploymentDomainOptions{})
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Println(domain.EffectiveURL)
+fmt.Println(domain.ProductionURL)
 pending, err := repo.SetDeploymentDomain(ctx, storage.SetDeploymentDomainOptions{
 	Hostname: "www.example.com",
 })
@@ -131,7 +131,7 @@ Domain methods use `/api/repos/{repo_name}/domain`. Reads require
 `deployment:read`; set/delete require `deployment:write`. Setting returns
 `202` while verification proceeds. Status is `pending_verification`,
 `pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
-`EffectiveURL` is the custom URL once ready, otherwise the managed
+`ProductionURL` is the custom URL once ready, otherwise the managed
 `https://<project>-<tenant>.code.host` URL, which remains available.
 DNS records contain `Type`, `Name` (relative to the apex zone), and `Value`.
 A missing hosting project returns `*APIError` with status `404`. If deletion

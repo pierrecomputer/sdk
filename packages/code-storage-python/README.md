@@ -150,7 +150,7 @@ Manage the production domain separately from the deployment list:
 
 ```python
 domain = await repo.get_deployment_domain()
-print(domain["effective_url"])
+print(domain["production_url"])
 pending = await repo.set_deployment_domain(hostname="www.example.com")
 print(pending.get("records", []))  # Publish and retain these DNS records.
 updated = await repo.get_deployment_domain()  # Check status after configuring DNS.
@@ -162,7 +162,7 @@ Domain methods use `/api/repos/{repo_name}/domain`. Reads require
 `deployment:read`; set/delete require `deployment:write`. Setting returns
 `202` while verification proceeds. Status is `pending_verification`,
 `pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
-`effective_url` is the custom URL once ready, otherwise the managed
+`production_url` is the custom URL once ready, otherwise the managed
 `https://<project>-<tenant>.code.host` URL, which remains available.
 DNS records contain `type`, `name` (relative to the apex zone), and `value`.
 A missing hosting project raises `ApiError` with status `404`. If deletion
