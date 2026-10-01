@@ -915,7 +915,7 @@ wheels = [
 
 [[package]]
 name = "pierre-storage"
-version = "1.18.0b0"
+version = "1.18.0b1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
