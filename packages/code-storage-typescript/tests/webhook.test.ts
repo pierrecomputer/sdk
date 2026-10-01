@@ -52,6 +52,22 @@ describe('Webhook Validation', () => {
     };
   }
 
+  it('preserves the current repository name and organization', async () => {
+    const payload = JSON.stringify({
+      ...rawPayload, org: 'acme',
+      repository: { ...rawPayload.repository, repo_name: 'owner/repo' },
+    });
+    const { header } = await generateSignature(payload, secret);
+    const result = await validateWebhook(payload, {
+      'x-pierre-signature': header, 'x-pierre-event': 'push',
+    }, secret);
+    expect(result.valid).toBe(true);
+    expect(result.payload).toEqual({
+      ...expectedPushPayload, org: 'acme',
+      repository: { ...expectedPushPayload.repository, repoName: 'owner/repo' },
+    });
+  });
+
   describe('parseSignatureHeader', () => {
     it('should parse valid signature header', () => {
       const header = 't=1234567890,sha256=abcdef123456';

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -848,5 +849,121 @@ func TestDeleteGitCredential(t *testing.T) {
 	}
 	if receivedBody["id"] != "cred-789" {
 		t.Fatalf("expected id cred-789 in request body, got %v", receivedBody["id"])
+	}
+}
+
+func TestCreateRepoDeploymentSettings(t *testing.T) {
+	var receivedBody map[string]interface{}
+	var scopes []interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/repos" {
+			t.Fatalf("request = %s %s, want POST /api/v1/repos", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&receivedBody); err != nil {
+			t.Fatal(err)
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		scopes, _ = claims["scopes"].([]interface{})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"repo_id":"internal-id"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployOnPush := true
+	apiURL := "https://example.com"
+	_, err = client.CreateRepo(t.Context(), CreateRepoOptions{
+		ID: "owner/repo",
+		Deployment: &DeploymentSettings{
+			DeployOnPush:             &deployOnPush,
+			Framework:                SetDeploymentString("nextjs"),
+			BuildCommand:             ResetDeploymentString(),
+			ServerlessFunctionRegion: SetDeploymentString("fra1"),
+			Env: map[string]*string{
+				"API_URL":   &apiURL,
+				"DELETE_ME": nil,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBody := map[string]interface{}{
+		"default_branch": "main",
+		"deployment": map[string]interface{}{
+			"deploy_on_push":             true,
+			"framework":                  "nextjs",
+			"build_command":              nil,
+			"serverless_function_region": "fra1",
+			"env": map[string]interface{}{
+				"API_URL":   "https://example.com",
+				"DELETE_ME": nil,
+			},
+		},
+	}
+	if !reflect.DeepEqual(receivedBody, wantBody) {
+		t.Fatalf("request body = %#v, want %#v", receivedBody, wantBody)
+	}
+	wantScopes := []interface{}{"repo:write", "deployment:write"}
+	if !reflect.DeepEqual(scopes, wantScopes) {
+		t.Fatalf("scopes = %#v, want %#v", scopes, wantScopes)
+	}
+}
+
+func TestUpdateRepoDeploymentSettings(t *testing.T) {
+	var receivedBody map[string]interface{}
+	var scopes []interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/api/v1/repo" {
+			t.Fatalf("request = %s %s, want PATCH /api/v1/repo", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&receivedBody); err != nil {
+			t.Fatal(err)
+		}
+		claims := parseJWTFromToken(t, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		scopes, _ = claims["scopes"].([]interface{})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"repo_id":"internal-id","id":"internal-id","repo_name":"owner/repo","url":"owner/repo","default_branch":"release"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Options{Name: "acme", Key: testKey, APIBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.UpdateRepo(t.Context(), UpdateRepoOptions{
+		ID:            "owner/repo",
+		DefaultBranch: "release",
+		Deployment: &DeploymentSettings{
+			Framework:                ResetDeploymentString(),
+			ServerlessFunctionRegion: ResetDeploymentString(),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBody := map[string]interface{}{
+		"default_branch": "release",
+		"deployment": map[string]interface{}{
+			"framework":                  nil,
+			"serverless_function_region": nil,
+		},
+	}
+	if !reflect.DeepEqual(receivedBody, wantBody) {
+		t.Fatalf("request body = %#v, want %#v", receivedBody, wantBody)
+	}
+	if !reflect.DeepEqual(scopes, []interface{}{"repo:write"}) {
+		t.Fatalf("scopes = %#v, want repo:write", scopes)
+	}
+	wantResult := UpdateRepoResult{
+		RepoName:      "owner/repo",
+		DefaultBranch: "release",
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Fatalf("result = %#v, want %#v", result, wantResult)
 	}
 }

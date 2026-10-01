@@ -166,6 +166,20 @@ class TestWebhookValidation:
         assert event["pushed_at"].month == 1
         assert event["pushed_at"].day == 15
 
+    def test_parse_push_event_current_fields(self) -> None:
+        payload = {
+            "repository": {"id": "repo", "url": "owner/repo", "repo_name": "owner/repo"},
+            "org": "acme",
+            "ref": "refs/heads/main",
+            "before": "abc",
+            "after": "def",
+            "customer_id": "cust",
+            "pushed_at": "2024-01-15T10:30:00Z",
+        }
+        event = parse_push_event(payload)
+        assert event["org"] == "acme"
+        assert event["repository"] == payload["repository"]
+
     def test_parse_push_event_invalid(self) -> None:
         """Test parsing invalid push event."""
         with pytest.raises(ValueError, match="Invalid push event payload"):

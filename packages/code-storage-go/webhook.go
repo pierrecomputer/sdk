@@ -135,9 +135,11 @@ func ValidateWebhook(payload []byte, headers http.Header, secret string, options
 }
 
 type rawWebhookPushEvent struct {
+	Org        string `json:"org,omitempty"`
 	Repository struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID       string `json:"id"`
+		URL      string `json:"url"`
+		RepoName string `json:"repo_name,omitempty"`
 	} `json:"repository"`
 	Ref        string `json:"ref"`
 	Before     string `json:"before"`
@@ -157,7 +159,8 @@ func convertWebhookPayload(eventType string, payload []byte) (WebhookEventPayloa
 		}
 		return WebhookEventPayload{Push: &WebhookPushEvent{
 			Type:        "push",
-			Repository:  WebhookRepository{ID: raw.Repository.ID, URL: raw.Repository.URL},
+			Repository:  WebhookRepository{ID: raw.Repository.ID, URL: raw.Repository.URL, RepoName: raw.Repository.RepoName},
+			Org:         raw.Org,
 			Ref:         raw.Ref,
 			Before:      raw.Before,
 			After:       raw.After,
