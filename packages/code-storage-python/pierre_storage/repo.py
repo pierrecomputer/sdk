@@ -190,6 +190,9 @@ def _deployment_result(data: Dict[str, Any]) -> DeploymentResult:
         "created_at": str(data["created_at"]),
         "updated_at": str(data["updated_at"]),
     }
+    production_url = data.get("production_url")
+    if isinstance(production_url, str):
+        result["production_url"] = production_url
     url = data.get("url")
     if isinstance(url, str):
         result["url"] = url
@@ -2266,6 +2269,7 @@ class RepoImpl:
     async def create_deployment(
         self,
         *,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         target: Optional[DeploymentTarget] = None,
         idempotency_key: Optional[str] = None,
@@ -2274,6 +2278,13 @@ class RepoImpl:
         """Create a deployment for a repository revision."""
         body: Dict[str, Any] = {}
         ref_clean = normalize_optional_ref(ref)
+        if deployment_id is not None:
+            deployment_id_clean = deployment_id.strip()
+            if not deployment_id_clean:
+                raise ValueError("create_deployment deployment_id must not be empty")
+            if ref_clean:
+                raise ValueError("create_deployment deployment_id and ref are mutually exclusive")
+            body["deployment_id"] = deployment_id_clean
         if ref_clean is not None:
             body["ref"] = ref_clean
         if target is not None:
@@ -2315,14 +2326,27 @@ class RepoImpl:
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
+        status: Optional[List[DeploymentStatus]] = None,
+        environment: Optional[List[DeploymentTarget]] = None,
+        time_range: Optional[Literal["1h", "24h", "7d", "30d", "all"]] = None,
         ttl: Optional[int] = None,
     ) -> ListDeploymentsResult:
         """List durable deployments for the repository."""
-        params: Dict[str, str] = {}
+        params: Dict[str, Any] = {}
         if cursor is not None:
             params["cursor"] = cursor
         if limit is not None:
             params["limit"] = str(limit)
+
+        if q is not None:
+            params["q"] = q
+        if status is not None:
+            params["status"] = status
+        if environment is not None:
+            params["environment"] = environment
+        if time_range is not None:
+            params["time_range"] = time_range
 
         ttl = ttl or DEFAULT_TOKEN_TTL_SECONDS
         jwt = self.generate_jwt(
@@ -2332,7 +2356,7 @@ class RepoImpl:
         repo_name = quote(self._id, safe="")
         url = f"{self.api_base_url}/api/repos/{repo_name}/deployments"
         if params:
-            url += f"?{urlencode(params)}"
+            url += f"?{urlencode(params, doseq=True)}"
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -2389,7 +2413,8 @@ class RepoImpl:
     async def deploy(
         self,
         *,
-        target: DeploymentTarget,
+        target: Optional[DeploymentTarget] = None,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         poll_interval: float = 2.0,
@@ -2402,7 +2427,8 @@ class RepoImpl:
         timeout expires.
 
         Args:
-            target: Deployment target
+            target: Deployment target (defaults to the API default)
+            deployment_id: Earlier deployment to rebuild; mutually exclusive with ref
             ref: Branch, tag, or commit to deploy
             idempotency_key: Key used to make creation idempotent
             poll_interval: Seconds between polls (default 2.0)
@@ -2426,6 +2452,7 @@ class RepoImpl:
         try:
             deployment: DeploymentResult = await asyncio.wait_for(
                 self.create_deployment(
+                    deployment_id=deployment_id,
                     ref=ref,
                     target=target,
                     idempotency_key=idempotency_key,

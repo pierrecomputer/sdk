@@ -197,6 +197,7 @@ def parse_push_event(payload: Dict[str, Any]) -> WebhookPushEvent:
         return {
             "type": "push",
             "repository": payload["repository"],
+            **({"org": payload["org"]} if "org" in payload else {}),
             "ref": payload["ref"],
             "before": payload["before"],
             "after": payload["after"],

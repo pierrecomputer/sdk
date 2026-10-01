@@ -156,7 +156,7 @@ export interface Repo {
   createDeployment(
     options?: CreateDeploymentOptions,
   ): Promise<CreateDeploymentResult>;
-  deploy(options: DeployOptions): Promise<DeploymentResult>;
+  deploy(options?: DeployOptions): Promise<DeploymentResult>;
   listDeployments(
     options?: ListDeploymentsOptions,
   ): Promise<ListDeploymentsResult>;
@@ -358,6 +358,8 @@ export type DeploymentStatus =
   | (string & {});
 
 export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
+  /** Redeploy the exact commit of an earlier deployment; mutually exclusive with ref. */
+  deploymentId?: string;
   ref?: string;
   target?: DeploymentTarget;
   idempotencyKey?: string;
@@ -365,8 +367,7 @@ export interface CreateDeploymentOptions extends GitStorageInvocationOptions {
 }
 
 export interface DeployOptions
-  extends Omit<CreateDeploymentOptions, 'target' | 'signal'> {
-  target: DeploymentTarget;
+  extends Omit<CreateDeploymentOptions, 'signal'> {
   /** Delay between status polls in milliseconds. Defaults to 2000. */
   pollIntervalMs?: number;
   /** Overall create-and-wait budget in milliseconds. Defaults to 600000. */
@@ -378,6 +379,8 @@ export type DeploymentResponse = DeploymentResponseRaw;
 export interface DeploymentResult {
   id: string;
   url?: string;
+  /** Production domain URL; present only on production create/get responses. */
+  productionUrl?: string;
   target: DeploymentTarget;
   ref: string;
   commitSha: string;
@@ -397,6 +400,11 @@ export interface CreateDeploymentResult extends DeploymentResult {
 export interface ListDeploymentsOptions extends GitStorageInvocationOptions {
   cursor?: string;
   limit?: number;
+  /** Case-insensitive substring of the deployment ID. */
+  q?: string;
+  status?: DeploymentStatus[];
+  environment?: DeploymentTarget[];
+  timeRange?: '1h' | '24h' | '7d' | '30d' | 'all';
   signal?: AbortSignal;
 }
 
@@ -1307,7 +1315,9 @@ export interface RawWebhookPushEvent {
   repository: {
     id: string;
     url: string;
+    repo_name?: string;
   };
+  org?: string;
   ref: string;
   before: string;
   after: string;
@@ -1317,9 +1327,11 @@ export interface RawWebhookPushEvent {
 
 export interface WebhookPushEvent {
   type: "push";
+  org?: string;
   repository: {
     id: string;
     url: string;
+    repoName?: string;
   };
   ref: string;
   before: string;

@@ -334,8 +334,13 @@ curl "$CODE_STORAGE_API_ORIGIN/api/repos/owner%2Frepo/deployments/DEPLOYMENT_ID"
   -H "Authorization: Bearer $CODE_STORAGE_TOKEN"
 ```
 
-`target` defaults to `production`; the first deployment of a repository is
-always production. `ref` defaults to the repository default branch.
+`deployment_id` redeploys an earlier deployment with the same ref and exact
+commit, even if the branch moved or was deleted. It is mutually exclusive
+with `ref`. Omit `target` to inherit the earlier deployment's target. For a
+new revision, `target` defaults to `production` and `ref` defaults to the
+repository default branch. The first deployment is always production.
+SDK create and deploy methods accept `deploymentId` (TypeScript),
+`deployment_id` (Python), or `DeploymentID` (Go); target can be omitted.
 
 Create returns `201` for a new deployment and `200` for an idempotent replay.
 The response headers include `Idempotency-Key` (server-generated when omitted),
@@ -344,12 +349,15 @@ when retrying.
 
 Create errors: `400` invalid body or key, `403` `hosting_not_enabled`, `404`
 repository or revision not found, `422` same `Idempotency-Key` reused with a
-different `ref`/`target`, `501` deployments unavailable on this cluster, `503`
+different `ref`/`target`/`deployment_id`, `501` deployments unavailable on this cluster, `503`
 with `Retry-After` when the deployment failed to start (retry the same request).
 List/Get errors: `404` repository or deployment not found.
 
-Deployment fields: `id`, optional `url`, `target`, `ref`, `commit_sha`,
+Deployment fields: `id`, optional `url`/`production_url`, `target`, `ref`, `commit_sha`,
 `status`, optional `error_code`/`error_message`, `created_at`, and `updated_at`.
+`url` appears only when ready. `production_url` appears only on production
+create/get responses and is omitted from list items. SDKs expose it as
+`productionUrl` (TypeScript), `production_url` (Python), and `ProductionURL` (Go).
 Statuses: `queued`, `building`, `ready`, `error`, `canceled`.
 
 SDK convenience: `deploy` / `Deploy` creates a deployment and polls Get
@@ -357,12 +365,20 @@ Deployment (2s interval, 10m timeout by default), resolves on `ready`, and
 fails with a typed `DeploymentFailedError` carrying
 `status`/`error_code`/`error_message` on `error` or `canceled`. On timeout the
 TypeScript SDK throws a `DOMException` named `TimeoutError`, Python raises
-`TimeoutError`, and Go returns the context error. Unknown future statuses are
+`TimeoutError`, and Go returns an error with the last status when its own
+timeout expires (or the caller context error when canceled). Unknown future statuses are
 passed through unchanged; only `ready`, `error`, and `canceled` are terminal.
 Settings validation (region length, env keys, project name) happens
 server-side and surfaces as `400` with the reason in `error`.
 
-List query parameters: `cursor`, `limit` (default 20, maximum 100). The response
+List query parameters: `cursor`, `limit` (default 20, maximum 100), `q`
+(case-insensitive deployment ID substring), repeated `status` (`queued`,
+`building`, `ready`, `error`, `canceled`), repeated `environment` (`preview`,
+`production`), and `time_range` (`1h`, `24h`, `7d`, `30d`, `all`; default `all`).
+SDKs expose `q`/`status`/`environment`/`timeRange` in TypeScript,
+`q`/`status`/`environment`/`time_range` in Python, and
+`Q`/`Status`/`Environment`/`TimeRange` in Go. Status and environment take lists.
+The response
 contains `deployments`, optional `next_cursor`, and `has_more`.
 The production domain is a separate resource; it is not included in this list.
 
@@ -1287,3 +1303,11 @@ git push origin feature-branch
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
 | Merge preview         | `GET /repos/merge/preview?source_branch=...&target_branch=...&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |
+
+## Webhook Push Fields
+
+Push payloads include optional `repository.repo_name` and `org`. Older queued
+deliveries can omit them; retain support for `repository.url` and `customer_id`.
+TypeScript returns `repository.repoName` and `org`, Python preserves
+`repository["repo_name"]` and `org`, and Go returns `Repository.RepoName` and `Org`.
+Unknown event types continue to use the raw-payload fallback.

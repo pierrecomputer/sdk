@@ -4564,6 +4564,37 @@ describe('GitStorage', () => {
       });
     });
 
+    it('redeploys the earlier commit through create and deploy without a target', async () => {
+      const repo = new GitStorage({ name: 'v0', key }).repo({ id: 'owner/repo' });
+      for (const wait of [false, true]) {
+        mockFetch.mockImplementationOnce((_url, init) => {
+          expect(JSON.parse(init?.body as string)).toEqual({
+            deployment_id: 'previous',
+          });
+          return Promise.resolve(
+            new Response(JSON.stringify({
+              ...rawDeployment,
+              target: 'production',
+              status: 'ready',
+              production_url: 'https://production.example.test',
+            }), { status: 201 })
+          );
+        });
+        const options = { deploymentId: ' previous ' };
+        const result = wait
+          ? await repo.deploy(options)
+          : await repo.createDeployment(options);
+        expect(result.productionUrl).toBe('https://production.example.test');
+      }
+      await expect(
+        repo.createDeployment({ deploymentId: ' ' })
+      ).rejects.toThrow('must not be empty');
+      await expect(
+        repo.deploy({ deploymentId: 'previous', ref: 'main' })
+      ).rejects.toThrow('mutually exclusive');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('reports an idempotent replay', async () => {
       const store = new GitStorage({ name: 'v0', key });
       const repo = store.repo({ id: 'owner/repo' });
@@ -4596,6 +4627,10 @@ describe('GitStorage', () => {
         );
         expect(requestUrl.searchParams.get('cursor')).toBe('page-2');
         expect(requestUrl.searchParams.get('limit')).toBe('10');
+        expect(requestUrl.searchParams.get('q')).toBe('release & 1');
+        expect(requestUrl.searchParams.getAll('status')).toEqual(['ready', 'error']);
+        expect(requestUrl.searchParams.getAll('environment')).toEqual(['production', 'preview']);
+        expect(requestUrl.searchParams.get('time_range')).toBe('7d');
         const headers = init?.headers as Record<string, string>;
         const payload = decodeJwtPayload(stripBearer(headers.Authorization));
         expect(payload.scopes).toEqual(['deployment:read']);
@@ -4624,6 +4659,10 @@ describe('GitStorage', () => {
       const result = await repo.listDeployments({
         cursor: 'page-2',
         limit: 10,
+        q: 'release & 1',
+        status: ['ready', 'error'],
+        environment: ['production', 'preview'],
+        timeRange: '7d',
       });
       expect(result).not.toHaveProperty('domain');
       expect(result.nextCursor).toBe('page-3');
@@ -4645,7 +4684,7 @@ describe('GitStorage', () => {
         const payload = decodeJwtPayload(stripBearer(headers.Authorization));
         expect(payload.scopes).toEqual(['deployment:read']);
         return Promise.resolve(
-          new Response(JSON.stringify({ ...rawDeployment, status: 'ready' }), {
+          new Response(JSON.stringify({ ...rawDeployment, status: 'ready', production_url: 'https://production.example.test' }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           })
@@ -4656,6 +4695,7 @@ describe('GitStorage', () => {
         deploymentId: 'deployment/1',
       });
       expect(result.status).toBe('ready');
+      expect(result.productionUrl).toBe('https://production.example.test');
       expect(result.commitSha).toBe(
         '0123456789abcdef0123456789abcdef01234567'
       );

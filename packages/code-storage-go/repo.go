@@ -1088,16 +1088,17 @@ func (r *Repo) PullUpstream(ctx context.Context, options PullUpstreamOptions) er
 
 func deploymentResult(payload deploymentResponse) DeploymentResult {
 	return DeploymentResult{
-		ID:           payload.ID,
-		URL:          payload.URL,
-		Target:       payload.Target,
-		Ref:          payload.Ref,
-		CommitSHA:    payload.CommitSHA,
-		Status:       payload.Status,
-		ErrorCode:    payload.ErrorCode,
-		ErrorMessage: payload.ErrorMessage,
-		CreatedAt:    payload.CreatedAt,
-		UpdatedAt:    payload.UpdatedAt,
+		ID:            payload.ID,
+		URL:           payload.URL,
+		ProductionURL: payload.ProductionURL,
+		Target:        payload.Target,
+		Ref:           payload.Ref,
+		CommitSHA:     payload.CommitSHA,
+		Status:        payload.Status,
+		ErrorCode:     payload.ErrorCode,
+		ErrorMessage:  payload.ErrorMessage,
+		CreatedAt:     payload.CreatedAt,
+		UpdatedAt:     payload.UpdatedAt,
 	}
 }
 
@@ -1152,6 +1153,15 @@ func (r *Repo) requestDeploymentDomain(ctx context.Context, method string, optio
 
 // CreateDeployment creates a deployment for a repository revision.
 func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOptions) (CreateDeploymentResult, error) {
+	deploymentID := strings.TrimSpace(options.DeploymentID)
+	if options.DeploymentID != "" {
+		if deploymentID == "" {
+			return CreateDeploymentResult{}, errors.New("create deployment id must not be empty")
+		}
+		if strings.TrimSpace(options.Ref) != "" {
+			return CreateDeploymentResult{}, errors.New("deployment id and ref are mutually exclusive")
+		}
+	}
 	ttl := resolveInvocationTTL(options.InvocationOptions, defaultTokenTTL)
 	jwtToken, err := r.client.generateJWT(r.ID, RemoteURLOptions{
 		Permissions: []Permission{PermissionDeploymentWrite},
@@ -1168,8 +1178,9 @@ func (r *Repo) CreateDeployment(ctx context.Context, options CreateDeploymentOpt
 	}
 	path := "repos/" + url.PathEscape(r.ID) + "/deployments"
 	resp, err := r.client.api.post(ctx, path, nil, &createDeploymentRequest{
-		Ref:    strings.TrimSpace(options.Ref),
-		Target: options.Target,
+		DeploymentID: deploymentID,
+		Ref:          strings.TrimSpace(options.Ref),
+		Target:       options.Target,
 	}, jwtToken, requestOpts)
 	if err != nil {
 		return CreateDeploymentResult{}, err
@@ -1208,6 +1219,18 @@ func (r *Repo) ListDeployments(ctx context.Context, options ListDeploymentsOptio
 	}
 	if options.Limit != 0 {
 		params.Set("limit", strconv.Itoa(options.Limit))
+	}
+	if options.Q != "" {
+		params.Set("q", options.Q)
+	}
+	for _, status := range options.Status {
+		params.Add("status", string(status))
+	}
+	for _, environment := range options.Environment {
+		params.Add("environment", string(environment))
+	}
+	if options.TimeRange != "" {
+		params.Set("time_range", options.TimeRange)
 	}
 	if len(params) == 0 {
 		params = nil
@@ -1284,6 +1307,7 @@ func (r *Repo) Deploy(ctx context.Context, options DeployOptions) (DeploymentRes
 	deployCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	created, err := r.CreateDeployment(deployCtx, CreateDeploymentOptions{
+		DeploymentID:      options.DeploymentID,
 		InvocationOptions: options.InvocationOptions,
 		Ref:               options.Ref,
 		Target:            options.Target,

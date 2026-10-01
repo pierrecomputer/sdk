@@ -717,6 +717,7 @@ function transformDeploymentResult(
   return {
     id: raw.id,
     url: raw.url,
+    productionUrl: raw.production_url,
     target: raw.target,
     ref: raw.ref,
     commitSha: raw.commit_sha,
@@ -1854,6 +1855,18 @@ class RepoImpl implements Repo {
   ): Promise<CreateDeploymentResult> {
     const body: Record<string, unknown> = {};
     const ref = options.ref?.trim();
+    if (options.deploymentId !== undefined) {
+      const deploymentId = options.deploymentId.trim();
+      if (!deploymentId) {
+        throw new Error('createDeployment deploymentId must not be empty');
+      }
+      if (ref) {
+        throw new Error(
+          'createDeployment deploymentId and ref are mutually exclusive'
+        );
+      }
+      body.deployment_id = deploymentId;
+    }
     if (ref) {
       body.ref = ref;
     }
@@ -1898,13 +1911,18 @@ class RepoImpl implements Repo {
   async listDeployments(
     options: ListDeploymentsOptions = {}
   ): Promise<ListDeploymentsResult> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string | string[]> = {};
     if (options.cursor !== undefined) {
       params.cursor = options.cursor;
     }
     if (options.limit !== undefined) {
       params.limit = String(options.limit);
     }
+
+    if (options.q !== undefined) params.q = options.q;
+    if (options.status !== undefined) params.status = options.status;
+    if (options.environment !== undefined) params.environment = options.environment;
+    if (options.timeRange !== undefined) params.time_range = options.timeRange;
 
     const ttl = resolveInvocationTtlSeconds(options, DEFAULT_TOKEN_TTL_SECONDS);
     const jwt = await this.generateJWT(this.id, {
@@ -1949,7 +1967,7 @@ class RepoImpl implements Repo {
     );
   }
 
-  async deploy(options: DeployOptions): Promise<DeploymentResult> {
+  async deploy(options: DeployOptions = {}): Promise<DeploymentResult> {
     const pollIntervalMs =
       options.pollIntervalMs ?? DEFAULT_DEPLOYMENT_POLL_INTERVAL_MS;
     if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {

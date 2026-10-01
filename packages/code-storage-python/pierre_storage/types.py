@@ -188,6 +188,7 @@ class DeploymentResult(TypedDict):
     created_at: str
     updated_at: str
     url: NotRequired[str]
+    production_url: NotRequired[str]
     error_code: NotRequired[str]
     error_message: NotRequired[str]
 
@@ -1211,6 +1212,7 @@ class Repo(Protocol):
     async def create_deployment(
         self,
         *,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         target: Optional[DeploymentTarget] = None,
         idempotency_key: Optional[str] = None,
@@ -1222,7 +1224,8 @@ class Repo(Protocol):
     async def deploy(
         self,
         *,
-        target: DeploymentTarget,
+        target: Optional[DeploymentTarget] = None,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         poll_interval: float = 2.0,
@@ -1237,6 +1240,10 @@ class Repo(Protocol):
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
+        status: Optional[List[DeploymentStatus]] = None,
+        environment: Optional[List[DeploymentTarget]] = None,
+        time_range: Optional[Literal["1h", "24h", "7d", "30d", "all"]] = None,
         ttl: Optional[int] = None,
     ) -> ListDeploymentsResult:
         """List durable deployments for the repository."""
@@ -1318,6 +1325,7 @@ class WebhookPushEvent(TypedDict):
     before: str
     after: str
     customer_id: str
+    org: NotRequired[str]
     pushed_at: datetime
     raw_pushed_at: str
 

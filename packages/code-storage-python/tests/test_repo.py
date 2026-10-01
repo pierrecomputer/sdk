@@ -3610,6 +3610,32 @@ class TestRepositoryDeployments:
         assert result["idempotent_replayed"] is False
 
     @pytest.mark.asyncio
+    async def test_redeploy_and_wait_preserve_production_url(
+        self, git_storage_options: dict
+    ) -> None:
+        repo = GitStorage(git_storage_options).repo(id="owner/repo")
+        response = MagicMock(status_code=201, is_success=True)
+        response.json.return_value = {
+            **self.raw_deployment,
+            "target": "production",
+            "status": "ready",
+            "production_url": "https://production.example.test",
+        }
+        response.headers = {}
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            for operation in (repo.create_deployment, repo.deploy):
+                result = await operation(deployment_id=" previous ")
+                assert mock_post.await_args.kwargs["json"] == {"deployment_id": "previous"}
+                assert result["production_url"] == "https://production.example.test"
+            with pytest.raises(ValueError, match="must not be empty"):
+                await repo.create_deployment(deployment_id=" ")
+            with pytest.raises(ValueError, match="mutually exclusive"):
+                await repo.deploy(deployment_id="previous", ref="main")
+            assert mock_post.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_list_maps_pagination_and_read_scope(self, git_storage_options: dict) -> None:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
@@ -3630,12 +3656,26 @@ class TestRepositoryDeployments:
         with patch("httpx.AsyncClient") as mock_client:
             mock_get = AsyncMock(return_value=response)
             mock_client.return_value.__aenter__.return_value.get = mock_get
-            result = await repo.list_deployments(cursor="page-2", limit=10)
+            result = await repo.list_deployments(
+                cursor="page-2",
+                limit=10,
+                q="release & 1",
+                status=["ready", "error"],
+                environment=["production", "preview"],
+                time_range="7d",
+            )
 
         call = mock_get.await_args
         parsed = urlparse(call.args[0])
         assert parsed.path == "/api/repos/owner%2Frepo/deployments"
-        assert parse_qs(parsed.query) == {"cursor": ["page-2"], "limit": ["10"]}
+        assert parse_qs(parsed.query) == {
+            "cursor": ["page-2"],
+            "limit": ["10"],
+            "q": ["release & 1"],
+            "status": ["ready", "error"],
+            "environment": ["production", "preview"],
+            "time_range": ["7d"],
+        }
         token = call.kwargs["headers"]["Authorization"].removeprefix("Bearer ")
         claims = jwt.decode(token, options={"verify_signature": False})
         assert claims["scopes"] == ["deployment:read"]
@@ -3648,7 +3688,11 @@ class TestRepositoryDeployments:
         storage = GitStorage(git_storage_options)
         repo = storage.repo(id="owner/repo")
         response = MagicMock(status_code=200, is_success=True)
-        response.json.return_value = {**self.raw_deployment, "status": "ready"}
+        response.json.return_value = {
+            **self.raw_deployment,
+            "status": "ready",
+            "production_url": "https://production.example.test",
+        }
 
         with patch("httpx.AsyncClient") as mock_client:
             mock_get = AsyncMock(return_value=response)
@@ -3658,6 +3702,7 @@ class TestRepositoryDeployments:
         call = mock_get.await_args
         assert urlparse(call.args[0]).path == "/api/repos/owner%2Frepo/deployments/deployment%2F1"
         assert result["status"] == "ready"
+        assert result["production_url"] == "https://production.example.test"
 
 
 class TestDeploy:

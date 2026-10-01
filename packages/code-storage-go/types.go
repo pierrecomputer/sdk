@@ -248,23 +248,26 @@ const (
 
 // DeploymentResult describes a durable repository deployment.
 type DeploymentResult struct {
-	ID           string
-	URL          string
-	Target       DeploymentTarget
-	Ref          string
-	CommitSHA    string
-	Status       DeploymentStatus
-	ErrorCode    string
-	ErrorMessage string
-	CreatedAt    string
-	UpdatedAt    string
+	ID            string
+	URL           string
+	ProductionURL string
+	Target        DeploymentTarget
+	Ref           string
+	CommitSHA     string
+	Status        DeploymentStatus
+	ErrorCode     string
+	ErrorMessage  string
+	CreatedAt     string
+	UpdatedAt     string
 }
 
 // CreateDeploymentOptions controls deployment creation.
 type CreateDeploymentOptions struct {
 	InvocationOptions
-	Ref string
-	// Target is preview or production. Empty uses the server default (production).
+	// DeploymentID redeploys an earlier commit; mutually exclusive with Ref.
+	DeploymentID string
+	Ref          string
+	// Target is preview or production. Empty inherits the earlier deployment target, or defaults to production.
 	Target         DeploymentTarget
 	IdempotencyKey string
 }
@@ -280,8 +283,10 @@ type CreateDeploymentResult struct {
 // DeployOptions controls deployment creation and readiness polling.
 type DeployOptions struct {
 	InvocationOptions
-	Ref string
-	// Target is preview or production. Empty uses the server default (production).
+	// DeploymentID redeploys an earlier commit; mutually exclusive with Ref.
+	DeploymentID string
+	Ref          string
+	// Target is preview or production. Empty inherits the earlier deployment target, or defaults to production.
 	Target         DeploymentTarget
 	IdempotencyKey string
 	// PollInterval is the delay between status polls; zero defaults to 2 seconds.
@@ -295,6 +300,12 @@ type ListDeploymentsOptions struct {
 	InvocationOptions
 	Cursor string
 	Limit  int
+	// Q matches deployment IDs by case-insensitive substring.
+	Q           string
+	Status      []DeploymentStatus
+	Environment []DeploymentTarget
+	// TimeRange is 1h, 24h, 7d, 30d, or all.
+	TimeRange string
 }
 
 // DeploymentDomainStatus is the production domain readiness.
@@ -1277,6 +1288,7 @@ type ParsedWebhookSignature struct {
 
 // WebhookPushEvent describes a push webhook.
 type WebhookPushEvent struct {
+	Org         string
 	Type        string
 	Repository  WebhookRepository
 	Ref         string
@@ -1289,8 +1301,9 @@ type WebhookPushEvent struct {
 
 // WebhookRepository describes webhook repo.
 type WebhookRepository struct {
-	ID  string
-	URL string
+	RepoName string
+	ID       string
+	URL      string
 }
 
 // WebhookUnknownEvent is a fallback for unknown events.

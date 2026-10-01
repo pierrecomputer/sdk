@@ -121,16 +121,17 @@ type updateRepoResponse struct {
 }
 
 type deploymentResponse struct {
-	ID           string           `json:"id"`
-	URL          string           `json:"url,omitempty"`
-	Target       DeploymentTarget `json:"target"`
-	Ref          string           `json:"ref"`
-	CommitSHA    string           `json:"commit_sha"`
-	Status       DeploymentStatus `json:"status"`
-	ErrorCode    string           `json:"error_code,omitempty"`
-	ErrorMessage string           `json:"error_message,omitempty"`
-	CreatedAt    string           `json:"created_at"`
-	UpdatedAt    string           `json:"updated_at"`
+	ProductionURL string           `json:"production_url,omitempty"`
+	ID            string           `json:"id"`
+	URL           string           `json:"url,omitempty"`
+	Target        DeploymentTarget `json:"target"`
+	Ref           string           `json:"ref"`
+	CommitSHA     string           `json:"commit_sha"`
+	Status        DeploymentStatus `json:"status"`
+	ErrorCode     string           `json:"error_code,omitempty"`
+	ErrorMessage  string           `json:"error_message,omitempty"`
+	CreatedAt     string           `json:"created_at"`
+	UpdatedAt     string           `json:"updated_at"`
 }
 
 type deploymentDomainResponse struct {

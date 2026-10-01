@@ -134,6 +134,7 @@ export const deploymentTargetSchema = z.enum(['preview', 'production']);
 export const deploymentResponseSchema = z.object({
   id: z.string(),
   url: z.string().optional(),
+  production_url: z.string().optional(),
   target: deploymentTargetSchema,
   ref: z.string(),
   commit_sha: z.string(),

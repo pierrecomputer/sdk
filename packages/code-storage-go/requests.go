@@ -17,8 +17,9 @@ type updateRepoRequest struct {
 
 // createDeploymentRequest is the JSON body for CreateDeployment.
 type createDeploymentRequest struct {
-	Ref    string           `json:"ref,omitempty"`
-	Target DeploymentTarget `json:"target,omitempty"`
+	DeploymentID string           `json:"deployment_id,omitempty"`
+	Ref          string           `json:"ref,omitempty"`
+	Target       DeploymentTarget `json:"target,omitempty"`
 }
 
 // buildDeploymentSettingsRequest validates settings and builds the wire

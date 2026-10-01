@@ -107,6 +107,27 @@ An empty `Target` uses the server default, `production`.
 10m end-to-end timeout by default). `CreateDeployment` returns immediately with
 the current state. Reuse the same idempotency key when retrying creation.
 
+Redeploy an earlier commit and filter deployment history:
+
+```go
+redeployed, err := repo.Deploy(ctx, storage.DeployOptions{DeploymentID: created.ID})
+page, err := repo.ListDeployments(ctx, storage.ListDeploymentsOptions{
+    Limit: 20,
+    Q: "deployment",
+    Status: []storage.DeploymentStatus{storage.DeploymentStatusReady, storage.DeploymentStatusError},
+    Environment: []storage.DeploymentTarget{storage.DeploymentTargetPreview},
+    TimeRange: "7d",
+})
+```
+
+`DeploymentID` rebuilds the exact earlier commit, even if its branch moved or
+was deleted. It cannot be combined with `Ref`. Omit `Target` to inherit that
+deployment's target; other creates default to production. `ProductionURL`
+appears on production create/get responses; it is empty on list items and
+previews. `Q` matches deployment IDs by case-insensitive substring. `Status`
+and `Environment` accept multiple values; `TimeRange` is `1h`, `24h`, `7d`,
+`30d`, or `all`.
+
 Manage the production domain separately from the deployment list:
 
 ```go
@@ -454,3 +475,8 @@ fmt.Println(repo.ID)
 - Create commits via streaming commit-pack or diff-commit endpoints.
 - Restore commits, merge branches, manage git notes, create branches, and manage tags.
 - Validate webhook signatures and parse push events.
+
+### Webhook push fields
+
+Push events preserve optional `Repository.RepoName` and `Org` fields. Older queued events
+may omit them; the legacy repository URL and customer ID remain available.

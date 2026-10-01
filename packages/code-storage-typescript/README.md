@@ -197,7 +197,14 @@ const created = await repo.createDeployment({
   ref: 'feature',
   target: 'preview',
 });
-const page = await repo.listDeployments({ limit: 20 });
+const redeployed = await repo.deploy({ deploymentId: created.id });
+const page = await repo.listDeployments({
+  limit: 20,
+  q: 'deployment',
+  status: ['ready', 'error'],
+  environment: ['preview'],
+  timeRange: '7d',
+});
 const current = await repo.getDeployment({
   deploymentId: created.id,
 });
@@ -209,6 +216,14 @@ const current = await repo.getDeployment({
 budget expires. `createDeployment` returns immediately with the current
 state. Reuse the same idempotency key when retrying a create request. The SDK
 mints the required repository and deployment scopes automatically.
+
+`deploymentId` rebuilds the exact commit of an earlier deployment, even if its
+branch moved or was deleted. It cannot be combined with `ref`. Omit `target`
+to inherit that deployment's target; other creates default to production.
+`productionUrl` is optional and appears on production create/get responses;
+the list omits it. `q` matches deployment IDs by case-insensitive substring.
+`status` and `environment` accept multiple values; `timeRange` is `1h`, `24h`,
+`7d`, `30d`, or `all`.
 
 Manage the production domain separately from the deployment list:
 
@@ -768,7 +783,7 @@ interface Repo {
   createDeployment(
     options?: CreateDeploymentOptions
   ): Promise<CreateDeploymentResult>;
-  deploy(options: DeployOptions): Promise<DeploymentResult>;
+  deploy(options?: DeployOptions): Promise<DeploymentResult>;
   listDeployments(
     options?: ListDeploymentsOptions
   ): Promise<ListDeploymentsResult>;
@@ -1328,6 +1343,11 @@ try {
 - Mutating operations (commit builder, `restoreCommit`) throw `RefUpdateError`
   when the backend reports a ref failure. Inspect `error.status`,
   `error.reason`, `error.message`, and `error.refUpdate` for details.
+
+### Webhook push fields
+
+Push events preserve optional `repository.repoName` and `org` fields. Older queued events
+may omit them; the legacy repository URL and customer ID remain available.
 
 ## License
 

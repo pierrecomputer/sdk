@@ -137,7 +137,11 @@ ready = await repo.deploy(
 print(ready["url"])
 
 created = await repo.create_deployment(ref="feature", target="preview")
-page = await repo.list_deployments(limit=20)
+redeployed = await repo.deploy(deployment_id=created["id"])
+page = await repo.list_deployments(
+    limit=20, q="deployment", status=["ready", "error"],
+    environment=["preview"], time_range="7d",
+)
 current = await repo.get_deployment(deployment_id=created["id"])
 ```
 
@@ -145,6 +149,14 @@ current = await repo.get_deployment(deployment_id=created["id"])
 10m end-to-end timeout by default). It raises `DeploymentFailedError` on
 `error` or `canceled`, and `TimeoutError` when the budget expires. `create_deployment` returns immediately with the current
 state. Reuse the same idempotency key when retrying creation.
+
+`deployment_id` rebuilds the exact commit of an earlier deployment, even if its
+branch moved or was deleted. It cannot be combined with `ref`. Omit `target`
+to inherit that deployment's target; other creates default to production.
+`production_url` is optional and appears on production create/get responses;
+the list omits it. `q` matches deployment IDs by case-insensitive substring.
+`status` and `environment` accept multiple values; `time_range` is `1h`, `24h`,
+`7d`, `30d`, or `all`.
 
 Manage the production domain separately from the deployment list:
 
@@ -1079,6 +1091,7 @@ class Repo:
     async def create_deployment(
         self,
         *,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         target: Optional[DeploymentTarget] = None,
         idempotency_key: Optional[str] = None,
@@ -1088,7 +1101,8 @@ class Repo:
     async def deploy(
         self,
         *,
-        target: DeploymentTarget,
+        target: Optional[DeploymentTarget] = None,
+        deployment_id: Optional[str] = None,
         ref: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         poll_interval: float = 2.0,
@@ -1101,6 +1115,10 @@ class Repo:
         *,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        q: Optional[str] = None,
+        status: Optional[List[DeploymentStatus]] = None,
+        environment: Optional[List[DeploymentTarget]] = None,
+        time_range: Optional[Literal["1h", "24h", "7d", "30d", "all"]] = None,
         ttl: Optional[int] = None,
     ) -> ListDeploymentsResult: ...
 
@@ -1218,6 +1236,10 @@ BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo]
 ```
 
 ## Webhook Validation
+
+Push events preserve optional `repository["repo_name"]` and `org` fields. Older queued events
+may omit them; the legacy repository URL and customer ID remain available.
+
 
 The SDK includes utilities for validating webhook signatures:
 
