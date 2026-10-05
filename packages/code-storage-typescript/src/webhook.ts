@@ -283,7 +283,11 @@ function transformPushEvent(raw: RawWebhookPushEvent): WebhookPushEvent {
     repository: {
       id: raw.repository.id,
       url: raw.repository.url,
+      ...(raw.repository.repo_name !== undefined
+        ? { repoName: raw.repository.repo_name }
+        : {}),
     },
+    ...(raw.org !== undefined ? { org: raw.org } : {}),
     ref: raw.ref,
     before: raw.before,
     after: raw.after,
@@ -303,6 +307,9 @@ function isRawWebhookPushEvent(value: unknown): value is RawWebhookPushEvent {
   return (
     typeof value.repository.id === 'string' &&
     typeof value.repository.url === 'string' &&
+    (value.repository.repo_name === undefined ||
+      typeof value.repository.repo_name === 'string') &&
+    (value.org === undefined || typeof value.org === 'string') &&
     typeof value.ref === 'string' &&
     typeof value.before === 'string' &&
     typeof value.after === 'string' &&

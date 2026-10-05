@@ -97,6 +97,91 @@ result = await repo.grep(
 print(result["matches"])
 ```
 
+### Repository Deployments
+
+Configure hosting when creating or updating a repository:
+
+```python
+repo = await storage.create_repo(
+    id="my-custom-repo",
+    deployment={
+        "deploy_on_push": True,
+        "production_branch": "main",
+        "framework": "nextjs",
+        "root_directory": "apps/web",
+        "serverless_function_region": "fra1",
+        "env": {"API_URL": "https://example.com"},
+    },
+)
+
+await storage.update_repo(
+    id=repo.id,
+    deployment={
+        "framework": None,
+        "serverless_function_region": None,
+        "env": {"OLD_SECRET": None},
+    },
+)
+```
+
+Omit nullable build settings to leave them unchanged; pass `None` to reset
+them. Region codes are at most four characters and apply from the next
+deployment.
+
+```python
+ready = await repo.deploy(
+    ref="main",
+    target="production",
+    idempotency_key="release-2026-08-27",
+)
+print(ready["url"])
+
+created = await repo.create_deployment(ref="feature", target="preview")
+redeployed = await repo.deploy(deployment_id=created["id"])
+page = await repo.list_deployments(
+    limit=20, q="deployment", status=["ready", "error"],
+    environment=["preview"], time_range="7d",
+)
+current = await repo.get_deployment(deployment_id=created["id"])
+```
+
+`deploy` creates and polls until the deployment reaches `ready` (2s interval,
+10m end-to-end timeout by default). It raises `DeploymentFailedError` on
+`error` or `canceled`, and `TimeoutError` when the budget expires. `create_deployment` returns immediately with the current
+state. Reuse the same idempotency key when retrying creation.
+
+`deployment_id` rebuilds the exact commit of an earlier deployment, even if its
+branch moved or was deleted. It cannot be combined with `ref`. Omit `target`
+to inherit that deployment's target; other creates default to production.
+`production_url` is optional and appears on production create/get responses;
+the list omits it. `q` matches deployment IDs by case-insensitive substring.
+`status` and `environment` accept multiple values; `time_range` is `1h`, `24h`,
+`7d`, `30d`, or `all`.
+
+Manage the production domain separately from the deployment list:
+
+```python
+domain = await repo.get_deployment_domain()
+print(domain["production_url"])
+pending = await repo.set_deployment_domain(hostname="www.example.com")
+print(pending.get("records", []))  # Publish and retain these DNS records.
+updated = await repo.get_deployment_domain()  # Check status after configuring DNS.
+# To remove the custom hostname:
+managed = await repo.delete_deployment_domain()
+```
+
+Domain methods use `/api/repos/{repo_name}/domain`. Reads require
+`deployment:read`; set/delete require `deployment:write`. Setting returns
+`202` while verification proceeds. Status is `pending_verification`,
+`pending_dns`, `ready`, `error`, or `unknown`; future values pass through.
+`production_url` is the custom URL once ready, otherwise the managed
+`https://<project>-<tenant>.code.host` URL, which remains available.
+DNS records contain `type`, `name` (relative to the apex zone), and `value`.
+A missing hosting project raises `ApiError` with status `404`. If deletion
+raises `ApiError` with status `503`, retry deletion after the `Retry-After`
+delay in `error.response.headers`; cleanup has not finished.
+All domain methods accept an optional `ttl` in seconds.
+
 ### Getting Remote URLs
 
 The SDK generates secure URLs with JWT authentication for Git operations:
@@ -691,8 +776,17 @@ class GitStorage:
         id: Optional[str] = None,
         default_branch: Optional[str] = None,  # defaults to "main"
         base_repo: Optional[BaseRepo] = None,
+        deployment: Optional[DeploymentSettings] = None,
         ttl: Optional[int] = None,
     ) -> Repo: ...
+    async def update_repo(
+        self,
+        *,
+        id: str,
+        default_branch: Optional[str] = None,
+        deployment: Optional[DeploymentSettings] = None,
+        ttl: Optional[int] = None,
+    ) -> UpdateRepoResult: ...
     async def find_one(self, *, id: str) -> Optional[Repo]: ...
     def repo(
         self,
@@ -994,6 +1088,47 @@ class Repo:
         ttl: Optional[int] = None,
         ref_policies: Optional[Refs] = None,
     ) -> None: ...
+    async def create_deployment(
+        self,
+        *,
+        deployment_id: Optional[str] = None,
+        ref: Optional[str] = None,
+        target: Optional[DeploymentTarget] = None,
+        idempotency_key: Optional[str] = None,
+        ttl: Optional[int] = None,
+    ) -> CreateDeploymentResult: ...
+
+    async def deploy(
+        self,
+        *,
+        target: Optional[DeploymentTarget] = None,
+        deployment_id: Optional[str] = None,
+        ref: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        poll_interval: float = 2.0,
+        timeout: float = 600.0,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult: ...
+
+    async def list_deployments(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        q: Optional[str] = None,
+        status: Optional[List[DeploymentStatus]] = None,
+        environment: Optional[List[DeploymentTarget]] = None,
+        time_range: Optional[Literal["1h", "24h", "7d", "30d", "all"]] = None,
+        ttl: Optional[int] = None,
+    ) -> ListDeploymentsResult: ...
+
+    async def get_deployment(
+        self,
+        *,
+        deployment_id: str,
+        ttl: Optional[int] = None,
+    ) -> DeploymentResult: ...
+
 
     async def restore_commit(
         self,
@@ -1060,6 +1195,11 @@ from pierre_storage.types import (
     ListBranchesResult,
     ListTagsResult,
     ListCommitsResult,
+    DeploymentSettings,
+    DeploymentResult,
+    CreateDeploymentResult,
+    ListDeploymentsResult,
+    UpdateRepoResult,
     BlameResult,
     GetBranchDiffResult,
     GetCommitDiffResult,
@@ -1096,6 +1236,10 @@ BaseRepo = Union[GitHubBaseRepo, ForkBaseRepo]
 ```
 
 ## Webhook Validation
+
+Push events preserve optional `repository["repo_name"]` and `org` fields. Older queued events
+may omit them; the legacy repository URL and customer ID remain available.
+
 
 The SDK includes utilities for validating webhook signatures:
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -170,6 +171,22 @@ func TestValidateWebhook(t *testing.T) {
 	result = ValidateWebhook(payload, wrongHeaders, secret, WebhookValidationOptions{})
 	if result.Valid || result.Error != "invalid signature" {
 		t.Fatalf("expected invalid signature error")
+	}
+}
+
+func TestWebhookCurrentFields(t *testing.T) {
+	payload := []byte(`{"org":"acme","repository":{"id":"repo","url":"owner/repo","repo_name":"owner/repo"},"ref":"refs/heads/main","before":"abc","after":"def","customer_id":"cust","pushed_at":"2024-01-20T10:30:00Z"}`)
+	headers := http.Header{}
+	headers.Set("X-Pierre-Signature", buildSignatureHeader(t, payload, "secret", time.Now().Unix()))
+	headers.Set("X-Pierre-Event", "push")
+	result := ValidateWebhook(payload, headers, "secret", WebhookValidationOptions{})
+	want := &WebhookPushEvent{
+		Type: "push", Org: "acme", Repository: WebhookRepository{ID: "repo", URL: "owner/repo", RepoName: "owner/repo"},
+		Ref: "refs/heads/main", Before: "abc", After: "def", CustomerID: "cust",
+		PushedAt: time.Date(2024, 1, 20, 10, 30, 0, 0, time.UTC), RawPushedAt: "2024-01-20T10:30:00Z",
+	}
+	if !result.Valid || result.Payload == nil || !reflect.DeepEqual(result.Payload.Push, want) {
+		t.Fatalf("result = %#v, want push %#v", result, want)
 	}
 }
 

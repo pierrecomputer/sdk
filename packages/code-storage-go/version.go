@@ -3,7 +3,7 @@ package storage
 const (
 	PackageName = "code-storage-go-sdk"
 	// PackageVersion is set from .version by scripts/sync_versions.py.
-	PackageVersion = "1.17.1"
+	PackageVersion = "1.18.0-beta.1"
 )
 
 func userAgent() string {

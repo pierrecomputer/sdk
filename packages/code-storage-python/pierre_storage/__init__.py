@@ -5,7 +5,7 @@ A Python SDK for interacting with Pierre's git storage system.
 
 from pierre_storage.auth import encode_refs_claim, generate_jwt
 from pierre_storage.client import GitStorage, create_client
-from pierre_storage.errors import ApiError, RefUpdateError
+from pierre_storage.errors import ApiError, DeploymentFailedError, RefUpdateError
 from pierre_storage.types import (
     OP_NO_FORCE_PUSH,
     OP_NO_PUSH,
@@ -19,10 +19,17 @@ from pierre_storage.types import (
     CommitResult,
     CommitSignature,
     CreateBranchResult,
+    CreateDeploymentResult,
     CreateTagResult,
     DeleteBranchResult,
     DeleteRepoResult,
     DeleteTagResult,
+    DeploymentDNSRecord,
+    DeploymentDomain,
+    DeploymentResult,
+    DeploymentSettings,
+    DeploymentStatus,
+    DeploymentTarget,
     DiffFileState,
     DiffStats,
     FileDiff,
@@ -37,6 +44,7 @@ from pierre_storage.types import (
     GrepResult,
     ListBranchesResult,
     ListCommitsResult,
+    ListDeploymentsResult,
     ListFilesResult,
     ListFilesWithMetadataResult,
     ListNotesRefsResult,
@@ -58,6 +66,7 @@ from pierre_storage.types import (
     RepoInfo,
     RestoreCommitResult,
     TagInfo,
+    UpdateRepoResult,
 )
 from pierre_storage.version import PACKAGE_VERSION
 from pierre_storage.webhook import (
@@ -78,6 +87,7 @@ __all__ = [
     "generate_jwt",
     # Errors
     "ApiError",
+    "DeploymentFailedError",
     "RefUpdateError",
     # Types
     "BaseRepo",
@@ -87,6 +97,7 @@ __all__ = [
     "CommitMetadata",
     "CreateBranchResult",
     "CreateTagResult",
+    "CreateDeploymentResult",
     "CommitInfo",
     "CommitResult",
     "CommitSignature",
@@ -94,6 +105,12 @@ __all__ = [
     "DeleteRepoResult",
     "DeleteTagResult",
     "DiffFileState",
+    "DeploymentDomain",
+    "DeploymentDNSRecord",
+    "DeploymentResult",
+    "DeploymentSettings",
+    "DeploymentStatus",
+    "DeploymentTarget",
     "DiffStats",
     "FileWithMetadata",
     "FileDiff",
@@ -114,6 +131,7 @@ __all__ = [
     "Refs",
     "ListBranchesResult",
     "ListCommitsResult",
+    "ListDeploymentsResult",
     "ListFilesResult",
     "ListFilesWithMetadataResult",
     "ListNotesRefsResult",
@@ -131,6 +149,7 @@ __all__ = [
     "Repo",
     "RestoreCommitResult",
     "TagInfo",
+    "UpdateRepoResult",
     # Webhook
     "WebhookPushEvent",
     "parse_signature_header",
