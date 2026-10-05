@@ -163,7 +163,7 @@ export async function validateWebhookSignature(
  * This is a convenience function that validates the signature and parses the payload.
  *
  * @param payload - The raw webhook payload (request body)
- * @param headers - The request headers (must include x-pierre-signature and x-pierre-event)
+ * @param headers - Fetch Headers or a plain header object (must include x-pierre-signature and x-pierre-event)
  * @param secret - The webhook secret for HMAC verification
  * @param options - Validation options
  * @returns The parsed webhook payload if valid, or validation error
@@ -186,10 +186,14 @@ export async function validateWebhookSignature(
  */
 export async function validateWebhook(
   payload: string | Uint8Array,
-  headers: Record<string, string | string[] | undefined>,
+  headers: Headers | Record<string, string | string[] | undefined>,
   secret: string,
   options: WebhookValidationOptions = {}
 ): Promise<WebhookValidationResult & { payload?: WebhookEventPayload }> {
+  if (headers instanceof Headers) {
+    headers = Object.fromEntries(headers);
+  }
+
   // Get signature header
   const signatureHeader =
     headers['x-pierre-signature'] || headers['X-Pierre-Signature'];

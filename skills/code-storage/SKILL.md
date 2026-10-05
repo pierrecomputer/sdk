@@ -1130,3 +1130,9 @@ git push origin feature-branch
 | Policy ops            | JWT-level guards via `refPolicies` (per-ref, first match wins, preferred). `no-force-push` (TS/Py `OP_NO_FORCE_PUSH`, Go `OpNoForcePush`) blocks non-FF updates. `no-push` (`OP_NO_PUSH`/`OpNoPush`) blocks pushes to matching refs. `verify-sig` (`OP_VERIFY_SIG`/`OpVerifySig`) blocks pushes introducing commits not signed by a registered signing key. Top-level `ops` is a legacy alias on URL-minting methods only. |
 | Merge endpoint        | `POST /repos/merge`. Strategies: `merge`, `ff_only`, `ff_prefer`. Optional `expected_target_sha` guards the target tip (409 if moved); omit it to merge into the current target tip. Optional `squash` (not with `ff_only`). 409 on conflict. |
 | Merge preview         | `GET /repos/merge/preview?source_branch=...&target_branch=...&include_content=true`. Requires `git:read`; never creates commits or updates refs. Conflicts return HTTP 200 with `status:conflicted`. |
+
+## Webhook Validation
+
+TypeScript `validateWebhook(rawBody, headers, secret)` accepts Fetch `Headers`
+(including `request.headers`) or plain header objects. Pass the unmodified body
+and include `x-pierre-signature` and `x-pierre-event` in either form.

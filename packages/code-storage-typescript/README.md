@@ -81,6 +81,21 @@ one-shot: a retry wrapper must not reuse a consumed body. The SDK does not buffe
 or replay uploads. This option does not affect Git CLI traffic to generated remote
 URLs.
 
+### Validating Webhooks
+
+`validateWebhook` accepts Fetch `Headers` (including `request.headers`) or a
+plain header object with `x-pierre-signature` and `x-pierre-event`.
+Pass the raw request body so signature verification uses the original bytes.
+
+```typescript
+import { validateWebhook } from '@pierre/storage';
+
+const result = await validateWebhook(await request.text(), request.headers, webhookSecret);
+if (!result.valid) {
+  return new Response('Invalid webhook', { status: 401 });
+}
+```
+
 ### Creating a Repository
 
 ```typescript

@@ -268,6 +268,43 @@ describe('Webhook Validation', () => {
       expect(result.payload).toEqual(expectedPushPayload);
     });
 
+    it('should validate Fetch request headers and reject tampered or missing signatures', async () => {
+      const { header, timestamp } = await generateSignature(payloadStr, secret);
+      const request = new Request('https://example.com/webhook', {
+        method: 'POST',
+        headers: {
+          'X-Pierre-Signature': header,
+          'X-Pierre-Event': 'push',
+        },
+        body: payloadStr,
+      });
+      const body = await request.text();
+      const result = await validateWebhook(body, request.headers, secret);
+      expect(result).toEqual({
+        valid: true,
+        eventType: 'push',
+        timestamp,
+        payload: expectedPushPayload,
+      });
+
+      const tampered = await validateWebhook(body + ' ', request.headers, secret);
+      expect(tampered.valid).toBe(false);
+      expect(tampered.error).toBe('Invalid signature');
+
+      request.headers.delete('x-pierre-signature');
+      expect(await validateWebhook(body, request.headers, secret)).toEqual({
+        valid: false,
+        error: 'Missing or invalid X-Pierre-Signature header',
+      });
+
+      request.headers.set('x-pierre-signature', header);
+      request.headers.delete('x-pierre-event');
+      expect(await validateWebhook(body, request.headers, secret)).toEqual({
+        valid: false,
+        error: 'Missing or invalid X-Pierre-Event header',
+      });
+    });
+
     it('should handle uppercase headers', async () => {
       const { header, timestamp } = await generateSignature(payloadStr, secret);
       const headers = {
