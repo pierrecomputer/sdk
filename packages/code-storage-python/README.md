@@ -23,6 +23,7 @@ from pierre_storage import GitStorage
 storage = GitStorage({
     "name": "your-name",  # e.g., 'v0'
     "key": "your-key",  # Your API key in PEM format
+    "key_id": "your-key-id",  # Required when using a restricted signing key
 })
 ```
 

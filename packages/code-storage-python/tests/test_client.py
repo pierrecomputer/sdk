@@ -90,12 +90,14 @@ class TestGitStorage:
     async def test_token_sent_verbatim(self) -> None:
         """Test that a pre-minted token is sent verbatim in the Authorization header."""
         expected_token = "my-pre-minted-jwt-token-value"
-        storage = GitStorage({
-            "name": "test-customer",
-            "token": expected_token,
-            "api_base_url": "https://api.test.code.storage",
-            "storage_base_url": "test.code.storage",
-        })
+        storage = GitStorage(
+            {
+                "name": "test-customer",
+                "token": expected_token,
+                "api_base_url": "https://api.test.code.storage",
+                "storage_base_url": "test.code.storage",
+            }
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -672,9 +674,7 @@ class TestGitStorage:
             assert body["username"] == "myuser"
 
     @pytest.mark.asyncio
-    async def test_create_git_credential_without_username(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_create_git_credential_without_username(self, git_storage_options: dict) -> None:
         """Test creating a git credential without a username."""
         storage = GitStorage(git_storage_options)
 
@@ -917,6 +917,23 @@ class TestJWTGeneration:
             assert payload["scopes"] == ["git:read"]
             assert payload["exp"] - payload["iat"] == 3600
 
+    def test_jwt_includes_configured_key_id(self, git_storage_options: dict) -> None:
+        """Test JWT includes the configured key ID."""
+        git_storage_options["key_id"] = "tp-read-only"
+        storage = GitStorage(git_storage_options)
+        token = storage._generate_jwt("test-repo")
+
+        assert jwt.get_unverified_header(token)["kid"] == "tp-read-only"
+
+    def test_jwt_defaults_to_one_hour_with_key_id(self, git_storage_options: dict) -> None:
+        """Test JWT lifetime defaults to one hour when a key ID is configured."""
+        git_storage_options["key_id"] = "tp-read-only"
+        storage = GitStorage(git_storage_options)
+        token = storage._generate_jwt("test-repo")
+        payload = jwt.decode(token, options={"verify_signature": False})
+
+        assert payload["exp"] - payload["iat"] == 3600
+
     @pytest.mark.asyncio
     async def test_get_ephemeral_remote_url(self, git_storage_options: dict) -> None:
         """Test getting ephemeral remote URL."""
@@ -959,9 +976,7 @@ class TestJWTGeneration:
             assert "test-repo+import.git" in url
 
     @pytest.mark.asyncio
-    async def test_get_import_remote_url_with_permissions(
-        self, git_storage_options: dict
-    ) -> None:
+    async def test_get_import_remote_url_with_permissions(self, git_storage_options: dict) -> None:
         """Test import remote URL with custom permissions."""
         storage = GitStorage(git_storage_options)
 
