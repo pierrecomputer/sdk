@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
@@ -129,6 +133,119 @@ class RecordTest(unittest.TestCase):
         empty = tempfile.TemporaryDirectory()
         self.addCleanup(empty.cleanup)
         self.assertIsNone(sdk_build.load_record(Path(empty.name)))
+
+
+class PullRequestTest(unittest.TestCase):
+    """Test the rule that a release pull request needs a version that no registry has."""
+
+    VERSION = "0.1.0-canary.6"
+
+    def setUp(self) -> None:
+        """Commit a build of canary 5, then of VERSION, and publish VERSION everywhere."""
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        self.root = Path(self.temporary_directory.name)
+        self.git("init", "-q", "-b", "main")
+        self.write_build("0.1.0-canary.5")
+        self.previous = self.commit("Release v0.1.0-canary.5")
+        self.write_build(self.VERSION)
+        self.current = self.commit("Release v" + self.VERSION)
+        for name, value in (
+            ("npm_versions", lambda package: {self.VERSION}),
+            ("pypi_has", lambda version: True),
+            ("go_tag_exists", lambda root, version: True),
+        ):
+            patcher = mock.patch.object(sdk_build, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def plan(self, base: str | None) -> dict[str, str]:
+        """Plan the publish of a pull request with a base commit, with no output."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            return sdk_build.plan(self.root, pull_request=True, base=base)
+
+    def git(self, *args: str) -> str:
+        """Run git in the repository."""
+        return subprocess.run(
+            ["git", "-c", "user.name=test", "-c", "user.email=test@example.com", *args],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def commit(self, message: str) -> str:
+        """Commit every file, and return the commit."""
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def write_build(self, version: str) -> None:
+        """Write the manifests of a build of a version, and record them in sdk-build.json."""
+        python_version = sdk_build.python_version(version)
+        manifests = {
+            "typescript/package.json": {"name": "@pierre/sdk"},
+            "cli/package.json": {"name": "@pierre/cli"},
+        }
+        for name, manifest in manifests.items():
+            manifest.update(version=version, publishConfig={"tag": sdk_build.npm_tag(version)})
+            (self.root / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / name).write_text(json.dumps(manifest), encoding="utf-8")
+        (self.root / "python").mkdir(exist_ok=True)
+        (self.root / "python/pyproject.toml").write_text(
+            f'[project]\nname = "pierre-sdk"\nversion = "{python_version}"\n', encoding="utf-8"
+        )
+        (self.root / "python/PKG-INFO").write_text(
+            f"Name: pierre-sdk\nVersion: {python_version}\n\nThe Pierre SDK.\n", encoding="utf-8"
+        )
+        (self.root / "go").mkdir(exist_ok=True)
+        (self.root / "go/go.mod").write_text(f"module {sdk_build.GO_MODULE}\n", encoding="utf-8")
+        (self.root / "go/version.go").write_text(
+            f'package pierre\n\nconst Version = "{version}"\n', encoding="utf-8"
+        )
+        files = {
+            path.relative_to(self.root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for directory in sdk_build.DIRECTORIES
+            for path in (self.root / directory).rglob("*")
+            if path.is_file()
+        }
+        record = {
+            "version": version,
+            "python_version": python_version,
+            "npm_tag": sdk_build.npm_tag(version),
+            "files": files,
+        }
+        (self.root / sdk_build.RECORD).write_text(json.dumps(record), encoding="utf-8")
+
+    def test_a_pull_request_that_keeps_the_build_passes(self) -> None:
+        """A pull request that does not change sdk-build.json passes, and publishes nothing."""
+        (self.root / "AGENTS.md").write_text("Notes.\n", encoding="utf-8")
+        self.commit("Change the notes")
+        outputs = self.plan(self.current)
+        self.assertEqual(outputs["publish_npm_sdk"], "false")
+        self.assertEqual(outputs["publish_go"], "false")
+
+    def test_a_release_pull_request_of_a_published_version_fails(self) -> None:
+        """A pull request that changes sdk-build.json fails when a registry has its version."""
+        with self.assertRaisesRegex(sdk_build.BuildError, "the registries already have"):
+            self.plan(self.previous)
+
+    def test_the_first_build_of_a_published_version_fails(self) -> None:
+        """A build on a base with no sdk-build.json is a release pull request."""
+        empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        empty = self.git("commit-tree", empty_tree, "-m", "Empty")
+        with self.assertRaisesRegex(sdk_build.BuildError, "the registries already have"):
+            self.plan(empty)
+
+    def test_without_a_base_a_published_version_fails(self) -> None:
+        """With no base, each pull request is a release pull request."""
+        with self.assertRaisesRegex(sdk_build.BuildError, "the registries already have"):
+            self.plan(None)
+
+    def test_an_unknown_base_fails(self) -> None:
+        """A base commit that the checkout does not have fails and names the commit."""
+        with self.assertRaisesRegex(sdk_build.BuildError, "0{40} is not in the checkout"):
+            self.plan("0" * 40)
 
 
 if __name__ == "__main__":

@@ -8,9 +8,11 @@ version, the npm tag, and the SHA-256 of each file in the four directories.
         Checks the build and asks each registry for the version. Fails when
         the version is below the highest version on npm. Writes one publish
         output for each package to $GITHUB_OUTPUT. publish-sdk.yml runs it.
-    python3 scripts/sdk_build.py check
+    python3 scripts/sdk_build.py check [--base <commit>]
         Runs the checks of plan, and also fails when a registry has the
-        version. check-sdk-build.yml runs it on each pull request.
+        version. With --base, that last rule applies only when sdk-build.json
+        differs from its content at the base commit, as in a release pull
+        request. check-sdk-build.yml runs it on each pull request.
     python3 scripts/sdk_build.py npm-files <directory>
         Reads the output of `npm pack --dry-run --json` on stdin. Fails when
         the packed files are not the files of <directory> in sdk-build.json.
@@ -238,7 +240,21 @@ def go_tag_exists(root: Path, version: str) -> bool:
     return bool(result.stdout.strip())
 
 
-def plan(root: Path, *, pull_request: bool) -> dict[str, str]:
+def record_changed(root: Path, base: str) -> bool:
+    """Return whether sdk-build.json differs from its content at a base commit."""
+
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=False
+        )
+
+    if git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
+        raise BuildError(f"the base commit {base} is not in the checkout")
+    shown = git("show", f"{base}:{RECORD}")
+    return shown.returncode != 0 or shown.stdout != read_text(root, RECORD)
+
+
+def plan(root: Path, *, pull_request: bool, base: str | None = None) -> dict[str, str]:
     """Check the build and the registries, and return the outputs of the plan."""
     record = load_record(root)
     if record is None:
@@ -267,8 +283,11 @@ def plan(root: Path, *, pull_request: bool) -> dict[str, str]:
             "Publish a new version instead, so that no npm tag moves back."
         )
     if pull_request and any(published.values()):
-        names = ", ".join(name for name, present in published.items() if present)
-        raise BuildError(f"the registries already have {version}: {names}")
+        if base is not None and not record_changed(root, base):
+            print(f"{RECORD} does not change, so the published version is not a new release.")
+        else:
+            names = ", ".join(name for name, present in published.items() if present)
+            raise BuildError(f"the registries already have {version}: {names}")
 
     pypi, npm_sdk, npm_cli, go = (str(not present).lower() for present in published.values())
     return {
@@ -312,7 +331,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check the SDK release build.")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("plan", help="check the build and plan the publish")
-    commands.add_parser("check", help="check the build of a pull request")
+    check = commands.add_parser("check", help="check the build of a pull request")
+    check.add_argument("--base", help="the base commit of the pull request")
     npm_files = commands.add_parser("npm-files", help="check the output of npm pack")
     npm_files.add_argument("directory", choices=sorted(NPM_PACKAGES))
     args = parser.parse_args(argv)
@@ -321,7 +341,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "npm-files":
             check_npm_files(ROOT, args.directory, sys.stdin.read())
             return 0
-        outputs = plan(ROOT, pull_request=args.command == "check")
+        outputs = plan(
+            ROOT, pull_request=args.command == "check", base=getattr(args, "base", None)
+        )
     except BuildError as error:
         print(f"sdk_build: {error}", file=sys.stderr)
         return 1
