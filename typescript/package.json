@@ -1,0 +1,53 @@
+{
+  "name": "@pierre/sdk",
+  "version": "0.1.0-canary.4",
+  "description": "The Pierre SDK for TypeScript",
+  "license": "Apache-2.0",
+  "homepage": "https://pierre.computer",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "canary"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    },
+    "./repos": {
+      "types": "./dist/repos.d.ts",
+      "default": "./dist/repos.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./git": {
+      "types": "./dist/git.d.ts",
+      "default": "./dist/git.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "default": "./dist/webhooks.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "devDependencies": {
+    "typescript-7": "npm:typescript@7.0.2"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json"
+  }
+}
