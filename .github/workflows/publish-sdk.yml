@@ -1,10 +1,13 @@
 name: Publish SDK build
 
 # Publishes the build that sdk-build.json records: pierre-sdk to PyPI, then
-# @pierre/sdk and @pierre/cli to npm, then the tag go/v<version>. Each job skips
-# a package that its registry already has, so "Re-run failed jobs" on the same
-# run publishes only what is missing. The old packages in packages/ publish
-# through publish.yml.
+# @pierre/sdk and @pierre/cli to npm, then the tag go/v<version>. The plan job
+# asks each registry for the version, and each job skips a package that its
+# registry already has, so "Re-run all jobs" on the same run publishes only what
+# is missing. "Re-run failed jobs" keeps the first plan, so it can publish a
+# package again. The last job waits for each registry to show the version, and
+# its failure skips no publish. The old packages in packages/ publish through
+# publish.yml.
 
 on:
   push:
@@ -33,6 +36,7 @@ jobs:
     outputs:
       build: ${{ steps.plan.outputs.build }}
       version: ${{ steps.plan.outputs.version }}
+      python_version: ${{ steps.plan.outputs.python_version }}
       npm_tag: ${{ steps.plan.outputs.npm_tag }}
       publish_pypi: ${{ steps.plan.outputs.publish_pypi }}
       publish_npm_sdk: ${{ steps.plan.outputs.publish_npm_sdk }}
@@ -123,23 +127,6 @@ jobs:
         if: needs.plan.outputs.publish_npm_cli == 'true'
         run: npm publish ./cli --tag "$NPM_TAG" --ignore-scripts
 
-      - name: Check the npm tags
-        run: |
-          set -euo pipefail
-          for package in @pierre/sdk @pierre/cli; do
-            # The registry can take a short time to show a new version.
-            for attempt in $(seq 1 12); do
-              actual=$(npm view "$package" "dist-tags.$NPM_TAG" 2>/dev/null || true)
-              [ "$actual" = "$VERSION" ] && break
-              sleep 10
-            done
-            if [ "$actual" != "$VERSION" ]; then
-              echo "::error::$package has $NPM_TAG at '$actual', not $VERSION."
-              exit 1
-            fi
-            echo "$package: $NPM_TAG is $VERSION"
-          done
-
   go:
     name: Tag the Go module
     needs: [plan, npm]
@@ -162,7 +149,52 @@ jobs:
           git tag -a "go/v$VERSION" -m "Go SDK v$VERSION" "$GITHUB_SHA"
           git push origin "refs/tags/go/v$VERSION"
 
-      - name: Request the module from the Go proxy
+  check:
+    name: Check the published versions
+    needs: [plan, pypi, npm, go]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      PYTHON_VERSION: ${{ needs.plan.outputs.python_version }}
+      NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
+    steps:
+      # A registry can take minutes to show a new version. The request to the Go
+      # proxy also makes the proxy and pkg.go.dev fetch the module.
+      - name: Wait for npm, PyPI, and the Go proxy
         run: |
-          curl -fsS --retry 5 --retry-delay 10 --retry-all-errors \
-            "https://proxy.golang.org/github.com/pierrecomputer/sdk/go/@v/v$VERSION.info"
+          set -uo pipefail
+          deadline=$((SECONDS + 600))
+          failed=0
+
+          # wait_for <name> <command...>: runs the command every 20 seconds until
+          # it succeeds or the 10 minutes of the job pass.
+          wait_for() {
+            local name=$1
+            shift
+            until "$@"; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$name is not published after 10 minutes."
+                failed=1
+                return
+              fi
+              sleep 20
+            done
+            echo "$name: published"
+          }
+          npm_tag_is_version() {
+            [ "$(curl -fs "https://registry.npmjs.org/-/package/$1/dist-tags" 2>/dev/null |
+              jq -r --arg tag "$NPM_TAG" '.[$tag] // empty')" = "$VERSION" ]
+          }
+          url_exists() {
+            curl -fs -o /dev/null "$1" 2>/dev/null
+          }
+
+          wait_for "@pierre/sdk $NPM_TAG $VERSION" npm_tag_is_version '@pierre%2fsdk'
+          wait_for "@pierre/cli $NPM_TAG $VERSION" npm_tag_is_version '@pierre%2fcli'
+          wait_for "pierre-sdk $PYTHON_VERSION" \
+            url_exists "https://pypi.org/pypi/pierre-sdk/$PYTHON_VERSION/json"
+          wait_for "github.com/pierrecomputer/sdk/go v$VERSION" \
+            url_exists "https://proxy.golang.org/github.com/pierrecomputer/sdk/go/@v/v$VERSION.info"
+          exit "$failed"

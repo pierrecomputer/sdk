@@ -2,7 +2,9 @@ name: Check SDK build
 
 # Checks a pull request that changes the SDK build: each file against its
 # SHA-256 in sdk-build.json, the manifests, the version against the registries,
-# and that each package packs and builds. It needs no secret.
+# and that each package packs and builds. A pull request that changes
+# sdk-build.json is a release, and fails when a registry already has its
+# version. It needs no secret.
 
 on:
   pull_request:
@@ -40,7 +42,11 @@ jobs:
 
       - name: Check the build and the registries
         id: plan
-        run: python3 scripts/sdk_build.py check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --quiet --depth=1 origin "$BASE_SHA"
+          python3 scripts/sdk_build.py check --base "$BASE_SHA"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.plan.outputs.build == 'true'
