@@ -1,9 +1,14 @@
 {
   "name": "@pierre/cli",
-  "version": "0.1.0-canary.4",
+  "version": "0.1.0-canary.5",
   "description": "The pierre command-line tool for Code Storage",
   "license": "Apache-2.0",
   "homepage": "https://pierre.computer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pierrecomputer/sdk.git",
+    "directory": "cli"
+  },
   "type": "module",
   "bin": {
     "pierre": "./dist/cli.js"
@@ -26,7 +31,7 @@
     "typescript-7": "npm:typescript@7.0.2",
     "vitest": "4.1.9",
     "yaml": "2.9.1",
-    "@pierre/sdk": "0.1.0-canary.4"
+    "@pierre/sdk": "0.1.0-canary.5"
   },
   "scripts": {
     "build": "tsup",

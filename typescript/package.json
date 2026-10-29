@@ -1,9 +1,14 @@
 {
   "name": "@pierre/sdk",
-  "version": "0.1.0-canary.4",
+  "version": "0.1.0-canary.5",
   "description": "The Pierre SDK for TypeScript",
   "license": "Apache-2.0",
   "homepage": "https://pierre.computer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pierrecomputer/sdk.git",
+    "directory": "typescript"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
