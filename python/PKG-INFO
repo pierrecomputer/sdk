@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: pierre-sdk
-Version: 0.1.0.dev5
+Version: 0.1.0.dev6
 Summary: The Pierre SDK for Python
 Author: Pierre
 Author-email: Pierre <support@pierre.co>
@@ -15,7 +15,7 @@ Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Typing :: Typed
 Requires-Dist: cryptography>=41.0.0
-Requires-Dist: httpx>=0.27.0
+Requires-Dist: httpx>=0.27.0,<1
 Requires-Dist: typing-extensions>=4.5.0 ; python_full_version < '3.11'
 Requires-Python: >=3.10
 Project-URL: Homepage, https://pierre.computer
