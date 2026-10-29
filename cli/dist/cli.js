@@ -10814,7 +10814,7 @@ var {
 } = import_index.default;
 
 // ../typescript/dist/version.js
-var VERSION = "0.1.0-canary.5";
+var VERSION = "0.1.0-canary.6";
 
 // ../typescript/dist/runtime/errors.js
 var ERROR_CODES_DOC_URL = "https://code.storage/docs/api/overview.md#error-codes";
@@ -16560,7 +16560,7 @@ function envValue(env, name) {
 }
 
 // package.json
-var version = "0.1.0-canary.5";
+var version = "0.1.0-canary.6";
 
 // src/version.ts
 var CLI_VERSION = version;
