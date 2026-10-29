@@ -8,6 +8,21 @@
 - `packages/code-storage-go/`: Go SDK (package sources and `*_test.go` files).
 - `.moon/` and per-package `moon.yml`: workspace task definitions.
 
+## SDK Release Builds
+
+`typescript/`, `cli/`, `python/`, and `go/` hold the builds of `@pierre/sdk`,
+`@pierre/cli`, `pierre-sdk`, and the Go module `github.com/pierrecomputer/sdk/go`.
+`sdk-build.json` records their version, their npm tag, and the SHA-256 of each
+file. These files are build output: do not edit them by hand. A release pull
+request replaces all of them, and `.github/workflows/check-sdk-build.yml` checks
+it with `scripts/sdk_build.py`. When it merges, `.github/workflows/publish-sdk.yml`
+publishes each package that its registry does not have: PyPI first, then npm,
+then the tag `go/v<version>`. When a publish stops, use "Re-run failed jobs" on
+the same run. The reviewer of a release pull request checks that it changes only
+`sdk-build.json` and the four directories, and that the public files have no
+internal notes. The packages in `packages/`, `.version`, and `publish.yml` are
+not part of these releases.
+
 ## Build, Test, and Development Commands
 - TypeScript (from repo root):
   - `pnpm --filter @pierre/storage build` builds `dist/` with tsup.
