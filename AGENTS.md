@@ -17,8 +17,11 @@ file. These files are build output: do not edit them by hand. A release pull
 request replaces all of them, and `.github/workflows/check-sdk-build.yml` checks
 it with `scripts/sdk_build.py`. When it merges, `.github/workflows/publish-sdk.yml`
 publishes each package that its registry does not have: PyPI first, then npm,
-then the tag `go/v<version>`. When a publish stops, use "Re-run failed jobs" on
-the same run. The reviewer of a release pull request checks that it changes only
+then the tag `go/v<version>`. Its last job waits up to 10 minutes for each
+registry to show the version; a failure there skips no publish. When a publish
+stops, use "Re-run all jobs" on the same run: the plan job then skips each
+published package. "Re-run failed jobs" keeps the first plan and can publish a
+package again. The reviewer of a release pull request checks that it changes only
 `sdk-build.json` and the four directories, and that the public files have no
 internal notes. The packages in `packages/`, `.version`, and `publish.yml` are
 not part of these releases.
