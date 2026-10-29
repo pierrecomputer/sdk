@@ -1,0 +1,153 @@
+Metadata-Version: 2.4
+Name: pierre-sdk
+Version: 0.1.0.dev4
+Summary: The Pierre SDK for Python
+Author: Pierre
+Author-email: Pierre <support@pierre.co>
+License-Expression: Apache-2.0
+License-File: LICENSE
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Typing :: Typed
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: typing-extensions>=4.5.0 ; python_full_version < '3.11'
+Requires-Python: >=3.10
+Project-URL: Homepage, https://pierre.computer
+Description-Content-Type: text/markdown
+
+# Pierre SDK for Python
+
+The Python SDK of Pierre: `Pierre` for blocking code, and `AsyncPierre` for `asyncio` code. Both
+clients have the same namespaces, helpers, errors, pagination, and retries as `@pierre/sdk` in
+TypeScript.
+
+## Use the client
+
+`Pierre()` reads `PIERRE_ORG` and `PIERRE_PRIVATE_KEY`, or the other variables in
+[Credentials](#credentials). Each method path is the catalog ID of its operation, with each segment
+in snake_case. Each method takes keyword arguments with the wire names of the HTTP API.
+
+```python
+from pierre import Pierre
+
+pierre = Pierre()
+pierre.repos.create(repo_name="acme/web", default_branch="main")
+pierre.repos.branches.create(repo_name="acme/web", target_branch="feat", base_ref="main")
+pierre.repos.commits.create(
+    repo_name="acme/web",
+    target_branch="feat",
+    commit_message="Add readme",
+    author={"name": "Bot", "email": "bot@acme.dev"},
+    files=[{"path": "README.md", "content": "# Web"}],
+)
+for repo in pierre.repos.list(q="web"):
+    print(repo["repo_name"])
+```
+
+`AsyncPierre` takes the same arguments, and each method is async:
+
+```python
+from pierre import AsyncPierre
+
+pierre = AsyncPierre()
+repo = await pierre.repos.get(repo_name="acme/web")
+async for branch in pierre.repos.branches.list(repo_name="acme/web"):
+    print(branch["name"])
+```
+
+A result is a dict with the wire names of the response, typed as a `TypedDict` from `pierre.types`.
+A byte response, such as `repos.files.get`, returns the `httpx.Response`, which the caller reads or
+closes.
+
+## Credentials
+
+Give one credential. A credential in the options replaces every credential in the environment.
+
+| Option        | Variable                                                       | Use                                                                                     |
+| ------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `private_key` | `PIERRE_PRIVATE_KEY`, or the file at `PIERRE_PRIVATE_KEY_FILE` | The SDK signs a 5-minute token for each request, with only the scopes of the operation. |
+| `token`       | `PIERRE_TOKEN`                                                 | A fixed token. The server checks its scopes.                                            |
+| `get_token`   | none                                                           | A function that returns a token for each request, for a client with no private key.     |
+
+With no credential in the options, the SDK uses the first variable that is set: `PIERRE_TOKEN`, then
+`PIERRE_PRIVATE_KEY`, then `PIERRE_PRIVATE_KEY_FILE`.
+
+`org` (`PIERRE_ORG`) names the organization. With `token`, the SDK reads it from the `iss` claim.
+`base_url` (`PIERRE_API_BASE_URL`) and `git_host` (`PIERRE_GIT_HOST`) replace the default hosts,
+`https://api.{org}.code.storage` and `{org}.code.storage`. The base URL ends before `/api`, because
+each operation path starts with `/api`: for example `https://api.acme.code.storage`, not
+`https://api.acme.code.storage/api/v1`. A path in front of `/api`, such as the prefix of a proxy,
+stays in the base URL. The Git host is a host name with an optional port and no scheme, for example
+`acme.code.storage`.
+
+## Options
+
+The client options are `org`, `private_key`, `token`, `get_token`, `base_url`, `git_host`, `timeout`
+(seconds, default 60), `max_retries` (default 2), `default_headers`, `http_client`, and
+`ref_policies`. `pierre.options` holds the settings with no credential, and `pierre.with_options()`
+returns a copy with changed options.
+
+A client keeps one httpx client. `with Pierre() as pierre:` and
+`async with AsyncPierre() as pierre:` close the httpx client that the SDK made at the end of the
+block. An `http_client` that you give stays open.
+
+Each method also takes the request options `extra_headers`, `timeout`, `max_retries`,
+`idempotency_key`, `token_ttl`, and `ref_policies` for one call.
+
+`idempotency_key` applies only to an operation that accepts an `Idempotency-Key`. On any other
+operation, the call raises `PierreError` and sends no request.
+
+An optional argument has the default `NOT_GIVEN`, which the SDK does not send. `None` sends `null`.
+
+## Responses, pages, and errors
+
+- `pierre.with_raw_response` has the namespaces of the client. Each method returns a `RawResponse`
+  with `data`, `response` (the `httpx.Response`), `headers` (the declared response headers), and
+  `request_id`.
+- A list method returns a `Page` in `Pierre`. In `AsyncPierre`, it returns an `AsyncPaginator`:
+  `await` gives the first `AsyncPage`, and `async for` gives every item. A page has `data`,
+  `has_more`, `next_cursor`, `body`, `response`, `has_next_page()`, `get_next_page()`, and
+  `iter_pages()`. To serialize a page, serialize `page.body`, the response that the API sent.
+- Every error extends `PierreError`. An HTTP error is an `APIError` with `status`, `code`, `title`,
+  `detail`, `request_id`, `headers`, `body`, and `doc_url`, with a subclass for each status family,
+  and `MergeConflictError` and `RefUpdateError` for codes. `RefUpdateError.result` is a
+  `RefUpdateResult`, or a `NotesWriteResult` for a notes write, so `error.result["status"]` gives
+  the reason with no cast, for example `conflict`. A failed ref guard, with the code
+  `ref_guard_failed`, raises `RefGuardError`, a `ConflictError` with `guard` and `current_sha`: send
+  `current_sha` as the guard of the next attempt.
+
+## Local utilities
+
+Import the modules of the local utilities before you name a client `pierre`, because the client name
+hides the package:
+
+```python
+from pierre import Pierre, auth, git, webhooks
+
+pierre = Pierre()
+token = auth.create_token(pierre, scopes=["git:read"], repo="acme/web")
+url = git.remote_url(pierre, repo_name="acme/web")
+```
+
+- `auth.create_token(client, scopes=[...])` signs a token with no HTTP call. `auth.SCOPES` lists the
+  scopes of the API, and `auth.Scope` is their type.
+- `git.remote_url(client, repo_name=...)` builds a Git remote URL with a 15-minute token. With
+  `AsyncPierre`, await the result.
+- `webhooks.verify_webhook(payload=..., headers=..., secret=...)` checks a webhook delivery and
+  returns the typed event.
+
+## Differences from the TypeScript SDK
+
+- A timeout is in seconds, as in `httpx`. It covers each attempt: the token, the upload, the
+  response headers, and a JSON body. `Pierre` cannot stop a blocking `get_token`, so the attempt
+  fails when the token arrives after the deadline.
+- There is no `signal`. To stop an `AsyncPierre` call, cancel its task.
+- An async method starts its request when the caller awaits it, as a coroutine does.
+- `pierre.with_raw_response` replaces `withResponse()`. The SDK reads the body of a JSON response,
+  so there is no `asResponse()`. A byte response stays a stream.
