@@ -1,0 +1,168 @@
+name: Publish SDK build
+
+# Publishes the build that sdk-build.json records: pierre-sdk to PyPI, then
+# @pierre/sdk and @pierre/cli to npm, then the tag go/v<version>. Each job skips
+# a package that its registry already has, so "Re-run failed jobs" on the same
+# run publishes only what is missing. The old packages in packages/ publish
+# through publish.yml.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - sdk-build.json
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-sdk
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan the publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+      npm_tag: ${{ steps.plan.outputs.npm_tag }}
+      publish_pypi: ${{ steps.plan.outputs.publish_pypi }}
+      publish_npm_sdk: ${{ steps.plan.outputs.publish_npm_sdk }}
+      publish_npm_cli: ${{ steps.plan.outputs.publish_npm_cli }}
+      publish_go: ${{ steps.plan.outputs.publish_go }}
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::publish-sdk.yml publishes only from main, not from ${GITHUB_REF}."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Check the build and the registries
+        id: plan
+        run: python3 scripts/sdk_build.py plan
+
+  pypi:
+    name: Publish pierre-sdk to PyPI
+    needs: plan
+    if: needs.plan.outputs.publish_pypi == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.12.23'
+          enable-cache: false
+
+      - name: Build the wheel and the source archive
+        working-directory: python
+        run: uv build --out-dir ../python-dist
+
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: python-dist/
+          skip-existing: true
+
+  npm:
+    name: Publish @pierre/sdk and @pierre/cli to npm
+    needs: [plan, pypi]
+    if: >-
+      !cancelled() && !failure() &&
+      (needs.plan.outputs.publish_npm_sdk == 'true' || needs.plan.outputs.publish_npm_cli == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm for trusted publishing
+        run: npm install -g npm@11.21.0
+
+      - name: Publish @pierre/sdk
+        if: needs.plan.outputs.publish_npm_sdk == 'true'
+        run: npm publish ./typescript --tag "$NPM_TAG" --ignore-scripts
+
+      - name: Publish @pierre/cli
+        if: needs.plan.outputs.publish_npm_cli == 'true'
+        run: npm publish ./cli --tag "$NPM_TAG" --ignore-scripts
+
+      - name: Check the npm tags
+        run: |
+          set -euo pipefail
+          for package in @pierre/sdk @pierre/cli; do
+            # The registry can take a short time to show a new version.
+            for attempt in $(seq 1 12); do
+              actual=$(npm view "$package" "dist-tags.$NPM_TAG" 2>/dev/null || true)
+              [ "$actual" = "$VERSION" ] && break
+              sleep 10
+            done
+            if [ "$actual" != "$VERSION" ]; then
+              echo "::error::$package has $NPM_TAG at '$actual', not $VERSION."
+              exit 1
+            fi
+            echo "$package: $NPM_TAG is $VERSION"
+          done
+
+  go:
+    name: Tag the Go module
+    needs: [plan, npm]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.plan.outputs.publish_go == 'true'
+
+      - name: Tag the pushed commit
+        if: needs.plan.outputs.publish_go == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "go/v$VERSION" -m "Go SDK v$VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/go/v$VERSION"
+
+      - name: Request the module from the Go proxy
+        run: |
+          curl -fsS --retry 5 --retry-delay 10 --retry-all-errors \
+            "https://proxy.golang.org/github.com/pierrecomputer/sdk/go/@v/v$VERSION.info"
