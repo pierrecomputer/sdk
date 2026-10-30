@@ -120,9 +120,5 @@ compatibility and coordinate each breaking change.
 ## Security & Configuration Notes
 - Never commit private keys or API tokens. Use local files or environment
   variables for SDK credentials.
-- Audit `skills/code-storage/SKILL.md` against the SDK packages whenever public
-  API surface changes (endpoints, request/response shapes, JWT claims, scopes,
-  policy ops, base-repo providers, exported constants/helpers). The skill
-  doubles as agent-facing API documentation, so naming, examples, and the
-  endpoint table must match what the TypeScript, Python, and Go SDKs actually
-  send and accept.
+- `skills/code-storage/SKILL.md` points to the `pierre` and `pierre-migrate`
+  skills in `pierrecomputer/skills`. Do not add API details to it.

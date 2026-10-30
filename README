@@ -11,14 +11,32 @@ OPEN POSITIONS: [Systems Engineer](https://pierre.computer/careers/systems-engin
 ~~~
 
 SDKS:
- - Typescript
- - Python
- - Go
+ - TypeScript: npm install @pierre/sdk
+ - Python: pip install pierre-sdk
+ - Go: go get github.com/pierrecomputer/sdk/go
 
-[SDK DOCUMENTATION](https://code.storage/docs/reference/sdk)
+[TYPESCRIPT DOCUMENTATION](https://code.storage/docs/sdks/typescript)
+[PYTHON DOCUMENTATION](https://code.storage/docs/sdks/python)
+[GO DOCUMENTATION](https://code.storage/docs/sdks/go)
 
 ~~~
 
 TO USE AGENT SKILLS:
 
-npx skills add pierrecomputer/sdk
+npx skills add pierrecomputer/skills
+
+[AGENT SETUP](https://code.storage/docs/getting-started/agent-setup)
+
+~~~
+
+EARLIER SDKS:
+
+@pierre/storage, pierre-storage, and code-storage-go are the earlier
+Code Storage SDKs. @pierre/sdk, pierre-sdk, and
+github.com/pierrecomputer/sdk/go replace them. The earlier SDKs get no
+new release. Their source stays in packages/.
+
+To move code to the new SDKs, install the pierre-migrate skill with
+npx skills add pierrecomputer/skills.
+
+[EARLIER SDK DOCUMENTATION](https://code.storage/docs/sdk/overview)
