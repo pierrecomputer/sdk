@@ -95,6 +95,9 @@ class GitStorage:
         if has_key:
             self.options["key"] = options["key"]
 
+        if "key_id" in options:
+            self.options["key_id"] = options["key_id"]
+
         if has_token:
             self.options["token"] = options["token"]
 
@@ -645,7 +648,9 @@ class GitStorage:
             raise ValueError("GitStorage requires a key to generate a JWT.")
 
         permissions = ["git:write", "git:read"]
-        ttl: int = 31536000  # 1 year default
+        # The gateway caps tokens from a restricted signing key at one hour, so a
+        # configured key ID defaults to that instead of one year.
+        ttl: int = DEFAULT_TOKEN_TTL_SECONDS if self.options.get("key_id") else 31536000
         ops: Optional[List[str]] = None
         refs = None
 
@@ -673,6 +678,7 @@ class GitStorage:
             ttl,
             ops,
             refs,
+            key_id=self.options.get("key_id"),
         )
 
 
