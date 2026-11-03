@@ -584,6 +584,7 @@ REPOS_LIST: OperationSpec[NoHeaders] = OperationSpec(
     parameters=(
         ParameterSpec("query", "cursor", "cursor"),
         ParameterSpec("query", "limit", "limit"),
+        ParameterSpec("query", "prefix", "prefix"),
         ParameterSpec("query", "q", "q"),
     ),
     body=None,
@@ -917,7 +918,6 @@ class ReposArchiveNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> httpx.Response:
         """Archive
@@ -955,7 +955,6 @@ class ReposArchiveNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -981,7 +980,6 @@ class ReposBlameNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBlameGetResponse:
         """Blame
@@ -1019,7 +1017,6 @@ class ReposBlameNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1047,7 +1044,6 @@ class ReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesCreateResponse:
         """Create Branch
@@ -1089,7 +1085,6 @@ class ReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1106,7 +1101,6 @@ class ReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesDeleteResponse:
         """Delete Branch
@@ -1140,7 +1134,6 @@ class ReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1156,7 +1149,6 @@ class ReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesGetResponse:
         """Get Branch
@@ -1188,7 +1180,6 @@ class ReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1205,7 +1196,6 @@ class ReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.BranchListItem, schemas.ReposBranchesListResponse]:
         """List Branches
@@ -1237,7 +1227,6 @@ class ReposBranchesNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -1269,7 +1258,6 @@ class ReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.CommitWriteResponse:
         """Create Commit from Files
@@ -1322,7 +1310,6 @@ class ReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1348,7 +1335,6 @@ class ReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.CommitWriteResponse:
         """Create Commit from Diff
@@ -1401,7 +1387,6 @@ class ReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1417,7 +1402,6 @@ class ReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCommitsGetResponse:
         """Get Commit
@@ -1449,7 +1433,6 @@ class ReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1469,7 +1452,6 @@ class ReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.Commit, schemas.ReposCommitsListResponse]:
         """List Commits
@@ -1507,7 +1489,6 @@ class ReposCommitsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -1528,7 +1509,6 @@ class ReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCommitsRestoreResponse:
         """Restore Commit
@@ -1574,7 +1554,6 @@ class ReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1604,7 +1583,6 @@ class ReposDiffNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposDiffGetResponse:
         """Get Commit Diff
@@ -1650,7 +1628,6 @@ class ReposDiffNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1680,7 +1657,6 @@ class ReposFilesMetadataNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> HeadersResult[ReposFilesMetadataGetResponseHeaders]:
         """Get File Headers
@@ -1726,7 +1702,6 @@ class ReposFilesMetadataNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1746,7 +1721,6 @@ class ReposFilesMetadataNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.FileWithMetadata, schemas.ReposFilesMetadataListResponse]:
         """List Files with Metadata
@@ -1786,7 +1760,6 @@ class ReposFilesMetadataNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -1816,7 +1789,6 @@ class ReposFilesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> httpx.Response:
         """Get File
@@ -1862,7 +1834,6 @@ class ReposFilesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1882,7 +1853,6 @@ class ReposFilesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.FileEntry, schemas.ReposFilesListResponse]:
         """List Files
@@ -1920,7 +1890,6 @@ class ReposFilesNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -1942,7 +1911,6 @@ class ReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.GitCredential:
         """Create Git Credential
@@ -1974,7 +1942,6 @@ class ReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -1989,7 +1956,6 @@ class ReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> HeadersResult[NoHeaders]:
         """Delete Git Credential
@@ -2019,7 +1985,6 @@ class ReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2036,7 +2001,6 @@ class ReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.GitCredential:
         """Update Git Credential
@@ -2070,7 +2034,6 @@ class ReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2094,7 +2057,6 @@ class ReposNotesRefsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.NotesRef, schemas.ReposNotesRefsListResponse]:
         """List Notes Refs
@@ -2126,7 +2088,6 @@ class ReposNotesRefsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -2155,7 +2116,6 @@ class ReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Append Note
@@ -2199,7 +2159,6 @@ class ReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2222,7 +2181,6 @@ class ReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Create Note
@@ -2268,7 +2226,6 @@ class ReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2291,7 +2248,6 @@ class ReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Delete Note
@@ -2337,7 +2293,6 @@ class ReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2355,7 +2310,6 @@ class ReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposNotesGetResponse:
         """Get Note
@@ -2391,7 +2345,6 @@ class ReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2415,7 +2368,6 @@ class ReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsCreateResponse:
         """Create Tag
@@ -2449,7 +2401,6 @@ class ReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2464,7 +2415,6 @@ class ReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsDeleteResponse:
         """Delete Tag
@@ -2494,7 +2444,6 @@ class ReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2509,7 +2458,6 @@ class ReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsGetResponse:
         """Get Tag
@@ -2539,7 +2487,6 @@ class ReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2555,7 +2502,6 @@ class ReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.TagListItem, schemas.ReposTagsListResponse]:
         """List Tags
@@ -2585,7 +2531,6 @@ class ReposTagsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -2605,7 +2550,6 @@ class ReposUpstreamNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpstreamDeleteResponse:
         """Delete Upstream
@@ -2633,7 +2577,6 @@ class ReposUpstreamNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2649,7 +2592,6 @@ class ReposUpstreamNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpstreamPullResponse:
         """Pull Upstream
@@ -2681,7 +2623,6 @@ class ReposUpstreamNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2715,7 +2656,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCreateResponse:
         """Create Repo
@@ -2756,7 +2696,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2770,7 +2709,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposDeleteResponse:
         """Delete Repo
@@ -2798,7 +2736,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2812,7 +2749,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.Repository:
         """Get Repo
@@ -2840,7 +2776,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2863,7 +2798,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposGrepResponse:
         """Grep
@@ -2909,7 +2843,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -2920,24 +2853,25 @@ class ReposNamespace:
         *,
         cursor: Union[str, NotGiven] = NOT_GIVEN,
         limit: Union[int, NotGiven] = NOT_GIVEN,
+        prefix: Union[str, NotGiven] = NOT_GIVEN,
         q: Union[str, NotGiven] = NOT_GIVEN,
         extra_headers: Union[Mapping[str, str], NotGiven] = NOT_GIVEN,
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> Page[schemas.Repository, schemas.ReposListResponse]:
         """List Repos
 
-        List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`).
+        List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`), and `prefix` to filter by the start of `repo_name`. When both are set they combine with AND: a repository is returned only when it matches both filters.
 
         Scope: `org:read`.
 
         Args:
             cursor: Pagination cursor from previous response (base64 encoded)
             limit: Maximum number of repositories to return. Defaults to 20 and is capped at 100.
-            q: Case-insensitive substring to match against `repo_name`. Trimmed before matching. When omitted or empty after trimming, the full repository list is returned.
+            prefix: Case-insensitive prefix to match against the start of `repo_name`. For example, `pierre/` matches `pierre/sdk-documentation` and `pierre/example` but not `acme/pierre-tools`. When `q` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix, so `prefix=pierre/&q=sdk` returns `pierre/sdk-documentation` but not `pierre/example`. Trimmed before matching. When omitted or empty after trimming, no prefix filter applies.
+            q: Case-insensitive substring to match against `repo_name`. Trimmed before matching. When `prefix` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix. When omitted or empty after trimming, the full repository list is returned.
 
         Catalog ID `repos.list`: `GET /api/repos`.
 
@@ -2948,6 +2882,7 @@ class ReposNamespace:
             {
                 "cursor": cursor,
                 "limit": limit,
+                "prefix": prefix,
                 "q": q,
             },
             RequestOptions(
@@ -2955,7 +2890,6 @@ class ReposNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -2981,7 +2915,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposMergeResponse:
         """Merge Branch
@@ -3035,7 +2968,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3054,7 +2986,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposPreviewMergeResponse:
         """Preview Merge
@@ -3092,7 +3023,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3107,7 +3037,6 @@ class ReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpdateResponse:
         """Update Repository Settings
@@ -3139,7 +3068,6 @@ class ReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3165,7 +3093,6 @@ class AsyncReposArchiveNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> httpx.Response:
         """Archive
@@ -3203,7 +3130,6 @@ class AsyncReposArchiveNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3229,7 +3155,6 @@ class AsyncReposBlameNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBlameGetResponse:
         """Blame
@@ -3267,7 +3192,6 @@ class AsyncReposBlameNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3295,7 +3219,6 @@ class AsyncReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesCreateResponse:
         """Create Branch
@@ -3337,7 +3260,6 @@ class AsyncReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3354,7 +3276,6 @@ class AsyncReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesDeleteResponse:
         """Delete Branch
@@ -3388,7 +3309,6 @@ class AsyncReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3404,7 +3324,6 @@ class AsyncReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposBranchesGetResponse:
         """Get Branch
@@ -3436,7 +3355,6 @@ class AsyncReposBranchesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3453,7 +3371,6 @@ class AsyncReposBranchesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.BranchListItem, schemas.ReposBranchesListResponse]:
         """List Branches
@@ -3485,7 +3402,6 @@ class AsyncReposBranchesNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -3517,7 +3433,6 @@ class AsyncReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.CommitWriteResponse:
         """Create Commit from Files
@@ -3570,7 +3485,6 @@ class AsyncReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3596,7 +3510,6 @@ class AsyncReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.CommitWriteResponse:
         """Create Commit from Diff
@@ -3649,7 +3562,6 @@ class AsyncReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3665,7 +3577,6 @@ class AsyncReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCommitsGetResponse:
         """Get Commit
@@ -3697,7 +3608,6 @@ class AsyncReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3717,7 +3627,6 @@ class AsyncReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.Commit, schemas.ReposCommitsListResponse]:
         """List Commits
@@ -3755,7 +3664,6 @@ class AsyncReposCommitsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -3776,7 +3684,6 @@ class AsyncReposCommitsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCommitsRestoreResponse:
         """Restore Commit
@@ -3822,7 +3729,6 @@ class AsyncReposCommitsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3852,7 +3758,6 @@ class AsyncReposDiffNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposDiffGetResponse:
         """Get Commit Diff
@@ -3898,7 +3803,6 @@ class AsyncReposDiffNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3928,7 +3832,6 @@ class AsyncReposFilesMetadataNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> HeadersResult[ReposFilesMetadataGetResponseHeaders]:
         """Get File Headers
@@ -3974,7 +3877,6 @@ class AsyncReposFilesMetadataNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -3994,7 +3896,6 @@ class AsyncReposFilesMetadataNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.FileWithMetadata, schemas.ReposFilesMetadataListResponse]:
         """List Files with Metadata
@@ -4034,7 +3935,6 @@ class AsyncReposFilesMetadataNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -4064,7 +3964,6 @@ class AsyncReposFilesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> httpx.Response:
         """Get File
@@ -4110,7 +4009,6 @@ class AsyncReposFilesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4130,7 +4028,6 @@ class AsyncReposFilesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.FileEntry, schemas.ReposFilesListResponse]:
         """List Files
@@ -4168,7 +4065,6 @@ class AsyncReposFilesNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -4190,7 +4086,6 @@ class AsyncReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.GitCredential:
         """Create Git Credential
@@ -4222,7 +4117,6 @@ class AsyncReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4237,7 +4131,6 @@ class AsyncReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> HeadersResult[NoHeaders]:
         """Delete Git Credential
@@ -4267,7 +4160,6 @@ class AsyncReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4284,7 +4176,6 @@ class AsyncReposGitCredentialsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.GitCredential:
         """Update Git Credential
@@ -4318,7 +4209,6 @@ class AsyncReposGitCredentialsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4342,7 +4232,6 @@ class AsyncReposNotesRefsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.NotesRef, schemas.ReposNotesRefsListResponse]:
         """List Notes Refs
@@ -4374,7 +4263,6 @@ class AsyncReposNotesRefsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -4403,7 +4291,6 @@ class AsyncReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Append Note
@@ -4447,7 +4334,6 @@ class AsyncReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4470,7 +4356,6 @@ class AsyncReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Create Note
@@ -4516,7 +4401,6 @@ class AsyncReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4539,7 +4423,6 @@ class AsyncReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.NotesWriteResponse:
         """Delete Note
@@ -4585,7 +4468,6 @@ class AsyncReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4603,7 +4485,6 @@ class AsyncReposNotesNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposNotesGetResponse:
         """Get Note
@@ -4639,7 +4520,6 @@ class AsyncReposNotesNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4663,7 +4543,6 @@ class AsyncReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsCreateResponse:
         """Create Tag
@@ -4697,7 +4576,6 @@ class AsyncReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4712,7 +4590,6 @@ class AsyncReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsDeleteResponse:
         """Delete Tag
@@ -4742,7 +4619,6 @@ class AsyncReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4757,7 +4633,6 @@ class AsyncReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposTagsGetResponse:
         """Get Tag
@@ -4787,7 +4662,6 @@ class AsyncReposTagsNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4803,7 +4677,6 @@ class AsyncReposTagsNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.TagListItem, schemas.ReposTagsListResponse]:
         """List Tags
@@ -4833,7 +4706,6 @@ class AsyncReposTagsNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -4853,7 +4725,6 @@ class AsyncReposUpstreamNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpstreamDeleteResponse:
         """Delete Upstream
@@ -4881,7 +4752,6 @@ class AsyncReposUpstreamNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4897,7 +4767,6 @@ class AsyncReposUpstreamNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpstreamPullResponse:
         """Pull Upstream
@@ -4929,7 +4798,6 @@ class AsyncReposUpstreamNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -4963,7 +4831,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposCreateResponse:
         """Create Repo
@@ -5004,7 +4871,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5018,7 +4884,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposDeleteResponse:
         """Delete Repo
@@ -5046,7 +4911,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5060,7 +4924,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.Repository:
         """Get Repo
@@ -5088,7 +4951,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5111,7 +4973,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposGrepResponse:
         """Grep
@@ -5157,7 +5018,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5168,24 +5028,25 @@ class AsyncReposNamespace:
         *,
         cursor: Union[str, NotGiven] = NOT_GIVEN,
         limit: Union[int, NotGiven] = NOT_GIVEN,
+        prefix: Union[str, NotGiven] = NOT_GIVEN,
         q: Union[str, NotGiven] = NOT_GIVEN,
         extra_headers: Union[Mapping[str, str], NotGiven] = NOT_GIVEN,
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> AsyncPaginator[schemas.Repository, schemas.ReposListResponse]:
         """List Repos
 
-        List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`).
+        List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`), and `prefix` to filter by the start of `repo_name`. When both are set they combine with AND: a repository is returned only when it matches both filters.
 
         Scope: `org:read`.
 
         Args:
             cursor: Pagination cursor from previous response (base64 encoded)
             limit: Maximum number of repositories to return. Defaults to 20 and is capped at 100.
-            q: Case-insensitive substring to match against `repo_name`. Trimmed before matching. When omitted or empty after trimming, the full repository list is returned.
+            prefix: Case-insensitive prefix to match against the start of `repo_name`. For example, `pierre/` matches `pierre/sdk-documentation` and `pierre/example` but not `acme/pierre-tools`. When `q` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix, so `prefix=pierre/&q=sdk` returns `pierre/sdk-documentation` but not `pierre/example`. Trimmed before matching. When omitted or empty after trimming, no prefix filter applies.
+            q: Case-insensitive substring to match against `repo_name`. Trimmed before matching. When `prefix` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix. When omitted or empty after trimming, the full repository list is returned.
 
         Catalog ID `repos.list`: `GET /api/repos`.
 
@@ -5196,6 +5057,7 @@ class AsyncReposNamespace:
             {
                 "cursor": cursor,
                 "limit": limit,
+                "prefix": prefix,
                 "q": q,
             },
             RequestOptions(
@@ -5203,7 +5065,6 @@ class AsyncReposNamespace:
                 timeout=timeout,
                 max_retries=max_retries,
                 idempotency_key=idempotency_key,
-                token_ttl=token_ttl,
                 ref_policies=ref_policies,
             ),
         )
@@ -5229,7 +5090,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposMergeResponse:
         """Merge Branch
@@ -5283,7 +5143,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5302,7 +5161,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposPreviewMergeResponse:
         """Preview Merge
@@ -5340,7 +5198,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -5355,7 +5212,6 @@ class AsyncReposNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.ReposUpdateResponse:
         """Update Repository Settings
@@ -5387,7 +5243,6 @@ class AsyncReposNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),

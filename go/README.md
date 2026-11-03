@@ -102,8 +102,7 @@ One `option.RequestOption` serves a client and one request. Give it to `pierre.N
   `option.WithMaxRetries` (2), `option.WithHeader`, and `option.WithRefPolicies`.
 - For a client only: `option.WithOrg`, the credentials, `option.WithBaseURL`, `option.WithGitHost`,
   and `option.WithHTTPClient`.
-- For one call only: `option.WithIdempotencyKey`, `option.WithTokenTTL` (1 second to 1 hour), and
-  `option.WithResponseInto`.
+- For one call only: `option.WithIdempotencyKey` and `option.WithResponseInto`.
 
 `option.WithIdempotencyKey` applies only to an operation that accepts an `Idempotency-Key`. On any
 other operation, the method returns a `*pierre.PierreError` and sends no request.

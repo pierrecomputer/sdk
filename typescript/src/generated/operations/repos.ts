@@ -1136,7 +1136,11 @@ export interface ReposListParams {
 	 */
 	limit?: number;
 	/**
-	 * Case-insensitive substring to match against `repo_name`. Trimmed before matching. When omitted or empty after trimming, the full repository list is returned.
+	 * Case-insensitive prefix to match against the start of `repo_name`. For example, `pierre/` matches `pierre/sdk-documentation` and `pierre/example` but not `acme/pierre-tools`. When `q` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix, so `prefix=pierre/&q=sdk` returns `pierre/sdk-documentation` but not `pierre/example`. Trimmed before matching. When omitted or empty after trimming, no prefix filter applies.
+	 */
+	prefix?: string;
+	/**
+	 * Case-insensitive substring to match against `repo_name`. Trimmed before matching. When `prefix` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix. When omitted or empty after trimming, the full repository list is returned.
 	 */
 	q?: string;
 }
@@ -1148,6 +1152,7 @@ export const reposList: OperationSpec = {
 	parameters: [
 		{ in: 'query', name: 'cursor', field: 'cursor' },
 		{ in: 'query', name: 'limit', field: 'limit' },
+		{ in: 'query', name: 'prefix', field: 'prefix' },
 		{ in: 'query', name: 'q', field: 'q' },
 	],
 	body: null,

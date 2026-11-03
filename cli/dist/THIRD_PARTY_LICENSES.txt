@@ -2,7 +2,7 @@ dist/cli.js bundles the packages below. Each section gives the license of one pa
 
 --------------------------------------------------------------------------------
 
-commander 14.0.3 (MIT)
+commander 15.0.0 (MIT)
 
 (The MIT License)
 

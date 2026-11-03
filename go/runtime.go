@@ -120,10 +120,6 @@ func (c *core) prepare(op *operation, in input, opts []option.RequestOption) (*c
 	if err != nil {
 		return nil, err
 	}
-	ttl := credentials.RequestTokenTTL
-	if options.TokenTTL != nil {
-		ttl = *options.TokenTTL
-	}
 	// A request option replaces the client option.
 	refPolicies := c.refPolicies
 	if options.RefPolicies != nil {
@@ -198,7 +194,7 @@ func (c *core) prepare(op *operation, in input, opts []option.RequestOption) (*c
 		responseInto:   options.ResponseInto,
 		generatedKey:   op.idempotencyKey && options.IdempotencyKey == nil,
 		// Each attempt signs a new token with the same policies.
-		token: config.TokenRequest{Scopes: op.scopes, TTL: ttl, RefPolicies: nonEmpty(refPolicies)},
+		token: config.TokenRequest{Scopes: op.scopes, TTL: credentials.RequestTokenTTL, RefPolicies: nonEmpty(refPolicies)},
 	}
 	if op.repoClaim {
 		request.token.Repo = w.repo
@@ -462,10 +458,6 @@ func (c *core) readToken(ctx context.Context, repo string, opts []option.Request
 	if err != nil {
 		return "", err
 	}
-	ttl := credentials.RequestTokenTTL
-	if options.TokenTTL != nil {
-		ttl = *options.TokenTTL
-	}
 	timeout := c.timeout
 	if options.Timeout != nil {
 		timeout = *options.Timeout
@@ -474,7 +466,7 @@ func (c *core) readToken(ctx context.Context, repo string, opts []option.Request
 	defer cancel(nil)
 	timer := time.AfterFunc(timeout, func() { cancel(errAttemptTimeout) })
 	defer timer.Stop()
-	token, err := c.source.Token(tokenCtx, config.TokenRequest{Scopes: []string{"git:read"}, Repo: repo, TTL: ttl})
+	token, err := c.source.Token(tokenCtx, config.TokenRequest{Scopes: []string{"git:read"}, Repo: repo, TTL: credentials.RequestTokenTTL})
 	if err != nil {
 		if ctx.Err() != nil {
 			return "", context.Cause(ctx)

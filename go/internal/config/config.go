@@ -59,7 +59,6 @@ type Options struct {
 	// RefPolicies is set also for an empty list, which removes the policies.
 	RefPolicies    *[]RefPolicy
 	IdempotencyKey *string
-	TokenTTL       *time.Duration
 	ResponseInto   **http.Response
 }
 

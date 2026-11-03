@@ -218,21 +218,6 @@ func WithIdempotencyKey(key string) RequestOption {
 	}
 }
 
-// WithTokenTTL sets the lifetime of the request token, a whole number of seconds from 1 second
-// to 1 hour. Default: 5 minutes. The SDK ignores it for a fixed token.
-func WithTokenTTL(ttl time.Duration) RequestOption {
-	return func(options *config.Options) {
-		if !requestOnly(options, "WithTokenTTL") {
-			return
-		}
-		if err := config.CheckTTL(ttl, "option.WithTokenTTL"); err != nil {
-			options.Err = err
-			return
-		}
-		options.TokenTTL = &ttl
-	}
-}
-
 // WithResponseInto stores the HTTP response of the last attempt in *dst. Its headers include
 // the response headers that the operation declares, and X-Request-Id. The SDK has read the
 // body of a JSON or error response, and gives a copy that the caller can read again. For a byte

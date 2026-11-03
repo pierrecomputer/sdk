@@ -38,7 +38,6 @@ class MetaNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.Meta:
         """Get Organization Metadata
@@ -61,7 +60,6 @@ class MetaNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),
@@ -81,7 +79,6 @@ class AsyncMetaNamespace:
         timeout: Union[float, NotGiven] = NOT_GIVEN,
         max_retries: Union[int, NotGiven] = NOT_GIVEN,
         idempotency_key: Union[str, NotGiven] = NOT_GIVEN,
-        token_ttl: Union[int, NotGiven] = NOT_GIVEN,
         ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN,
     ) -> schemas.Meta:
         """Get Organization Metadata
@@ -104,7 +101,6 @@ class AsyncMetaNamespace:
                     timeout=timeout,
                     max_retries=max_retries,
                     idempotency_key=idempotency_key,
-                    token_ttl=token_ttl,
                     ref_policies=ref_policies,
                 ),
             ),

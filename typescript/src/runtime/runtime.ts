@@ -24,11 +24,6 @@ export interface RequestOptions {
 	/** More request headers. A header that the operation declares is a typed param instead. */
 	headers?: Record<string, string>;
 	/**
-	 * The lifetime of the request token, in seconds, from 1 to 3600. Default: 300. The SDK
-	 * ignores it for a fixed `token`.
-	 */
-	tokenTtl?: number;
-	/**
 	 * The `refs` claim of the request token, which limits the refs that a write can change. It
 	 * replaces the client option for this call, and `[]` removes it. A client with a fixed
 	 * `token` cannot use it.
