@@ -5,7 +5,6 @@
 import { APIPromise, type Call, type FirstUse, type Received } from './api-promise.ts';
 import {
 	checkRefPolicies,
-	checkTtl,
 	REQUEST_TOKEN_SECONDS,
 	type Credentials,
 	type RefPolicy,
@@ -109,7 +108,6 @@ export class HttpRuntime implements Runtime {
 				'A client with a fixed `token` cannot make a token for another repository. Give that token in the params.',
 			);
 		}
-		const ttl = checkTtl(options?.tokenTtl ?? REQUEST_TOKEN_SECONDS, 'tokenTtl');
 		const timeout = checkTimeout(options?.timeout ?? this.#config.timeout);
 		// The timeout and the caller's signal cover this token, as they cover the token of an attempt.
 		const timer = new AbortController();
@@ -124,7 +122,12 @@ export class HttpRuntime implements Runtime {
 			callerSignal === undefined ? timer.signal : AbortSignal.any([callerSignal, timer.signal]);
 		try {
 			return await untilAborted(
-				this.#config.credentials.token({ scopes: ['git:read'], repo, ttl, signal }),
+				this.#config.credentials.token({
+					scopes: ['git:read'],
+					repo,
+					ttl: REQUEST_TOKEN_SECONDS,
+					signal,
+				}),
 				signal,
 			);
 		} catch (error) {
@@ -173,7 +176,6 @@ export class HttpRuntime implements Runtime {
 		options: RequestOptions | undefined,
 		firstUse: () => FirstUse,
 	): Promise<Received> {
-		const ttl = checkTtl(options?.tokenTtl ?? REQUEST_TOKEN_SECONDS, 'tokenTtl');
 		// A request option replaces the client option.
 		const refPolicies =
 			checkRefPolicies(options?.refPolicies, 'refPolicies') ?? this.#config.refPolicies ?? [];
@@ -251,7 +253,7 @@ export class HttpRuntime implements Runtime {
 			token: {
 				scopes: operation.scopes,
 				repo,
-				ttl,
+				ttl: REQUEST_TOKEN_SECONDS,
 				...(refPolicies.length > 0 ? { ref_policies: refPolicies } : {}),
 			},
 			requestHeaders: options?.headers ?? {},

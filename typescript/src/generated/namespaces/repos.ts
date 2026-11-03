@@ -787,7 +787,7 @@ export class ReposNamespace {
 	/**
 	 * List Repos
 	 *
-	 * List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`).
+	 * List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`), and `prefix` to filter by the start of `repo_name`. When both are set they combine with AND: a repository is returned only when it matches both filters.
 	 *
 	 * Scope: `org:read`.
 	 *

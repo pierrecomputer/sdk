@@ -27,8 +27,8 @@ npx @pierre/cli@canary version
 ```
 
 A canary version is `0.1.0-canary.N`, and its commands can change with no notice. To keep a build
-repeatable, use an exact version: `"@pierre/cli": "0.1.0-canary.6"` in `package.json`, or
-`@pierre/cli@0.1.0-canary.6` with `npm` and `npx`.
+repeatable, use an exact version: `"@pierre/cli": "0.1.0-canary.7"` in `package.json`, or
+`@pierre/cli@0.1.0-canary.7` with `npm` and `npx`.
 
 The CLI needs Node.js 22.23.4 or a later 22 release, 24.22.1 or a later 24 release, or 26.12.1 or
 later. Run `pierre auth setup-git` from a global install: Git stores the path of that `pierre`, and
@@ -52,8 +52,8 @@ git remote add storage https://acme.code.storage/my-app.git
 git push -u storage main
 ```
 
-`git clone https://acme.code.storage/my-app.git`, `git fetch`, and `git push` now work. No token
-appears in a URL or in a file.
+`git clone https://acme.code.storage/my-app.git`, `git fetch`, and `git push` now work. Git URLs
+contain no credential.
 
 ### CI and containers
 
@@ -375,8 +375,8 @@ Remove the settings with `pierre auth setup-git --uninstall`.
 3. Confirm with `pierre auth status`. The key ID changes and the live check passes.
 4. Delete the old key on the dashboard.
 
-`pierre auth logout` deletes the local key file only. Use it when a machine must stop using a key,
-then revoke the key on the dashboard.
+`pierre auth logout` deletes the selected host entry and its local key file. Use it when a machine
+must stop using a key, then revoke the key on the dashboard.
 
 ## License
 

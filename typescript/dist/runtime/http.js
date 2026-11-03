@@ -2,7 +2,7 @@
 // request, and the response into the result of its encoding. It applies the timeout and the
 // retries.
 import { APIPromise } from './api-promise.js';
-import { checkRefPolicies, checkTtl, REQUEST_TOKEN_SECONDS, } from './credentials.js';
+import { checkRefPolicies, REQUEST_TOKEN_SECONDS, } from './credentials.js';
 import { APIConnectionError, apiError, APITimeoutError, PierreError, problemCode, } from './errors.js';
 import { Page, PagePromise } from './page.js';
 import { retryDelay, sleep, transientStatus } from './retry.js';
@@ -52,7 +52,6 @@ export class HttpRuntime {
         if (this.#config.credentials.fixed) {
             throw new PierreError('A client with a fixed `token` cannot make a token for another repository. Give that token in the params.');
         }
-        const ttl = checkTtl(options?.tokenTtl ?? REQUEST_TOKEN_SECONDS, 'tokenTtl');
         const timeout = checkTimeout(options?.timeout ?? this.#config.timeout);
         // The timeout and the caller's signal cover this token, as they cover the token of an attempt.
         const timer = new AbortController();
@@ -64,7 +63,12 @@ export class HttpRuntime {
         const callerSignal = options?.signal;
         const signal = callerSignal === undefined ? timer.signal : AbortSignal.any([callerSignal, timer.signal]);
         try {
-            return await untilAborted(this.#config.credentials.token({ scopes: ['git:read'], repo, ttl, signal }), signal);
+            return await untilAborted(this.#config.credentials.token({
+                scopes: ['git:read'],
+                repo,
+                ttl: REQUEST_TOKEN_SECONDS,
+                signal,
+            }), signal);
         }
         catch (error) {
             if (callerSignal?.aborted === true)
@@ -97,7 +101,6 @@ export class HttpRuntime {
     }
     /** Sends the request with its retries, and returns the response of the last attempt. */
     async #send(operation, values, options, firstUse) {
-        const ttl = checkTtl(options?.tokenTtl ?? REQUEST_TOKEN_SECONDS, 'tokenTtl');
         // A request option replaces the client option.
         const refPolicies = checkRefPolicies(options?.refPolicies, 'refPolicies') ?? this.#config.refPolicies ?? [];
         if (refPolicies.length > 0 && this.#config.credentials.fixed) {
@@ -169,7 +172,7 @@ export class HttpRuntime {
             token: {
                 scopes: operation.scopes,
                 repo,
-                ttl,
+                ttl: REQUEST_TOKEN_SECONDS,
                 ...(refPolicies.length > 0 ? { ref_policies: refPolicies } : {}),
             },
             requestHeaders: options?.headers ?? {},

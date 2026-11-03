@@ -214,7 +214,7 @@ var opReposGrep = operation{
 //
 // # List Repos
 //
-// List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`).
+// List repositories for the current organisation with cursor-based pagination. Supply `q` to filter results by a case-insensitive substring match against `repo_name` (for example `pierre/sdk-documentation`), and `prefix` to filter by the start of `repo_name`. When both are set they combine with AND: a repository is returned only when it matches both filters.
 //
 // Scope: `org:read`.
 //
@@ -229,7 +229,9 @@ type ReposListParams struct {
 	Cursor Opt[string] `query:"cursor" json:"-"`
 	// Maximum number of repositories to return. Defaults to 20 and is capped at 100.
 	Limit Opt[int64] `query:"limit" json:"-"`
-	// Case-insensitive substring to match against `repo_name`. Trimmed before matching. When omitted or empty after trimming, the full repository list is returned.
+	// Case-insensitive prefix to match against the start of `repo_name`. For example, `pierre/` matches `pierre/sdk-documentation` and `pierre/example` but not `acme/pierre-tools`. When `q` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix, so `prefix=pierre/&q=sdk` returns `pierre/sdk-documentation` but not `pierre/example`. Trimmed before matching. When omitted or empty after trimming, no prefix filter applies.
+	Prefix Opt[string] `query:"prefix" json:"-"`
+	// Case-insensitive substring to match against `repo_name`. Trimmed before matching. When `prefix` is also set, both must match (AND) and `q` only matches the part of `repo_name` after the prefix. When omitted or empty after trimming, the full repository list is returned.
 	Q Opt[string] `query:"q" json:"-"`
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@pierre/cli",
-  "version": "0.1.0-canary.6",
+  "version": "0.1.0-canary.7",
   "description": "The pierre command-line tool for Code Storage",
   "license": "Apache-2.0",
   "homepage": "https://pierre.computer",
@@ -25,17 +25,17 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
-    "commander": "^14.0.0",
+    "commander": "^15.0.0",
     "jose": "^6.2.3",
-    "tsup": "^8.5.0",
+    "rolldown": "1.2.15",
     "typescript-7": "npm:typescript@7.0.2",
-    "vitest": "4.1.9",
+    "vitest": "5.0.5",
     "yaml": "2.9.1",
-    "@pierre/sdk": "0.1.0-canary.6"
+    "@pierre/sdk": "0.1.0-canary.7"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "rolldown -c",
+    "dev": "rolldown -c --watch",
     "test": "vitest run",
     "typecheck": "tsc -p ."
   }

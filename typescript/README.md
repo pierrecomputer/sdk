@@ -20,7 +20,7 @@ npm install @pierre/sdk@canary
 ```
 
 A canary version is `0.1.0-canary.N`, and its API can change with no notice. To keep a build
-repeatable, put an exact version in `package.json`, for example `"@pierre/sdk": "0.1.0-canary.6"`.
+repeatable, put an exact version in `package.json`, for example `"@pierre/sdk": "0.1.0-canary.7"`.
 
 On Node.js, the SDK needs 22.23.4 or a later 22 release, 24.22.1 or a later 24 release, or 26.12.1
 or later.
@@ -72,7 +72,7 @@ for example with `pierre-cli/<version>`. `pierre.options` holds the settings, an
 `pierre.withOptions({ ... })` returns a copy with changed options.
 
 Request options, the second argument of each method: `signal`, `timeout`, `maxRetries`,
-`idempotencyKey`, `headers`, `tokenTtl` (in seconds, up to 3600), and `refPolicies`.
+`idempotencyKey`, `headers`, and `refPolicies`.
 
 `idempotencyKey` applies only to an operation that accepts an `Idempotency-Key`. On any other
 operation, the call fails with a `PierreError` and sends no request.

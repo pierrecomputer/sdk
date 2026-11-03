@@ -75,7 +75,7 @@ A client keeps one httpx client. `with Pierre() as pierre:` and
 block. An `http_client` that you give stays open.
 
 Each method also takes the request options `extra_headers`, `timeout`, `max_retries`,
-`idempotency_key`, `token_ttl`, and `ref_policies` for one call.
+`idempotency_key`, and `ref_policies` for one call.
 
 `idempotency_key` applies only to an operation that accepts an `Idempotency-Key`. On any other
 operation, the call raises `PierreError` and sends no request.

@@ -69,5 +69,4 @@ class RequestOptions:
     timeout: Union[float, NotGiven] = NOT_GIVEN
     max_retries: Union[int, NotGiven] = NOT_GIVEN
     idempotency_key: Union[str, NotGiven] = NOT_GIVEN
-    token_ttl: Union[int, NotGiven] = NOT_GIVEN
     ref_policies: Union[Sequence[RefPolicy], NotGiven] = NOT_GIVEN

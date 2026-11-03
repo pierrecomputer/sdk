@@ -505,6 +505,7 @@ export const reposList = {
     parameters: [
         { in: 'query', name: 'cursor', field: 'cursor' },
         { in: 'query', name: 'limit', field: 'limit' },
+        { in: 'query', name: 'prefix', field: 'prefix' },
         { in: 'query', name: 'q', field: 'q' },
     ],
     body: null,

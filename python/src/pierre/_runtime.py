@@ -33,7 +33,6 @@ from pierre._credentials import (
     Rules,
     TokenNeeds,
     check_ref_policies,
-    check_ttl,
     copy_ref_policies,
 )
 from pierre._errors import (
@@ -98,7 +97,6 @@ def copy_options(options: RequestOptions) -> RequestOptions:
         timeout=options.timeout,
         max_retries=options.max_retries,
         idempotency_key=options.idempotency_key,
-        token_ttl=options.token_ttl,
         ref_policies=policies if isinstance(policies, NotGiven) else copy_ref_policies(policies),  # type: ignore[arg-type]
     )
 
@@ -154,7 +152,6 @@ class BaseRuntime:
         self, operation: OperationSpec[Any], params: Mapping[str, Any], options: RequestOptions
     ) -> Prepared:
         config = self.config
-        ttl = check_ttl(_given(options.token_ttl, REQUEST_TOKEN_SECONDS), "token_ttl")
         # A request option replaces the client option.
         rules = check_ref_policies(_given(options.ref_policies, None), "ref_policies")
         if rules is None:
@@ -235,7 +232,9 @@ class BaseRuntime:
             headers=headers,
             json=content,
             ndjson=ndjson,
-            token=TokenNeeds(scopes=operation.scopes, repo=repo, ttl=ttl, rules=rules),
+            token=TokenNeeds(
+                scopes=operation.scopes, repo=repo, ttl=REQUEST_TOKEN_SECONDS, rules=rules
+            ),
             request_headers=dict(extra) if isinstance(extra, Mapping) else {},
             timeout=timeout,
             max_retries=max_retries,
@@ -320,8 +319,7 @@ class BaseRuntime:
                 "A client with a fixed `token` cannot make a token for another repository. "
                 "Give that token in the params."
             )
-        ttl = check_ttl(_given(options.token_ttl, REQUEST_TOKEN_SECONDS), "token_ttl")
-        return TokenNeeds(scopes=("git:read",), repo=repo, ttl=ttl, rules=())
+        return TokenNeeds(scopes=("git:read",), repo=repo, ttl=REQUEST_TOKEN_SECONDS, rules=())
 
 
 def declared_headers(operation: OperationSpec[Any], response: httpx.Response) -> Dict[str, str]:
