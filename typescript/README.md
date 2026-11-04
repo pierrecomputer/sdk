@@ -16,11 +16,8 @@ and the fields are the HTTP wire names. Search for the catalog ID in the docs.
 ## Install
 
 ```sh
-npm install @pierre/sdk@canary
+npm install @pierre/sdk
 ```
-
-A canary version is `0.1.0-canary.N`, and its API can change with no notice. To keep a build
-repeatable, put an exact version in `package.json`, for example `"@pierre/sdk": "0.1.0-canary.7"`.
 
 On Node.js, the SDK needs 22.23.4 or a later 22 release, 24.22.1 or a later 24 release, or 26.12.1
 or later.
