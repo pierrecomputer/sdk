@@ -18,6 +18,44 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 import sdk_build  # noqa: E402
 
 
+def write_build(root: Path, version: str) -> None:
+    """Write the manifests of a build of a version, and record them in sdk-build.json."""
+    python_version = sdk_build.python_version(version)
+    for directory, package in sdk_build.NPM_PACKAGES.items():
+        manifest = {
+            "name": package,
+            "version": version,
+            "publishConfig": {"tag": sdk_build.npm_tag(version)},
+        }
+        (root / directory).mkdir(parents=True, exist_ok=True)
+        (root / directory / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (root / "python").mkdir(exist_ok=True)
+    (root / "python/pyproject.toml").write_text(
+        f'[project]\nname = "pierre-sdk"\nversion = "{python_version}"\n', encoding="utf-8"
+    )
+    (root / "python/PKG-INFO").write_text(
+        f"Name: pierre-sdk\nVersion: {python_version}\n\nThe Pierre SDK.\n", encoding="utf-8"
+    )
+    (root / "go").mkdir(exist_ok=True)
+    (root / "go/go.mod").write_text(f"module {sdk_build.GO_MODULE}\n", encoding="utf-8")
+    (root / "go/version.go").write_text(
+        f'package pierre\n\nconst Version = "{version}"\n', encoding="utf-8"
+    )
+    files = {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for directory in sdk_build.DIRECTORIES
+        for path in (root / directory).rglob("*")
+        if path.is_file()
+    }
+    record = {
+        "version": version,
+        "python_version": python_version,
+        "npm_tag": sdk_build.npm_tag(version),
+        "files": files,
+    }
+    (root / sdk_build.RECORD).write_text(json.dumps(record), encoding="utf-8")
+
+
 class VersionTest(unittest.TestCase):
     """Test the release version forms and their order."""
 
@@ -146,9 +184,9 @@ class PullRequestTest(unittest.TestCase):
         self.addCleanup(self.temporary_directory.cleanup)
         self.root = Path(self.temporary_directory.name)
         self.git("init", "-q", "-b", "main")
-        self.write_build("0.1.0-canary.5")
+        write_build(self.root, "0.1.0-canary.5")
         self.previous = self.commit("Release v0.1.0-canary.5")
-        self.write_build(self.VERSION)
+        write_build(self.root, self.VERSION)
         self.current = self.commit("Release v" + self.VERSION)
         for name, value in (
             ("npm_versions", lambda package: {self.VERSION}),
@@ -179,43 +217,6 @@ class PullRequestTest(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", message)
         return self.git("rev-parse", "HEAD")
-
-    def write_build(self, version: str) -> None:
-        """Write the manifests of a build of a version, and record them in sdk-build.json."""
-        python_version = sdk_build.python_version(version)
-        manifests = {
-            "typescript/package.json": {"name": "@pierre/sdk"},
-            "cli/package.json": {"name": "@pierre/cli"},
-        }
-        for name, manifest in manifests.items():
-            manifest.update(version=version, publishConfig={"tag": sdk_build.npm_tag(version)})
-            (self.root / name).parent.mkdir(parents=True, exist_ok=True)
-            (self.root / name).write_text(json.dumps(manifest), encoding="utf-8")
-        (self.root / "python").mkdir(exist_ok=True)
-        (self.root / "python/pyproject.toml").write_text(
-            f'[project]\nname = "pierre-sdk"\nversion = "{python_version}"\n', encoding="utf-8"
-        )
-        (self.root / "python/PKG-INFO").write_text(
-            f"Name: pierre-sdk\nVersion: {python_version}\n\nThe Pierre SDK.\n", encoding="utf-8"
-        )
-        (self.root / "go").mkdir(exist_ok=True)
-        (self.root / "go/go.mod").write_text(f"module {sdk_build.GO_MODULE}\n", encoding="utf-8")
-        (self.root / "go/version.go").write_text(
-            f'package pierre\n\nconst Version = "{version}"\n', encoding="utf-8"
-        )
-        files = {
-            path.relative_to(self.root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for directory in sdk_build.DIRECTORIES
-            for path in (self.root / directory).rglob("*")
-            if path.is_file()
-        }
-        record = {
-            "version": version,
-            "python_version": python_version,
-            "npm_tag": sdk_build.npm_tag(version),
-            "files": files,
-        }
-        (self.root / sdk_build.RECORD).write_text(json.dumps(record), encoding="utf-8")
 
     def test_a_pull_request_that_keeps_the_build_passes(self) -> None:
         """A pull request that does not change sdk-build.json passes, and publishes nothing."""
