@@ -25,6 +25,11 @@ def write_build(root: Path, version: str) -> None:
         manifest = {
             "name": package,
             "version": version,
+            "repository": {
+                "type": "git",
+                "url": "git+https://github.com/pierrecomputer/sdk.git",
+                "directory": directory,
+            },
             "publishConfig": {"tag": sdk_build.npm_tag(version)},
         }
         (root / directory).mkdir(parents=True, exist_ok=True)
@@ -171,6 +176,50 @@ class RecordTest(unittest.TestCase):
         empty = tempfile.TemporaryDirectory()
         self.addCleanup(empty.cleanup)
         self.assertIsNone(sdk_build.load_record(Path(empty.name)))
+
+
+class ManifestTest(unittest.TestCase):
+    """Test the package manifests against sdk-build.json."""
+
+    def setUp(self) -> None:
+        """Write a build of a canary version."""
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        self.root = Path(self.temporary_directory.name)
+        write_build(self.root, "0.1.0-canary.6")
+
+    def check(self) -> None:
+        """Load the record and check the manifests."""
+        record = sdk_build.load_record(self.root)
+        assert record is not None
+        sdk_build.check_manifests(self.root, record)
+
+    def set_repository_url(self, directory: str, url: str | None) -> None:
+        """Set repository.url in the package.json of an npm package, or remove it for None."""
+        path = self.root / directory / "package.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["repository"].pop("url")
+        if url is not None:
+            manifest["repository"]["url"] = url
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def test_manifests_of_the_build_pass(self) -> None:
+        """Manifests with the recorded names and versions and the public repository pass."""
+        self.check()
+        self.set_repository_url("cli", "https://github.com/pierrecomputer/sdk")
+        self.check()
+
+    def test_npm_package_without_the_public_repository_url_fails(self) -> None:
+        """npm refuses the provenance of a package whose repository.url is missing or other."""
+        for directory in sdk_build.NPM_PACKAGES:
+            for url in (None, "git+https://github.com/pierrecomputer/sdks.git"):
+                with self.subTest(directory=directory, url=url):
+                    write_build(self.root, "0.1.0-canary.6")
+                    self.set_repository_url(directory, url)
+                    with self.assertRaisesRegex(
+                        sdk_build.BuildError, f"{directory}/package.json: repository.url is"
+                    ):
+                        self.check()
 
 
 class PullRequestTest(unittest.TestCase):
