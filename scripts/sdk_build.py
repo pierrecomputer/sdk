@@ -38,6 +38,9 @@ DIRECTORIES = ("typescript", "cli", "python", "go")
 NPM_PACKAGES = {"typescript": "@pierre/sdk", "cli": "@pierre/cli"}
 PYTHON_PACKAGE = "pierre-sdk"
 GO_MODULE = "github.com/pierrecomputer/sdk/go"
+# npm refuses a publish with provenance when repository.url of the package is not this
+# repository. The URL can start with git+ and end with .git.
+PUBLIC_REPOSITORY = "https://github.com/pierrecomputer/sdk"
 
 # A release version is X.Y.Z or X.Y.Z-canary.N. npm and Go use it as is, and
 # Python uses X.Y.Z.devN for X.Y.Z-canary.N.
@@ -163,7 +166,7 @@ def check_files(root: Path, record: Record) -> None:
 
 
 def check_manifests(root: Path, record: Record) -> None:
-    """Fail when a package manifest does not have the name and the version of the record."""
+    """Fail when a manifest lacks the name or version of the record, or the public repository."""
     import tomllib  # Python 3.11 or later.
 
     version = record.version
@@ -180,6 +183,10 @@ def check_manifests(root: Path, record: Record) -> None:
         expect(name, "version", manifest.get("version"), version)
         tag = manifest.get("publishConfig", {}).get("tag", "latest")
         expect(name, "publishConfig.tag", tag, record.npm_tag)
+        repository = manifest.get("repository")
+        url = repository.get("url") if isinstance(repository, dict) else None
+        if not isinstance(url, str) or re.sub(r"^git\+|\.git$", "", url) != PUBLIC_REPOSITORY:
+            errors.append(f"{name}: repository.url is {url!r}, not {PUBLIC_REPOSITORY!r}")
 
     project = tomllib.loads(read_text(root, "python/pyproject.toml")).get("project", {})
     expect("python/pyproject.toml", "name", project.get("name"), PYTHON_PACKAGE)
