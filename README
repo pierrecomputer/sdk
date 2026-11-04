@@ -15,9 +15,7 @@ SDKS:
  - Python: pip install pierre-sdk
  - Go: go get github.com/pierrecomputer/sdk/go
 
-[TYPESCRIPT DOCUMENTATION](https://code.storage/docs/sdks/typescript)
-[PYTHON DOCUMENTATION](https://code.storage/docs/sdks/python)
-[GO DOCUMENTATION](https://code.storage/docs/sdks/go)
+[SDK DOCUMENTATION](https://code.storage/docs/sdks/overview)
 
 ~~~
 

@@ -22,5 +22,5 @@ npx skills remove code-storage
 ```
 
 Until you install them, read the docs index: `https://code.storage/docs/llms.txt`.
-Pages accept a `.md` suffix, for example `https://code.storage/docs/sdks/typescript.md`.
+Pages accept a `.md` suffix, for example `https://code.storage/docs/sdks/overview.md`.
 The pages of the earlier SDKs start at `https://code.storage/docs/sdk/overview.md`.
