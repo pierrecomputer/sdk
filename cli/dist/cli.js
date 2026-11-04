@@ -2999,7 +2999,7 @@ function useColor() {
 const program = new Command();
 
 // ../typescript/dist/version.js
-const VERSION = "0.1.0-canary.7";
+const VERSION = "0.1.0";
 
 // ../typescript/dist/runtime/errors.js
 /** The docs page with the table of problem codes, in the Markdown form for agents. */
@@ -9576,7 +9576,7 @@ function envValue(env, name) {
 }
 
 // package.json
-var version = "0.1.0-canary.7";
+var version = "0.1.0";
 
 // src/version.ts
 /** The version of this CLI. */

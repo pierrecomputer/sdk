@@ -17,18 +17,14 @@ the docs. `pierre mcp` prints the MCP server and the command that installs the `
 
 ## Install
 
-Install the canary, or run it with no install:
+Install the CLI, or run it with no install:
 
 ```sh
-npm install -g @pierre/cli@canary
+npm install -g @pierre/cli
 pierre version
 
-npx @pierre/cli@canary version
+npx @pierre/cli version
 ```
-
-A canary version is `0.1.0-canary.N`, and its commands can change with no notice. To keep a build
-repeatable, use an exact version: `"@pierre/cli": "0.1.0-canary.7"` in `package.json`, or
-`@pierre/cli@0.1.0-canary.7` with `npm` and `npx`.
 
 The CLI needs Node.js 22.23.4 or a later 22 release, 24.22.1 or a later 24 release, or 26.12.1 or
 later. Run `pierre auth setup-git` from a global install: Git stores the path of that `pierre`, and
