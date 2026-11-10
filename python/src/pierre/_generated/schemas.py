@@ -750,6 +750,8 @@ class ReposBranchesCreateRequest(TypedDict):
     base_is_ephemeral: NotRequired[bool]
     # Optional source ref or revision. Provide base_ref or the deprecated base_branch.
     base_ref: NotRequired[str]
+    # Optional full commit SHA that must match the target branch tip. Set to 40 zeros to require a new branch. A non-zero guard requires target_branch. Empty means no guard. Applies with or without force.
+    expected_target_sha: NotRequired[str]
     # Allow non-fast-forward updates when recreating an existing named branch. Requires target_branch.
     force: NotRequired[bool]
     # Optional pack hint. A branch name the backend prefers as the delta base when it builds the thin pack. It does not change the source or the result.
@@ -834,7 +836,7 @@ class ReposCommitsCreateFromDiffRequest(TypedDict):
     ephemeral_base: NotRequired[bool]
     # Deprecated: use expected_target_sha. Guard ensuring the branch tip matches before applying the patch.
     expected_head_sha: NotRequired[str]
-    # Guard ensuring the target branch tip matches before applying the patch.
+    # Guard ensuring the target branch tip matches before applying the patch. Set to 40 zeros to create the first commit in an empty repository, without base_branch.
     expected_target_sha: NotRequired[str]
     # Destination branch name.
     target_branch: str
@@ -861,7 +863,7 @@ class ReposCommitsCreateRequest(TypedDict):
     ephemeral_base: NotRequired[bool]
     # Deprecated: use expected_target_sha. Commit SHA that must match the branch tip before writing.
     expected_head_sha: NotRequired[str]
-    # Commit SHA that must match the target branch tip before writing. Omit to fast-forward unconditionally.
+    # Commit SHA that must match the target branch tip before writing. Set to 40 zeros to create the first commit in an empty repository, without base_branch. Omit to fast-forward unconditionally.
     expected_target_sha: NotRequired[str]
     # File operations applied in this commit.
     files: List["FileOperation"]
@@ -924,7 +926,7 @@ class ReposCreateRequest(TypedDict):
 
     # Code Storage repository to copy once. The new repository keeps no link to it. Do not set it together with upstream.
     base_repo: NotRequired["BaseRepo"]
-    # Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main.
+    # Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main. An empty repository has no branch until its first commit, and a commit to this name creates the default branch.
     default_branch: NotRequired[str]
     # Name of the new repository. It can contain a slash.
     repo_name: NotRequired[str]

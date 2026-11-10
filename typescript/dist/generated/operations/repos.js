@@ -54,6 +54,7 @@ export const reposBranchesCreate = {
             'base_branch',
             'base_is_ephemeral',
             'base_ref',
+            'expected_target_sha',
             'force',
             'preferred_base',
             'target_branch',

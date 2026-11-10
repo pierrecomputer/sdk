@@ -175,16 +175,16 @@ pierre version [--json]
 
 ### Global flags
 
-| Flag                | Meaning                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------- |
-| `--debug`           | Print diagnostics to stderr. Never prints a token                                                 |
-| `-h`, `--help`      | Show help                                                                                         |
-| `--hostname <host>` | Select a tenant by its Git host. Overrides `PIERRE_GIT_HOST` and the current repository's remote. |
-| `--json`            | Print the JSON response body                                                                      |
-| `--no-input`        | Fail instead of prompt                                                                            |
-| `--quiet`           | Print only results and errors                                                                     |
-| `-v`, `--version`   | Print the CLI version                                                                             |
-| `--yes`             | Skip confirmations                                                                                |
+| Flag                | Meaning                                                                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--debug`           | Print to stderr the repository taken from the Git remote, the token steps of the credential helper and of `auth token`, and the stack of an unexpected error. Never prints a token |
+| `-h`, `--help`      | Show help                                                                                                                                                                          |
+| `--hostname <host>` | Select a tenant by its Git host. Overrides `PIERRE_GIT_HOST` and the current repository's remote.                                                                                  |
+| `--json`            | Print the JSON response body                                                                                                                                                       |
+| `--no-input`        | Fail instead of prompt                                                                                                                                                             |
+| `--quiet`           | Print only results and errors                                                                                                                                                      |
+| `-v`, `--version`   | Print the CLI version                                                                                                                                                              |
+| `--yes`             | Skip confirmations                                                                                                                                                                 |
 
 ### Exit codes
 

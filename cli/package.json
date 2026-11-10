@@ -1,6 +1,6 @@
 {
   "name": "@pierre/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The pierre command-line tool for Code Storage",
   "license": "Apache-2.0",
   "homepage": "https://pierre.computer",
@@ -11,7 +11,7 @@
   },
   "type": "module",
   "bin": {
-    "pierre": "./dist/cli.js"
+    "pierre": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -24,13 +24,15 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "@types/proper-lockfile": "^4.1.4",
     "commander": "^15.0.0",
     "jose": "^6.2.3",
+    "proper-lockfile": "^4.1.2",
     "rolldown": "1.2.15",
     "typescript-7": "npm:typescript@7.0.2",
     "vitest": "5.0.5",
     "yaml": "2.9.1",
-    "@pierre/sdk": "0.1.0"
+    "@pierre/sdk": "0.1.1"
   },
   "scripts": {
     "build": "rolldown -c",

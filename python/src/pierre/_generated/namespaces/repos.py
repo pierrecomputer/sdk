@@ -82,6 +82,7 @@ REPOS_BRANCHES_CREATE: OperationSpec[NoHeaders] = OperationSpec(
             "base_branch",
             "base_is_ephemeral",
             "base_ref",
+            "expected_target_sha",
             "force",
             "preferred_base",
             "target_branch",
@@ -1036,6 +1037,7 @@ class ReposBranchesNamespace:
         base_branch: Union[str, NotGiven] = NOT_GIVEN,
         base_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
         base_ref: Union[str, NotGiven] = NOT_GIVEN,
+        expected_target_sha: Union[str, NotGiven] = NOT_GIVEN,
         force: Union[bool, NotGiven] = NOT_GIVEN,
         preferred_base: Union[str, NotGiven] = NOT_GIVEN,
         target_branch: Union[str, NotGiven] = NOT_GIVEN,
@@ -1048,7 +1050,7 @@ class ReposBranchesNamespace:
     ) -> schemas.ReposBranchesCreateResponse:
         """Create Branch
 
-        Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first.
+        Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first. The base ref must exist. A new empty repository has no branch until its first commit, so the request returns `404`.
 
         Scope: `git:write` on the repository.
 
@@ -1057,6 +1059,7 @@ class ReposBranchesNamespace:
             base_branch: Deprecated: use base_ref. Preferred source branch name.
             base_is_ephemeral: Whether the base branch should be resolved from the ephemeral namespace.
             base_ref: Optional source ref or revision. Provide base_ref or the deprecated base_branch.
+            expected_target_sha: Optional full commit SHA that must match the target branch tip. Set to 40 zeros to require a new branch. A non-zero guard requires target_branch. Empty means no guard. Applies with or without force.
             force: Allow non-fast-forward updates when recreating an existing named branch. Requires target_branch.
             preferred_base: Optional pack hint. A branch name the backend prefers as the delta base when it builds the thin pack. It does not change the source or the result.
             target_branch: Optional destination branch name. Omit it to let the server allocate a name.
@@ -1075,6 +1078,7 @@ class ReposBranchesNamespace:
                     "base_branch": base_branch,
                     "base_is_ephemeral": base_is_ephemeral,
                     "base_ref": base_ref,
+                    "expected_target_sha": expected_target_sha,
                     "force": force,
                     "preferred_base": preferred_base,
                     "target_branch": target_branch,
@@ -1153,7 +1157,7 @@ class ReposBranchesNamespace:
     ) -> schemas.ReposBranchesGetResponse:
         """Get Branch
 
-        Get one branch by its exact short name. The response omits list pagination fields.
+        Get one branch by its exact short name. The response omits list pagination fields. A new empty repository has no branch until its first commit, so the request returns `404`.
 
         Scope: `git:read` on the repository.
 
@@ -1200,7 +1204,7 @@ class ReposBranchesNamespace:
     ) -> Page[schemas.BranchListItem, schemas.ReposBranchesListResponse]:
         """List Branches
 
-        List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git.
+        List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git. A new empty repository has no branch until its first commit, so its list is empty.
 
         Scope: `git:read` on the repository.
 
@@ -1278,7 +1282,7 @@ class ReposCommitsNamespace:
             ephemeral: Deprecated: use target_is_ephemeral. When true, write the target branch under the ephemeral namespace.
             ephemeral_base: Deprecated: use base_is_ephemeral. When true, interpret base_branch as ephemeral.
             expected_head_sha: Deprecated: use expected_target_sha. Commit SHA that must match the branch tip before writing.
-            expected_target_sha: Commit SHA that must match the target branch tip before writing. Omit to fast-forward unconditionally.
+            expected_target_sha: Commit SHA that must match the target branch tip before writing. Set to 40 zeros to create the first commit in an empty repository, without base_branch. Omit to fast-forward unconditionally.
             target_is_ephemeral: When true, write the target branch under the ephemeral namespace.
 
         Catalog ID `repos.commits.create`: `POST /api/repos/{repo_name}/commit-pack`.
@@ -1355,7 +1359,7 @@ class ReposCommitsNamespace:
             ephemeral: Deprecated: use target_is_ephemeral. When true, write the target branch under the ephemeral namespace.
             ephemeral_base: Deprecated: use base_is_ephemeral. When true, interpret base_branch as ephemeral.
             expected_head_sha: Deprecated: use expected_target_sha. Guard ensuring the branch tip matches before applying the patch.
-            expected_target_sha: Guard ensuring the target branch tip matches before applying the patch.
+            expected_target_sha: Guard ensuring the target branch tip matches before applying the patch. Set to 40 zeros to create the first commit in an empty repository, without base_branch.
             target_is_ephemeral: When true, write the target branch under the ephemeral namespace.
 
         Catalog ID `repos.commits.createFromDiff`: `POST /api/repos/{repo_name}/diff-commit`.
@@ -2664,6 +2668,8 @@ class ReposNamespace:
 
         A repository starts empty or from a source. `base_repo` is a one-time copy of a Code Storage repository; `upstream` is a lasting link to an external Git host. A copy takes the history of one commit (`base_repo.ref`, or the source HEAD) into one branch, and keeps no link to its source. A sync keeps its upstream, and the repository can sync from it again. Set at most one of the two.
 
+        A new empty repository has no branch until its first commit. The first commit creates the branch that it targets, so the default branch exists only after a commit to it.
+
         Create is idempotent on the repository name. A new repository returns `201`. When the name already exists, the request returns `200`, and a copy copies nothing. When the name exists with a different upstream, the request returns `409`.
 
         The deprecated form of `base_repo`, with `provider` and `operation`, still works.
@@ -2672,7 +2678,7 @@ class ReposNamespace:
 
         Args:
             base_repo: Code Storage repository to copy once. The new repository keeps no link to it. Do not set it together with upstream.
-            default_branch: Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main.
+            default_branch: Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main. An empty repository has no branch until its first commit, and a commit to this name creates the default branch.
             repo_name: Name of the new repository. It can contain a slash.
             upstream: External Git host to keep syncing from. The link lasts, and the repository can sync again. Do not set it together with base_repo.
 
@@ -3211,6 +3217,7 @@ class AsyncReposBranchesNamespace:
         base_branch: Union[str, NotGiven] = NOT_GIVEN,
         base_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
         base_ref: Union[str, NotGiven] = NOT_GIVEN,
+        expected_target_sha: Union[str, NotGiven] = NOT_GIVEN,
         force: Union[bool, NotGiven] = NOT_GIVEN,
         preferred_base: Union[str, NotGiven] = NOT_GIVEN,
         target_branch: Union[str, NotGiven] = NOT_GIVEN,
@@ -3223,7 +3230,7 @@ class AsyncReposBranchesNamespace:
     ) -> schemas.ReposBranchesCreateResponse:
         """Create Branch
 
-        Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first.
+        Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first. The base ref must exist. A new empty repository has no branch until its first commit, so the request returns `404`.
 
         Scope: `git:write` on the repository.
 
@@ -3232,6 +3239,7 @@ class AsyncReposBranchesNamespace:
             base_branch: Deprecated: use base_ref. Preferred source branch name.
             base_is_ephemeral: Whether the base branch should be resolved from the ephemeral namespace.
             base_ref: Optional source ref or revision. Provide base_ref or the deprecated base_branch.
+            expected_target_sha: Optional full commit SHA that must match the target branch tip. Set to 40 zeros to require a new branch. A non-zero guard requires target_branch. Empty means no guard. Applies with or without force.
             force: Allow non-fast-forward updates when recreating an existing named branch. Requires target_branch.
             preferred_base: Optional pack hint. A branch name the backend prefers as the delta base when it builds the thin pack. It does not change the source or the result.
             target_branch: Optional destination branch name. Omit it to let the server allocate a name.
@@ -3250,6 +3258,7 @@ class AsyncReposBranchesNamespace:
                     "base_branch": base_branch,
                     "base_is_ephemeral": base_is_ephemeral,
                     "base_ref": base_ref,
+                    "expected_target_sha": expected_target_sha,
                     "force": force,
                     "preferred_base": preferred_base,
                     "target_branch": target_branch,
@@ -3328,7 +3337,7 @@ class AsyncReposBranchesNamespace:
     ) -> schemas.ReposBranchesGetResponse:
         """Get Branch
 
-        Get one branch by its exact short name. The response omits list pagination fields.
+        Get one branch by its exact short name. The response omits list pagination fields. A new empty repository has no branch until its first commit, so the request returns `404`.
 
         Scope: `git:read` on the repository.
 
@@ -3375,7 +3384,7 @@ class AsyncReposBranchesNamespace:
     ) -> AsyncPaginator[schemas.BranchListItem, schemas.ReposBranchesListResponse]:
         """List Branches
 
-        List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git.
+        List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git. A new empty repository has no branch until its first commit, so its list is empty.
 
         Scope: `git:read` on the repository.
 
@@ -3453,7 +3462,7 @@ class AsyncReposCommitsNamespace:
             ephemeral: Deprecated: use target_is_ephemeral. When true, write the target branch under the ephemeral namespace.
             ephemeral_base: Deprecated: use base_is_ephemeral. When true, interpret base_branch as ephemeral.
             expected_head_sha: Deprecated: use expected_target_sha. Commit SHA that must match the branch tip before writing.
-            expected_target_sha: Commit SHA that must match the target branch tip before writing. Omit to fast-forward unconditionally.
+            expected_target_sha: Commit SHA that must match the target branch tip before writing. Set to 40 zeros to create the first commit in an empty repository, without base_branch. Omit to fast-forward unconditionally.
             target_is_ephemeral: When true, write the target branch under the ephemeral namespace.
 
         Catalog ID `repos.commits.create`: `POST /api/repos/{repo_name}/commit-pack`.
@@ -3530,7 +3539,7 @@ class AsyncReposCommitsNamespace:
             ephemeral: Deprecated: use target_is_ephemeral. When true, write the target branch under the ephemeral namespace.
             ephemeral_base: Deprecated: use base_is_ephemeral. When true, interpret base_branch as ephemeral.
             expected_head_sha: Deprecated: use expected_target_sha. Guard ensuring the branch tip matches before applying the patch.
-            expected_target_sha: Guard ensuring the target branch tip matches before applying the patch.
+            expected_target_sha: Guard ensuring the target branch tip matches before applying the patch. Set to 40 zeros to create the first commit in an empty repository, without base_branch.
             target_is_ephemeral: When true, write the target branch under the ephemeral namespace.
 
         Catalog ID `repos.commits.createFromDiff`: `POST /api/repos/{repo_name}/diff-commit`.
@@ -4839,6 +4848,8 @@ class AsyncReposNamespace:
 
         A repository starts empty or from a source. `base_repo` is a one-time copy of a Code Storage repository; `upstream` is a lasting link to an external Git host. A copy takes the history of one commit (`base_repo.ref`, or the source HEAD) into one branch, and keeps no link to its source. A sync keeps its upstream, and the repository can sync from it again. Set at most one of the two.
 
+        A new empty repository has no branch until its first commit. The first commit creates the branch that it targets, so the default branch exists only after a commit to it.
+
         Create is idempotent on the repository name. A new repository returns `201`. When the name already exists, the request returns `200`, and a copy copies nothing. When the name exists with a different upstream, the request returns `409`.
 
         The deprecated form of `base_repo`, with `provider` and `operation`, still works.
@@ -4847,7 +4858,7 @@ class AsyncReposNamespace:
 
         Args:
             base_repo: Code Storage repository to copy once. The new repository keeps no link to it. Do not set it together with upstream.
-            default_branch: Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main.
+            default_branch: Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main. An empty repository has no branch until its first commit, and a commit to this name creates the default branch.
             repo_name: Name of the new repository. It can contain a slash.
             upstream: External Git host to keep syncing from. The link lasts, and the repository can sync again. Do not set it together with base_repo.
 

@@ -664,6 +664,8 @@ type ReposBranchesCreateRequest struct {
 	BaseIsEphemeral Opt[bool] `json:"base_is_ephemeral,omitzero"`
 	// Optional source ref or revision. Provide base_ref or the deprecated base_branch.
 	BaseRef Opt[string] `json:"base_ref,omitzero"`
+	// Optional full commit SHA that must match the target branch tip. Set to 40 zeros to require a new branch. A non-zero guard requires target_branch. Empty means no guard. Applies with or without force.
+	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// Allow non-fast-forward updates when recreating an existing named branch. Requires target_branch.
 	Force Opt[bool] `json:"force,omitzero"`
 	// Optional pack hint. A branch name the backend prefers as the delta base when it builds the thin pack. It does not change the source or the result.
@@ -742,7 +744,7 @@ type ReposCommitsCreateFromDiffRequest struct {
 	EphemeralBase Opt[bool] `json:"ephemeral_base,omitzero"`
 	// Deprecated: use expected_target_sha. Guard ensuring the branch tip matches before applying the patch.
 	ExpectedHeadSHA Opt[string] `json:"expected_head_sha,omitzero"`
-	// Guard ensuring the target branch tip matches before applying the patch.
+	// Guard ensuring the target branch tip matches before applying the patch. Set to 40 zeros to create the first commit in an empty repository, without base_branch.
 	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// Destination branch name.
 	TargetBranch string `json:"target_branch"`
@@ -768,7 +770,7 @@ type ReposCommitsCreateRequest struct {
 	EphemeralBase Opt[bool] `json:"ephemeral_base,omitzero"`
 	// Deprecated: use expected_target_sha. Commit SHA that must match the branch tip before writing.
 	ExpectedHeadSHA Opt[string] `json:"expected_head_sha,omitzero"`
-	// Commit SHA that must match the target branch tip before writing. Omit to fast-forward unconditionally.
+	// Commit SHA that must match the target branch tip before writing. Set to 40 zeros to create the first commit in an empty repository, without base_branch. Omit to fast-forward unconditionally.
 	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// File operations applied in this commit.
 	Files []FileOperation `json:"files"`
@@ -826,7 +828,7 @@ type ReposCommitsRestoreResponse struct {
 type ReposCreateRequest struct {
 	// Code Storage repository to copy once. The new repository keeps no link to it. Do not set it together with upstream.
 	BaseRepo Opt[BaseRepo] `json:"base_repo,omitzero"`
-	// Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main.
+	// Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main. An empty repository has no branch until its first commit, and a commit to this name creates the default branch.
 	DefaultBranch Opt[string] `json:"default_branch,omitzero"`
 	// Name of the new repository. It can contain a slash.
 	RepoName Opt[string] `json:"repo_name,omitzero"`
