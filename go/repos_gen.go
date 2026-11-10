@@ -50,6 +50,8 @@ func newReposNamespace(c *core) *ReposNamespace {
 //
 // A repository starts empty or from a source. `base_repo` is a one-time copy of a Code Storage repository; `upstream` is a lasting link to an external Git host. A copy takes the history of one commit (`base_repo.ref`, or the source HEAD) into one branch, and keeps no link to its source. A sync keeps its upstream, and the repository can sync from it again. Set at most one of the two.
 //
+// A new empty repository has no branch until its first commit. The first commit creates the branch that it targets, so the default branch exists only after a commit to it.
+//
 // Create is idempotent on the repository name. A new repository returns `201`. When the name already exists, the request returns `200`, and a copy copies nothing. When the name exists with a different upstream, the request returns `409`.
 //
 // The deprecated form of `base_repo`, with `provider` and `operation`, still works.
@@ -67,7 +69,7 @@ func (n *ReposNamespace) Create(ctx context.Context, params ReposCreateParams, o
 type ReposCreateParams struct {
 	// Code Storage repository to copy once. The new repository keeps no link to it. Do not set it together with upstream.
 	BaseRepo Opt[BaseRepo] `json:"base_repo,omitzero"`
-	// Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main.
+	// Default branch for the new repository. When omitted, a copy takes the default branch of the source, a sync from GitHub takes the default branch of the GitHub repository, and any other repository uses main. An empty repository has no branch until its first commit, and a commit to this name creates the default branch.
 	DefaultBranch Opt[string] `json:"default_branch,omitzero"`
 	// Name of the new repository. It can contain a slash.
 	RepoName Opt[string] `json:"repo_name,omitzero"`
@@ -517,7 +519,7 @@ func newReposBranchesNamespace(c *core) *ReposBranchesNamespace {
 //
 // # Create Branch
 //
-// Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first.
+// Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first. The base ref must exist. A new empty repository has no branch until its first commit, so the request returns `404`.
 //
 // Scope: `git:write` on the repository.
 //
@@ -534,6 +536,8 @@ type ReposBranchesCreateParams struct {
 	BaseIsEphemeral Opt[bool] `json:"base_is_ephemeral,omitzero"`
 	// Optional source ref or revision. Provide base_ref or the deprecated base_branch.
 	BaseRef Opt[string] `json:"base_ref,omitzero"`
+	// Optional full commit SHA that must match the target branch tip. Set to 40 zeros to require a new branch. A non-zero guard requires target_branch. Empty means no guard. Applies with or without force.
+	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// Allow non-fast-forward updates when recreating an existing named branch. Requires target_branch.
 	Force Opt[bool] `json:"force,omitzero"`
 	// Optional pack hint. A branch name the backend prefers as the delta base when it builds the thin pack. It does not change the source or the result.
@@ -601,7 +605,7 @@ var opReposBranchesDelete = operation{
 //
 // # Get Branch
 //
-// Get one branch by its exact short name. The response omits list pagination fields.
+// Get one branch by its exact short name. The response omits list pagination fields. A new empty repository has no branch until its first commit, so the request returns `404`.
 //
 // Scope: `git:read` on the repository.
 //
@@ -639,7 +643,7 @@ var opReposBranchesGet = operation{
 //
 // # List Branches
 //
-// List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git.
+// List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git. A new empty repository has no branch until its first commit, so its list is empty.
 //
 // Scope: `git:read` on the repository.
 //
@@ -713,7 +717,7 @@ type ReposCommitsCreateParams struct {
 	CommitMessage string `json:"commit_message"`
 	// Committer identity. Defaults to author when omitted.
 	Committer Opt[GitIdentity] `json:"committer,omitzero"`
-	// Commit SHA that must match the target branch tip before writing. Omit to fast-forward unconditionally.
+	// Commit SHA that must match the target branch tip before writing. Set to 40 zeros to create the first commit in an empty repository, without base_branch. Omit to fast-forward unconditionally.
 	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// Destination branch name (no refs/ prefix).
 	TargetBranch string `json:"target_branch"`
@@ -767,7 +771,7 @@ type ReposCommitsCreateFromDiffParams struct {
 	CommitMessage string `json:"commit_message"`
 	// Committer identity. Defaults to author when omitted.
 	Committer Opt[GitIdentity] `json:"committer,omitzero"`
-	// Guard ensuring the target branch tip matches before applying the patch.
+	// Guard ensuring the target branch tip matches before applying the patch. Set to 40 zeros to create the first commit in an empty repository, without base_branch.
 	ExpectedTargetSHA Opt[string] `json:"expected_target_sha,omitzero"`
 	// Destination branch name.
 	TargetBranch string `json:"target_branch"`

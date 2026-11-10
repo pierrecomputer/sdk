@@ -46,7 +46,7 @@ export declare class ReposBranchesNamespace {
     /**
      * Create Branch
      *
-     * Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first.
+     * Create a new branch from an existing branch or ref. This is useful for agent workflows, ephemeral previews, or server-side automation where you do not want to clone the repo first. The base ref must exist. A new empty repository has no branch until its first commit, so the request returns `404`.
      *
      * Scope: `git:write` on the repository.
      *
@@ -70,7 +70,7 @@ export declare class ReposBranchesNamespace {
     /**
      * Get Branch
      *
-     * Get one branch by its exact short name. The response omits list pagination fields.
+     * Get one branch by its exact short name. The response omits list pagination fields. A new empty repository has no branch until its first commit, so the request returns `404`.
      *
      * Scope: `git:read` on the repository.
      *
@@ -82,7 +82,7 @@ export declare class ReposBranchesNamespace {
     /**
      * List Branches
      *
-     * List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git.
+     * List branches in the repository with cursor pagination. Use this to build branch selectors, review tools, or sync jobs without shelling out to Git. A new empty repository has no branch until its first commit, so its list is empty.
      *
      * Scope: `git:read` on the repository.
      *
@@ -453,6 +453,8 @@ export declare class ReposNamespace {
      * Create a repository.
      *
      * A repository starts empty or from a source. `base_repo` is a one-time copy of a Code Storage repository; `upstream` is a lasting link to an external Git host. A copy takes the history of one commit (`base_repo.ref`, or the source HEAD) into one branch, and keeps no link to its source. A sync keeps its upstream, and the repository can sync from it again. Set at most one of the two.
+     *
+     * A new empty repository has no branch until its first commit. The first commit creates the branch that it targets, so the default branch exists only after a commit to it.
      *
      * Create is idempotent on the repository name. A new repository returns `201`. When the name already exists, the request returns `200`, and a copy copies nothing. When the name exists with a different upstream, the request returns `409`.
      *
