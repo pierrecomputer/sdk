@@ -723,6 +723,10 @@ export interface ReposPreviewMergeParams {
      */
     repo_name: string;
     /**
+     * Preview a merge of branches with no common ancestor, as the `allow_unrelated_histories` of `POST /merge`.
+     */
+    allow_unrelated_histories?: boolean;
+    /**
      * When true, include bounded conflict content in the response.
      */
     include_content?: boolean;
@@ -734,6 +738,14 @@ export interface ReposPreviewMergeParams {
      * Whether `source_branch` should be resolved from the ephemeral namespace.
      */
     source_is_ephemeral?: boolean;
+    /**
+     * Preview a squash merge, as the `squash` of `POST /merge`. Cannot be used with the `ff_only` strategy.
+     */
+    squash?: boolean;
+    /**
+     * Merge strategy to preview, as the `strategy` of `POST /merge`. Defaults to `ff_prefer`.
+     */
+    strategy?: 'ff_only' | 'ff_prefer' | 'merge' | (string & {});
     /**
      * Destination branch to preview merging into.
      */

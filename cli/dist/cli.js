@@ -20,6 +20,14 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esmMin = (fn, res, err) => () => {
+	if (err) throw err[0];
+	try {
+		return fn && (res = fn(fn = 0)), res;
+	} catch (e) {
+		throw err = [e], e;
+	}
+};
 var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod, mod.exports), cb = null), mod.exports);
 var __copyProps = (to, from, except, desc) => {
 	if (from && typeof from === "object" || typeof from === "function") {
@@ -2999,7 +3007,7 @@ function useColor() {
 const program = new Command();
 
 // ../typescript/dist/version.js
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 
 // ../typescript/dist/runtime/errors.js
 /** The docs page with the table of problem codes, in the Markdown form for agents. */
@@ -5607,6 +5615,11 @@ const reposPreviewMerge = {
 		},
 		{
 			in: "query",
+			name: "allow_unrelated_histories",
+			field: "allow_unrelated_histories"
+		},
+		{
+			in: "query",
 			name: "include_content",
 			field: "include_content"
 		},
@@ -5619,6 +5632,16 @@ const reposPreviewMerge = {
 			in: "query",
 			name: "source_is_ephemeral",
 			field: "source_is_ephemeral"
+		},
+		{
+			in: "query",
+			name: "squash",
+			field: "squash"
+		},
+		{
+			in: "query",
+			name: "strategy",
+			field: "strategy"
 		},
 		{
 			in: "query",
@@ -6456,7 +6479,7 @@ var ReposNamespace = class {
 	/**
 	* Preview Merge
 	*
-	* Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
+	* Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
 	*
 	* Scope: `git:read` on the repository.
 	*
@@ -8450,7 +8473,7 @@ const COMMANDS = [
 				in: "body",
 				type: "object",
 				required: false,
-				description: "Author identity used when the backend creates a merge commit. Required for merge-commit strategies.",
+				description: "Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.",
 				fields: [{
 					name: "email",
 					in: "body",
@@ -8470,7 +8493,7 @@ const COMMANDS = [
 				in: "body",
 				type: "string",
 				required: false,
-				description: "Commit message used when a merge commit is created."
+				description: "Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request."
 			},
 			{
 				name: "committer",
@@ -8533,7 +8556,7 @@ const COMMANDS = [
 				in: "body",
 				type: "boolean",
 				required: false,
-				description: "When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy."
+				description: "When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy."
 			},
 			{
 				name: "strategy",
@@ -8545,7 +8568,7 @@ const COMMANDS = [
 					"merge"
 				],
 				required: true,
-				description: "Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit."
+				description: "Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit."
 			},
 			{
 				name: "target_branch",
@@ -9028,7 +9051,7 @@ const COMMANDS = [
 		resource: "repos",
 		method: "preview-merge",
 		summary: "Preview Merge",
-		description: "Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.\n\nScope: `git:read` on the repository.",
+		description: "Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.\n\nScope: `git:read` on the repository.",
 		httpMethod: "GET",
 		path: "/api/repos/{repo_name}/merge/preview",
 		scopes: ["git:read"],
@@ -9041,6 +9064,13 @@ const COMMANDS = [
 				type: "string",
 				required: true,
 				description: "The repository name, for example `acme/web`."
+			},
+			{
+				name: "allow_unrelated_histories",
+				in: "query",
+				type: "boolean",
+				required: false,
+				description: "Preview a merge of branches with no common ancestor, as the `allow_unrelated_histories` of `POST /merge`."
 			},
 			{
 				name: "include_content",
@@ -9062,6 +9092,25 @@ const COMMANDS = [
 				type: "boolean",
 				required: false,
 				description: "Whether `source_branch` should be resolved from the ephemeral namespace."
+			},
+			{
+				name: "squash",
+				in: "query",
+				type: "boolean",
+				required: false,
+				description: "Preview a squash merge, as the `squash` of `POST /merge`. Cannot be used with the `ff_only` strategy."
+			},
+			{
+				name: "strategy",
+				in: "query",
+				type: "enum",
+				values: [
+					"ff_only",
+					"ff_prefer",
+					"merge"
+				],
+				required: false,
+				description: "Merge strategy to preview, as the `strategy` of `POST /merge`. Defaults to `ff_prefer`."
 			},
 			{
 				name: "target_branch",
@@ -9586,11 +9635,11 @@ function envValue(env, name) {
 }
 
 // package.json
-var version = "0.1.1";
+var version$2 = "0.1.2";
 
 // src/version.ts
 /** The version of this CLI. */
-const CLI_VERSION = version;
+const CLI_VERSION = version$2;
 
 // src/client.ts
 /**
@@ -17181,6 +17230,23 @@ async function fetchJson(url) {
 	}
 }
 
+// src/account/scopes.ts
+const ALLOWED = /* @__PURE__ */ new Set(["*", ...SCOPES]);
+function keyScopes(value) {
+	const scopes = registeredKeyScopes(value);
+	return scopes?.every((scope) => ALLOWED.has(scope)) ? scopes : void 0;
+}
+/** A saved key can also have scopes for deployments, sandboxes, and triggers. */
+function registeredKeyScopes(value) {
+	if (!Array.isArray(value) || value.length === 0 || !value.every((scope) => typeof scope === "string" && (scope === "*" || isScope(scope)))) return void 0;
+	const scopes = [...new Set(value)].toSorted();
+	if (scopes.includes("*")) return scopes.length === 1 ? scopes : void 0;
+	return scopes.includes("org:read") && scopes.includes("git:read") ? scopes : void 0;
+}
+function sameKeyScopes(left, right) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
 // src/account/transport.ts
 const CODES = /* @__PURE__ */ new Set([
 	"invalid_argument",
@@ -17189,6 +17255,7 @@ const CODES = /* @__PURE__ */ new Set([
 	"not_found",
 	"already_exists",
 	"failed_precondition",
+	"aborted",
 	"resource_exhausted",
 	"unavailable",
 	"internal",
@@ -17200,13 +17267,17 @@ const CODES = /* @__PURE__ */ new Set([
 	"invalid_grant"
 ]);
 const REASON_MESSAGES = {
-	subdomain_unavailable: "The subdomain is unavailable. Choose another --subdomain and run the command again. Payment is already recorded.",
+	subdomain_unavailable: "The subdomain is unavailable. Choose another --subdomain and run the command again.",
+	selection_changed: "The signup choices changed on another machine. Run the command again to read the current choices.",
+	email_unverified: "Verify your email in the browser, then run the command again.",
 	checkout_flow_conflict: "Checkout is already open in another signup flow. Complete it there, then run this command again.",
 	promotion_code_invalid: "The promotion code is not valid. Pass another --promotion-code, or run the command without it.",
 	account_setup_unavailable: "CLI account setup is not available in this environment."
 };
 const SAFE_REASONS = /* @__PURE__ */ new Map([
 	["subdomain is unavailable", "subdomain_unavailable"],
+	["signup choices changed; read the current choices", "selection_changed"],
+	["verify your email before signup", "email_unverified"],
 	["checkout is already open in another signup flow", "checkout_flow_conflict"],
 	["promotion code is not valid", "promotion_code_invalid"],
 	["CLI account setup is not available in this environment.", "account_setup_unavailable"]
@@ -17350,6 +17421,17 @@ function publicURL(raw) {
 }
 
 // src/account/config.ts
+const STAGING_SETTINGS = {
+	version: 1,
+	accountFlowVersion: 2,
+	workosClientId: "client_01K1BJ5Q1JCKEMASZ61C7ZYVR7",
+	workosApiUrl: "https://api.workos.com",
+	controlPlaneUrl: "https://workspace-api-cli-staging.code.storage",
+	cloudApiUrl: "https://cloudapi-admin-staging.code.storage",
+	gitHostTemplate: "{{org}}.3p.pierre.rip",
+	apiUrlTemplate: "https://api.{{org}}.3p.pierre.rip/api/v1",
+	requiredSubdomainSuffix: "-staging"
+};
 async function settings(origin) {
 	try {
 		return await request(`${origin}/.well-known/pierre-cli.json`);
@@ -17360,7 +17442,7 @@ async function settings(origin) {
 }
 async function discover(env) {
 	const origin = publicURL(dashboardUrl(env));
-	const body = await settings(origin);
+	const body = origin === "https://dash.3p.pierre.rip" ? STAGING_SETTINGS : await settings(origin);
 	if (body.version !== 1) throw new CliError("The account configuration version is not supported.");
 	const gitHostTemplate = textField(body, "gitHostTemplate");
 	const apiUrlTemplate = textField(body, "apiUrlTemplate");
@@ -17371,6 +17453,7 @@ async function discover(env) {
 		workosApiUrl: publicURL(textField(body, "workosApiUrl")),
 		controlPlaneUrl: publicURL(textField(body, "controlPlaneUrl")),
 		cloudApiUrl: publicURL(textField(body, "cloudApiUrl")),
+		...body.accountFlowVersion === 2 ? { accountFlowVersion: 2 } : {},
 		gitHostTemplate,
 		apiUrlTemplate,
 		requiredSubdomainSuffix: typeof body.requiredSubdomainSuffix === "string" ? body.requiredSubdomainSuffix : ""
@@ -17403,6 +17486,10 @@ async function loadAccount(file, environment) {
 	};
 	if (value.orgId !== void 0) state.orgId = textField(value, "orgId");
 	if (value.signupSessionId !== void 0) state.signupSessionId = textField(value, "signupSessionId");
+	if (value.keyScopes !== void 0) {
+		state.keyScopes = keyScopes(value.keyScopes);
+		if (!state.keyScopes) throw new CliError("The saved key scopes are invalid.");
+	}
 	if (value.signup !== void 0) {
 		if (!isRecord(value.signup) || !isRecord(value.signup.clusterTarget)) throw new CliError("The saved signup is invalid.");
 		const target = value.signup.clusterTarget;
@@ -17418,9 +17505,11 @@ async function loadAccount(file, environment) {
 		};
 	}
 	if (value.key !== void 0) {
+		state.keyScopes ??= ["*"];
 		if (!isRecord(value.key)) throw new CliError("The saved key registration is invalid.");
 		state.key = {
 			orgId: textField(value.key, "orgId"),
+			...value.key.name === void 0 ? {} : { name: textField(value.key, "name") },
 			host: textField(value.key, "host"),
 			keyFile: textField(value.key, "keyFile"),
 			registrationId: textField(value.key, "registrationId"),
@@ -19435,6 +19524,3381 @@ async function activeOrg(session) {
 	}
 }
 
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/version.js
+/** @internal */
+const version$1 = "0.1.1";
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/internal/errors.js
+/** @internal */
+function getVersion() {
+	return version$1;
+}
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Errors.js
+/**
+* Base error class inherited by all errors thrown by ox.
+*
+* @example
+* ```ts
+* import { Errors } from 'ox'
+* throw new Errors.BaseError('An error occurred')
+* ```
+*/
+var BaseError = class BaseError extends Error {
+	static setStaticOptions(options) {
+		BaseError.prototype.docsOrigin = options.docsOrigin;
+		BaseError.prototype.showVersion = options.showVersion;
+		BaseError.prototype.version = options.version;
+	}
+	constructor(shortMessage, options = {}) {
+		const details = (() => {
+			if (options.cause instanceof BaseError) {
+				if (options.cause.details) return options.cause.details;
+				if (options.cause.shortMessage) return options.cause.shortMessage;
+			}
+			if (options.cause && "details" in options.cause && typeof options.cause.details === "string") return options.cause.details;
+			if (options.cause?.message) return options.cause.message;
+			return options.details;
+		})();
+		const docsPath = (() => {
+			if (options.cause instanceof BaseError) return options.cause.docsPath || options.docsPath;
+			return options.docsPath;
+		})();
+		const docsBaseUrl = options.docsOrigin ?? BaseError.prototype.docsOrigin;
+		const docs = `${docsBaseUrl}${docsPath ?? ""}`;
+		const showVersion = Boolean(options.version ?? BaseError.prototype.showVersion);
+		const version = options.version ?? BaseError.prototype.version;
+		const message = [
+			shortMessage || "An error occurred.",
+			...options.metaMessages ? ["", ...options.metaMessages] : [],
+			...details || docsPath || showVersion ? [
+				"",
+				details ? `Details: ${details}` : void 0,
+				docsPath ? `See: ${docs}` : void 0,
+				showVersion ? `Version: ${version}` : void 0
+			] : []
+		].filter((x) => typeof x === "string").join("\n");
+		super(message, options.cause ? { cause: options.cause } : void 0);
+		Object.defineProperty(this, "details", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "docs", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "docsOrigin", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "docsPath", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "shortMessage", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "showVersion", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "version", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "cause", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: void 0
+		});
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "BaseError"
+		});
+		this.cause = options.cause;
+		this.details = details;
+		this.docs = docs;
+		this.docsOrigin = docsBaseUrl;
+		this.docsPath = docsPath;
+		this.shortMessage = shortMessage;
+		this.showVersion = showVersion;
+		this.version = version;
+	}
+	walk(fn) {
+		return walk(this, fn);
+	}
+};
+Object.defineProperty(BaseError, "defaultStaticOptions", {
+	enumerable: true,
+	configurable: true,
+	writable: true,
+	value: {
+		docsOrigin: "https://oxlib.sh",
+		showVersion: false,
+		version: `ox@${getVersion()}`
+	}
+});
+(() => {
+	BaseError.setStaticOptions(BaseError.defaultStaticOptions);
+})();
+/** @internal */
+function walk(err, fn) {
+	if (fn?.(err)) return err;
+	if (err && typeof err === "object" && "cause" in err && err.cause) return walk(err.cause, fn);
+	return fn ? null : err;
+}
+
+// ../../../node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/utils.js
+/*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+/** Checks if something is Uint8Array. Be careful: nodejs Buffer will return true. */
+function isBytes(a) {
+	return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
+}
+/** Asserts something is positive integer. */
+function anumber(n) {
+	if (!Number.isSafeInteger(n) || n < 0) throw new Error("positive integer expected, got " + n);
+}
+/** Asserts something is Uint8Array. */
+function abytes(b, ...lengths) {
+	if (!isBytes(b)) throw new Error("Uint8Array expected");
+	if (lengths.length > 0 && !lengths.includes(b.length)) throw new Error("Uint8Array expected of length " + lengths + ", got length=" + b.length);
+}
+/** Asserts something is hash */
+function ahash(h) {
+	if (typeof h !== "function" || typeof h.create !== "function") throw new Error("Hash should be wrapped by utils.createHasher");
+	anumber(h.outputLen);
+	anumber(h.blockLen);
+}
+/** Asserts a hash instance has not been destroyed / finished */
+function aexists(instance, checkFinished = true) {
+	if (instance.destroyed) throw new Error("Hash instance has been destroyed");
+	if (checkFinished && instance.finished) throw new Error("Hash#digest() has already been called");
+}
+/** Asserts output is properly-sized byte array */
+function aoutput(out, instance) {
+	abytes(out);
+	const min = instance.outputLen;
+	if (out.length < min) throw new Error("digestInto() expects output buffer of length at least " + min);
+}
+/** Zeroize a byte array. Warning: JS provides no guarantees. */
+function clean(...arrays) {
+	for (let i = 0; i < arrays.length; i++) arrays[i].fill(0);
+}
+/** Create DataView of an array for easy byte-level manipulation. */
+function createView(arr) {
+	return new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
+}
+/** The rotate right (circular right shift) operation for uint32 */
+function rotr(word, shift) {
+	return word << 32 - shift | word >>> shift;
+}
+/**
+* Converts string to bytes using UTF8 encoding.
+* @example utf8ToBytes('abc') // Uint8Array.from([97, 98, 99])
+*/
+function utf8ToBytes(str) {
+	if (typeof str !== "string") throw new Error("string expected");
+	return new Uint8Array(new TextEncoder().encode(str));
+}
+/**
+* Normalizes (non-hex) string or Uint8Array to Uint8Array.
+* Warning: when Uint8Array is passed, it would NOT get copied.
+* Keep in mind for future mutable operations.
+*/
+function toBytes$1(data) {
+	if (typeof data === "string") data = utf8ToBytes(data);
+	abytes(data);
+	return data;
+}
+/** Wraps hash function, creating an interface on top of it */
+function createHasher(hashCons) {
+	const hashC = (msg) => hashCons().update(toBytes$1(msg)).digest();
+	const tmp = hashCons();
+	hashC.outputLen = tmp.outputLen;
+	hashC.blockLen = tmp.blockLen;
+	hashC.create = () => hashCons();
+	return hashC;
+}
+var Hash;
+var init_utils = __esmMin((() => {
+	Hash = class {};
+}));
+
+// ../../../node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/hmac.js
+var HMAC, hmac;
+var init_hmac = __esmMin((() => {
+	init_utils();
+	HMAC = class extends Hash {
+		constructor(hash, _key) {
+			super();
+			this.finished = false;
+			this.destroyed = false;
+			ahash(hash);
+			const key = toBytes$1(_key);
+			this.iHash = hash.create();
+			if (typeof this.iHash.update !== "function") throw new Error("Expected instance of class which extends utils.Hash");
+			this.blockLen = this.iHash.blockLen;
+			this.outputLen = this.iHash.outputLen;
+			const blockLen = this.blockLen;
+			const pad = new Uint8Array(blockLen);
+			pad.set(key.length > blockLen ? hash.create().update(key).digest() : key);
+			for (let i = 0; i < pad.length; i++) pad[i] ^= 54;
+			this.iHash.update(pad);
+			this.oHash = hash.create();
+			for (let i = 0; i < pad.length; i++) pad[i] ^= 106;
+			this.oHash.update(pad);
+			clean(pad);
+		}
+		update(buf) {
+			aexists(this);
+			this.iHash.update(buf);
+			return this;
+		}
+		digestInto(out) {
+			aexists(this);
+			abytes(out, this.outputLen);
+			this.finished = true;
+			this.iHash.digestInto(out);
+			this.oHash.update(out);
+			this.oHash.digestInto(out);
+			this.destroy();
+		}
+		digest() {
+			const out = new Uint8Array(this.oHash.outputLen);
+			this.digestInto(out);
+			return out;
+		}
+		_cloneInto(to) {
+			to || (to = Object.create(Object.getPrototypeOf(this), {}));
+			const { oHash, iHash, finished, destroyed, blockLen, outputLen } = this;
+			to = to;
+			to.finished = finished;
+			to.destroyed = destroyed;
+			to.blockLen = blockLen;
+			to.outputLen = outputLen;
+			to.oHash = oHash._cloneInto(to.oHash);
+			to.iHash = iHash._cloneInto(to.iHash);
+			return to;
+		}
+		clone() {
+			return this._cloneInto();
+		}
+		destroy() {
+			this.destroyed = true;
+			this.oHash.destroy();
+			this.iHash.destroy();
+		}
+	};
+	hmac = (hash, key, message) => new HMAC(hash, key).update(message).digest();
+	hmac.create = (hash, key) => new HMAC(hash, key);
+}));
+
+// ../../../node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/_md.js
+/** Polyfill for Safari 14. https://caniuse.com/mdn-javascript_builtins_dataview_setbiguint64 */
+function setBigUint64(view, byteOffset, value, isLE) {
+	if (typeof view.setBigUint64 === "function") return view.setBigUint64(byteOffset, value, isLE);
+	const _32n = BigInt(32);
+	const _u32_max = BigInt(4294967295);
+	const wh = Number(value >> _32n & _u32_max);
+	const wl = Number(value & _u32_max);
+	const h = isLE ? 4 : 0;
+	const l = isLE ? 0 : 4;
+	view.setUint32(byteOffset + h, wh, isLE);
+	view.setUint32(byteOffset + l, wl, isLE);
+}
+/** Choice: a ? b : c */
+function Chi(a, b, c) {
+	return a & b ^ ~a & c;
+}
+/** Majority function, true if any two inputs is true. */
+function Maj(a, b, c) {
+	return a & b ^ a & c ^ b & c;
+}
+var HashMD, SHA256_IV;
+var init__md = __esmMin((() => {
+	init_utils();
+	HashMD = class extends Hash {
+		constructor(blockLen, outputLen, padOffset, isLE) {
+			super();
+			this.finished = false;
+			this.length = 0;
+			this.pos = 0;
+			this.destroyed = false;
+			this.blockLen = blockLen;
+			this.outputLen = outputLen;
+			this.padOffset = padOffset;
+			this.isLE = isLE;
+			this.buffer = new Uint8Array(blockLen);
+			this.view = createView(this.buffer);
+		}
+		update(data) {
+			aexists(this);
+			data = toBytes$1(data);
+			abytes(data);
+			const { view, buffer, blockLen } = this;
+			const len = data.length;
+			for (let pos = 0; pos < len;) {
+				const take = Math.min(blockLen - this.pos, len - pos);
+				if (take === blockLen) {
+					const dataView = createView(data);
+					for (; blockLen <= len - pos; pos += blockLen) this.process(dataView, pos);
+					continue;
+				}
+				buffer.set(data.subarray(pos, pos + take), this.pos);
+				this.pos += take;
+				pos += take;
+				if (this.pos === blockLen) {
+					this.process(view, 0);
+					this.pos = 0;
+				}
+			}
+			this.length += data.length;
+			this.roundClean();
+			return this;
+		}
+		digestInto(out) {
+			aexists(this);
+			aoutput(out, this);
+			this.finished = true;
+			const { buffer, view, blockLen, isLE } = this;
+			let { pos } = this;
+			buffer[pos++] = 128;
+			clean(this.buffer.subarray(pos));
+			if (this.padOffset > blockLen - pos) {
+				this.process(view, 0);
+				pos = 0;
+			}
+			for (let i = pos; i < blockLen; i++) buffer[i] = 0;
+			setBigUint64(view, blockLen - 8, BigInt(this.length * 8), isLE);
+			this.process(view, 0);
+			const oview = createView(out);
+			const len = this.outputLen;
+			if (len % 4) throw new Error("_sha2: outputLen should be aligned to 32bit");
+			const outLen = len / 4;
+			const state = this.get();
+			if (outLen > state.length) throw new Error("_sha2: outputLen bigger than state");
+			for (let i = 0; i < outLen; i++) oview.setUint32(4 * i, state[i], isLE);
+		}
+		digest() {
+			const { buffer, outputLen } = this;
+			this.digestInto(buffer);
+			const res = buffer.slice(0, outputLen);
+			this.destroy();
+			return res;
+		}
+		_cloneInto(to) {
+			to || (to = new this.constructor());
+			to.set(...this.get());
+			const { blockLen, buffer, length, finished, destroyed, pos } = this;
+			to.destroyed = destroyed;
+			to.finished = finished;
+			to.length = length;
+			to.pos = pos;
+			if (length % blockLen) to.buffer.set(buffer);
+			return to;
+		}
+		clone() {
+			return this._cloneInto();
+		}
+	};
+	SHA256_IV = /* @__PURE__ */ Uint32Array.from([
+		1779033703,
+		3144134277,
+		1013904242,
+		2773480762,
+		1359893119,
+		2600822924,
+		528734635,
+		1541459225
+	]);
+}));
+
+// ../../../node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha2.js
+var SHA256_K, SHA256_W, SHA256, sha256$2;
+var init_sha2 = __esmMin((() => {
+	init__md();
+	init_utils();
+	SHA256_K = /* @__PURE__ */ Uint32Array.from([
+		1116352408,
+		1899447441,
+		3049323471,
+		3921009573,
+		961987163,
+		1508970993,
+		2453635748,
+		2870763221,
+		3624381080,
+		310598401,
+		607225278,
+		1426881987,
+		1925078388,
+		2162078206,
+		2614888103,
+		3248222580,
+		3835390401,
+		4022224774,
+		264347078,
+		604807628,
+		770255983,
+		1249150122,
+		1555081692,
+		1996064986,
+		2554220882,
+		2821834349,
+		2952996808,
+		3210313671,
+		3336571891,
+		3584528711,
+		113926993,
+		338241895,
+		666307205,
+		773529912,
+		1294757372,
+		1396182291,
+		1695183700,
+		1986661051,
+		2177026350,
+		2456956037,
+		2730485921,
+		2820302411,
+		3259730800,
+		3345764771,
+		3516065817,
+		3600352804,
+		4094571909,
+		275423344,
+		430227734,
+		506948616,
+		659060556,
+		883997877,
+		958139571,
+		1322822218,
+		1537002063,
+		1747873779,
+		1955562222,
+		2024104815,
+		2227730452,
+		2361852424,
+		2428436474,
+		2756734187,
+		3204031479,
+		3329325298
+	]);
+	SHA256_W = /* @__PURE__ */ new Uint32Array(64);
+	SHA256 = class extends HashMD {
+		constructor(outputLen = 32) {
+			super(64, outputLen, 8, false);
+			this.A = SHA256_IV[0] | 0;
+			this.B = SHA256_IV[1] | 0;
+			this.C = SHA256_IV[2] | 0;
+			this.D = SHA256_IV[3] | 0;
+			this.E = SHA256_IV[4] | 0;
+			this.F = SHA256_IV[5] | 0;
+			this.G = SHA256_IV[6] | 0;
+			this.H = SHA256_IV[7] | 0;
+		}
+		get() {
+			const { A, B, C, D, E, F, G, H } = this;
+			return [
+				A,
+				B,
+				C,
+				D,
+				E,
+				F,
+				G,
+				H
+			];
+		}
+		set(A, B, C, D, E, F, G, H) {
+			this.A = A | 0;
+			this.B = B | 0;
+			this.C = C | 0;
+			this.D = D | 0;
+			this.E = E | 0;
+			this.F = F | 0;
+			this.G = G | 0;
+			this.H = H | 0;
+		}
+		process(view, offset) {
+			for (let i = 0; i < 16; i++, offset += 4) SHA256_W[i] = view.getUint32(offset, false);
+			for (let i = 16; i < 64; i++) {
+				const W15 = SHA256_W[i - 15];
+				const W2 = SHA256_W[i - 2];
+				const s0 = rotr(W15, 7) ^ rotr(W15, 18) ^ W15 >>> 3;
+				const s1 = rotr(W2, 17) ^ rotr(W2, 19) ^ W2 >>> 10;
+				SHA256_W[i] = s1 + SHA256_W[i - 7] + s0 + SHA256_W[i - 16] | 0;
+			}
+			let { A, B, C, D, E, F, G, H } = this;
+			for (let i = 0; i < 64; i++) {
+				const sigma1 = rotr(E, 6) ^ rotr(E, 11) ^ rotr(E, 25);
+				const T1 = H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i] | 0;
+				const T2 = (rotr(A, 2) ^ rotr(A, 13) ^ rotr(A, 22)) + Maj(A, B, C) | 0;
+				H = G;
+				G = F;
+				F = E;
+				E = D + T1 | 0;
+				D = C;
+				C = B;
+				B = A;
+				A = T1 + T2 | 0;
+			}
+			A = A + this.A | 0;
+			B = B + this.B | 0;
+			C = C + this.C | 0;
+			D = D + this.D | 0;
+			E = E + this.E | 0;
+			F = F + this.F | 0;
+			G = G + this.G | 0;
+			H = H + this.H | 0;
+			this.set(A, B, C, D, E, F, G, H);
+		}
+		roundClean() {
+			clean(SHA256_W);
+		}
+		destroy() {
+			this.set(0, 0, 0, 0, 0, 0, 0, 0);
+			clean(this.buffer);
+		}
+	};
+	sha256$2 = /* @__PURE__ */ createHasher(() => new SHA256());
+}));
+
+// ../../../node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha256.js
+init_sha2();
+/** @deprecated Use import from `noble/hashes/sha2` module */
+const sha256$1 = sha256$2;
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/internal/bytes.js
+/** @internal */
+function assertSize$1(bytes, size_) {
+	if (size(bytes) > size_) throw new SizeOverflowError({
+		givenSize: size(bytes),
+		maxSize: size_
+	});
+}
+/** @internal */
+const charCodeMap = {
+	zero: 48,
+	nine: 57,
+	A: 65,
+	F: 70,
+	a: 97,
+	f: 102
+};
+/** @internal */
+function charCodeToBase16(char) {
+	if (char >= charCodeMap.zero && char <= charCodeMap.nine) return char - charCodeMap.zero;
+	if (char >= charCodeMap.A && char <= charCodeMap.F) return char - (charCodeMap.A - 10);
+	if (char >= charCodeMap.a && char <= charCodeMap.f) return char - (charCodeMap.a - 10);
+}
+/** @internal */
+function pad$1(bytes, options = {}) {
+	const { dir, size = 32 } = options;
+	if (size === 0) return bytes;
+	if (bytes.length > size) throw new SizeExceedsPaddingSizeError({
+		size: bytes.length,
+		targetSize: size,
+		type: "Bytes"
+	});
+	const paddedBytes = new Uint8Array(size);
+	for (let i = 0; i < size; i++) {
+		const padEnd = dir === "right";
+		paddedBytes[padEnd ? i : size - i - 1] = bytes[padEnd ? i : bytes.length - i - 1];
+	}
+	return paddedBytes;
+}
+/** @internal */
+function trim(value, options = {}) {
+	const { dir = "left" } = options;
+	let data = value;
+	let sliceLength = 0;
+	for (let i = 0; i < data.length - 1; i++) if (data[dir === "left" ? i : data.length - i - 1].toString() === "0") sliceLength++;
+	else break;
+	data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
+	return data;
+}
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/internal/hex.js
+/** @internal */
+function assertSize(hex, size_) {
+	if (size$1(hex) > size_) throw new SizeOverflowError$1({
+		givenSize: size$1(hex),
+		maxSize: size_
+	});
+}
+/** @internal */
+function pad(hex_, options = {}) {
+	const { dir, size = 32 } = options;
+	if (size === 0) return hex_;
+	const hex = hex_.replace("0x", "");
+	if (hex.length > size * 2) throw new SizeExceedsPaddingSizeError$1({
+		size: Math.ceil(hex.length / 2),
+		targetSize: size,
+		type: "Hex"
+	});
+	return `0x${hex[dir === "right" ? "padEnd" : "padStart"](size * 2, "0")}`;
+}
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Json.js
+const bigIntSuffix = "#__bigint";
+/**
+* Serializes a value to a canonical JSON string as defined by
+* [RFC 8785 (JSON Canonicalization Scheme)](https://www.rfc-editor.org/rfc/rfc8785).
+*
+* - Object keys are sorted recursively by UTF-16 code unit comparison.
+* - Primitives are serialized per ECMAScript rules (no trailing zeros on numbers, etc.).
+* - No whitespace is inserted.
+*
+* @example
+* ```ts twoslash
+* import { Json } from 'ox'
+*
+* const json = Json.canonicalize({ b: 2, a: 1 })
+* // @log: '{"a":1,"b":2}'
+* ```
+*
+* @example
+* ```ts twoslash
+* import { Json } from 'ox'
+*
+* const json = Json.canonicalize({ z: [3, { y: 1, x: 2 }], a: 'hello' })
+* // @log: '{"a":"hello","z":[3,{"x":2,"y":1}]}'
+* ```
+*
+* @param value - The value to canonicalize.
+* @returns The canonical JSON string.
+*/
+function canonicalize(value) {
+	if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) throw new TypeError("Cannot canonicalize non-finite number");
+		return Object.is(value, -0) ? "0" : JSON.stringify(value);
+	}
+	if (typeof value === "bigint") throw new TypeError("Cannot canonicalize bigint");
+	if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item)).join(",")}]`;
+	if (typeof value === "object") return `{${Object.keys(value).sort().reduce((acc, key) => {
+		const v = value[key];
+		if (v !== void 0) acc.push(`${JSON.stringify(key)}:${canonicalize(v)}`);
+		return acc;
+	}, []).join(",")}}`;
+}
+/**
+* Stringifies a value to its JSON representation, with support for `bigint`.
+*
+* @example
+* ```ts twoslash
+* import { Json } from 'ox'
+*
+* const json = Json.stringify({
+*   foo: 'bar',
+*   baz: 69420694206942069420694206942069420694206942069420n,
+* })
+* // @log: '{"foo":"bar","baz":"69420694206942069420694206942069420694206942069420#__bigint"}'
+* ```
+*
+* @param value - The value to stringify.
+* @param replacer - A function that transforms the results. It is passed the key and value of the property, and must return the value to be used in the JSON string. If this function returns `undefined`, the property is not included in the resulting JSON string.
+* @param space - A string or number that determines the indentation of the JSON string. If it is a number, it indicates the number of spaces to use as indentation; if it is a string (e.g. `'\t'`), it uses the string as the indentation character.
+* @returns The JSON string.
+*/
+function stringify(value, replacer, space) {
+	return JSON.stringify(value, (key, value) => {
+		if (typeof replacer === "function") return replacer(key, value);
+		if (typeof value === "bigint") return value.toString() + bigIntSuffix;
+		return value;
+	}, space);
+}
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Hex.js
+const hexes = /*#__PURE__*/ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
+/**
+* Encodes a {@link ox#Bytes.Bytes} value into a {@link ox#Hex.Hex} value.
+*
+* @example
+* ```ts twoslash
+* import { Bytes, Hex } from 'ox'
+*
+* Hex.fromBytes(Bytes.from([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]))
+* // @log: '0x48656c6c6f20576f726c6421'
+* ```
+*
+* @param value - The {@link ox#Bytes.Bytes} value to encode.
+* @param options - Options.
+* @returns The encoded {@link ox#Hex.Hex} value.
+*/
+function fromBytes$1(value, options = {}) {
+	let string = "";
+	for (let i = 0; i < value.length; i++) string += hexes[value[i]];
+	const hex = `0x${string}`;
+	if (typeof options.size === "number") {
+		assertSize(hex, options.size);
+		return padRight$1(hex, options.size);
+	}
+	return hex;
+}
+/**
+* Pads a {@link ox#Hex.Hex} value to the right with zero bytes until it reaches the given `size` (default: 32 bytes).
+*
+* @example
+* ```ts
+* import { Hex } from 'ox'
+*
+* Hex.padRight('0x1234', 4)
+* // @log: '0x12340000'
+* ```
+*
+* @param value - The {@link ox#Hex.Hex} value to pad.
+* @param size - The size (in bytes) of the output hex value.
+* @returns The padded {@link ox#Hex.Hex} value.
+*/
+function padRight$1(value, size) {
+	return pad(value, {
+		dir: "right",
+		size
+	});
+}
+/**
+* Retrieves the size of a {@link ox#Hex.Hex} value (in bytes).
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.size('0xdeadbeef')
+* // @log: 4
+* ```
+*
+* @param value - The {@link ox#Hex.Hex} value to get the size of.
+* @returns The size of the {@link ox#Hex.Hex} value (in bytes).
+*/
+function size$1(value) {
+	return Math.ceil((value.length - 2) / 2);
+}
+/**
+* Thrown when the provided integer is out of range, and cannot be represented as a hex value.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.fromNumber(420182738912731283712937129)
+* // @error: Hex.IntegerOutOfRangeError: Number \`4.2018273891273126e+26\` is not in safe unsigned integer range (`0` to `9007199254740991`)
+* ```
+*/
+var IntegerOutOfRangeError = class extends BaseError {
+	constructor({ max, min, signed, size, value }) {
+		super(`Number \`${value}\` is not in safe${size ? ` ${size * 8}-bit` : ""}${signed ? " signed" : " unsigned"} integer range ${max ? `(\`${min}\` to \`${max}\`)` : `(above \`${min}\`)`}`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.IntegerOutOfRangeError"
+		});
+	}
+};
+/**
+* Thrown when the provided hex value cannot be represented as a boolean.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.toBoolean('0xa')
+* // @error: Hex.InvalidHexBooleanError: Hex value `"0xa"` is not a valid boolean.
+* // @error: The hex value must be `"0x0"` (false) or `"0x1"` (true).
+* ```
+*/
+var InvalidHexBooleanError = class extends BaseError {
+	constructor(hex) {
+		super(`Hex value \`"${hex}"\` is not a valid boolean.`, { metaMessages: ["The hex value must be `\"0x0\"` (false) or `\"0x1\"` (true)."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.InvalidHexBooleanError"
+		});
+	}
+};
+/**
+* Thrown when the provided value is not a valid hex type.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.assert(1)
+* // @error: Hex.InvalidHexTypeError: Value `1` of type `number` is an invalid hex type.
+* ```
+*/
+var InvalidHexTypeError = class extends BaseError {
+	constructor(value) {
+		super(`Value \`${typeof value === "object" ? stringify(value) : value}\` of type \`${typeof value}\` is an invalid hex type.`, { metaMessages: ["Hex types must be represented as `\"0x${string}\"`."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.InvalidHexTypeError"
+		});
+	}
+};
+/**
+* Thrown when the provided hex value is invalid.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.assert('0x0123456789abcdefg')
+* // @error: Hex.InvalidHexValueError: Value `0x0123456789abcdefg` is an invalid hex value.
+* // @error: Hex values must start with `"0x"` and contain only hexadecimal characters (0-9, a-f, A-F).
+* ```
+*/
+var InvalidHexValueError = class extends BaseError {
+	constructor(value) {
+		super(`Value \`${value}\` is an invalid hex value.`, { metaMessages: ["Hex values must start with `\"0x\"` and contain only hexadecimal characters (0-9, a-f, A-F)."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.InvalidHexValueError"
+		});
+	}
+};
+/**
+* Thrown when the provided hex value is an odd length.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.fromHex('0xabcde')
+* // @error: Hex.InvalidLengthError: Hex value `"0xabcde"` is an odd length (5 nibbles).
+* ```
+*/
+var InvalidLengthError = class extends BaseError {
+	constructor(value) {
+		super(`Hex value \`"${value}"\` is an odd length (${value.length - 2} nibbles).`, { metaMessages: ["It must be an even length."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.InvalidLengthError"
+		});
+	}
+};
+/**
+* Thrown when the size of the value exceeds the expected max size.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.fromString('Hello World!', { size: 8 })
+* // @error: Hex.SizeOverflowError: Size cannot exceed `8` bytes. Given size: `12` bytes.
+* ```
+*/
+var SizeOverflowError$1 = class extends BaseError {
+	constructor({ givenSize, maxSize }) {
+		super(`Size cannot exceed \`${maxSize}\` bytes. Given size: \`${givenSize}\` bytes.`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.SizeOverflowError"
+		});
+	}
+};
+/**
+* Thrown when the slice offset exceeds the bounds of the value.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.slice('0x0123456789', 6)
+* // @error: Hex.SliceOffsetOutOfBoundsError: Slice starting at offset `6` is out-of-bounds (size: `5`).
+* ```
+*/
+var SliceOffsetOutOfBoundsError$1 = class extends BaseError {
+	constructor({ offset, position, size }) {
+		super(`Slice ${position === "start" ? "starting" : "ending"} at offset \`${offset}\` is out-of-bounds (size: \`${size}\`).`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.SliceOffsetOutOfBoundsError"
+		});
+	}
+};
+/**
+* Thrown when the size of the value exceeds the pad size.
+*
+* @example
+* ```ts twoslash
+* import { Hex } from 'ox'
+*
+* Hex.padLeft('0x1a4e12a45a21323123aaa87a897a897a898a6567a578a867a98778a667a85a875a87a6a787a65a675a6a9', 32)
+* // @error: Hex.SizeExceedsPaddingSizeError: Hex size (`43`) exceeds padding size (`32`).
+* ```
+*/
+var SizeExceedsPaddingSizeError$1 = class extends BaseError {
+	constructor({ size, targetSize, type }) {
+		super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} size (\`${size}\`) exceeds padding size (\`${targetSize}\`).`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Hex.SizeExceedsPaddingSizeError"
+		});
+	}
+};
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Bytes.js
+const decoder$1 = /*#__PURE__*/ new TextDecoder();
+const encoder$1 = /*#__PURE__*/ new TextEncoder();
+/**
+* Instantiates a {@link ox#Bytes.Bytes} value from a `Uint8Array`, a hex string, or an array of unsigned 8-bit integers.
+*
+* :::tip
+*
+* To instantiate from a **Boolean**, **String**, or **Number**, use one of the following:
+*
+* - `Bytes.fromBoolean`
+*
+* - `Bytes.fromString`
+*
+* - `Bytes.fromNumber`
+*
+* :::
+*
+* @example
+* ```ts twoslash
+* // @noErrors
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.from([255, 124, 5, 4])
+* // @log: Uint8Array([255, 124, 5, 4])
+*
+* const data = Bytes.from('0xdeadbeef')
+* // @log: Uint8Array([222, 173, 190, 239])
+* ```
+*
+* @param value - Value to convert.
+* @returns A {@link ox#Bytes.Bytes} instance.
+*/
+function from$2(value) {
+	if (value instanceof Uint8Array) return value;
+	if (typeof value === "string") return fromHex(value);
+	return fromArray(value);
+}
+/**
+* Converts an array of unsigned 8-bit integers into {@link ox#Bytes.Bytes}.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.fromArray([255, 124, 5, 4])
+* // @log: Uint8Array([255, 124, 5, 4])
+* ```
+*
+* @param value - Value to convert.
+* @returns A {@link ox#Bytes.Bytes} instance.
+*/
+function fromArray(value) {
+	return value instanceof Uint8Array ? value : new Uint8Array(value);
+}
+/**
+* Encodes a {@link ox#Hex.Hex} value into {@link ox#Bytes.Bytes}.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.fromHex('0x48656c6c6f20776f726c6421')
+* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33])
+* ```
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.fromHex('0x48656c6c6f20776f726c6421', { size: 32 })
+* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+* ```
+*
+* @param value - {@link ox#Hex.Hex} value to encode.
+* @param options - Encoding options.
+* @returns Encoded {@link ox#Bytes.Bytes}.
+*/
+function fromHex(value, options = {}) {
+	const { size } = options;
+	let hex = value;
+	if (size) {
+		assertSize(value, size);
+		hex = padRight$1(value, size);
+	}
+	let hexString = hex.slice(2);
+	if (hexString.length % 2) hexString = `0${hexString}`;
+	const length = hexString.length / 2;
+	const bytes = new Uint8Array(length);
+	for (let index = 0, j = 0; index < length; index++) {
+		const nibbleLeft = charCodeToBase16(hexString.charCodeAt(j++));
+		const nibbleRight = charCodeToBase16(hexString.charCodeAt(j++));
+		if (nibbleLeft === void 0 || nibbleRight === void 0) throw new BaseError(`Invalid byte sequence ("${hexString[j - 2]}${hexString[j - 1]}" in "${hexString}").`);
+		bytes[index] = nibbleLeft << 4 | nibbleRight;
+	}
+	return bytes;
+}
+/**
+* Encodes a string into {@link ox#Bytes.Bytes}.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.fromString('Hello world!')
+* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33])
+* ```
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.fromString('Hello world!', { size: 32 })
+* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+* ```
+*
+* @param value - String to encode.
+* @param options - Encoding options.
+* @returns Encoded {@link ox#Bytes.Bytes}.
+*/
+function fromString$1(value, options = {}) {
+	const { size } = options;
+	const bytes = encoder$1.encode(value);
+	if (typeof size === "number") {
+		assertSize$1(bytes, size);
+		return padRight(bytes, size);
+	}
+	return bytes;
+}
+/**
+* Pads a {@link ox#Bytes.Bytes} value to the right with zero bytes until it reaches the given `size` (default: 32 bytes).
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.padRight(Bytes.from([1]), 4)
+* // @log: Uint8Array([1, 0, 0, 0])
+* ```
+*
+* @param value - {@link ox#Bytes.Bytes} value to pad.
+* @param size - Size to pad the {@link ox#Bytes.Bytes} value to.
+* @returns Padded {@link ox#Bytes.Bytes} value.
+*/
+function padRight(value, size) {
+	return pad$1(value, {
+		dir: "right",
+		size
+	});
+}
+/**
+* Retrieves the size of a {@link ox#Bytes.Bytes} value.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.size(Bytes.from([1, 2, 3, 4]))
+* // @log: 4
+* ```
+*
+* @param value - {@link ox#Bytes.Bytes} value.
+* @returns Size of the {@link ox#Bytes.Bytes} value.
+*/
+function size(value) {
+	return value.length;
+}
+/**
+* Decodes a {@link ox#Bytes.Bytes} into a string.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* const data = Bytes.toString(Bytes.from([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]))
+* // @log: 'Hello world'
+* ```
+*
+* @param bytes - The {@link ox#Bytes.Bytes} to decode.
+* @param options - Options.
+* @returns Decoded string.
+*/
+function toString$1(bytes, options = {}) {
+	const { size } = options;
+	let bytes_ = bytes;
+	if (typeof size !== "undefined") {
+		assertSize$1(bytes_, size);
+		bytes_ = trimRight(bytes_);
+	}
+	return decoder$1.decode(bytes_);
+}
+/**
+* Trims trailing zeros from a {@link ox#Bytes.Bytes} value.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.trimRight(Bytes.from([1, 2, 3, 0, 0, 0, 0]))
+* // @log: Uint8Array([1, 2, 3])
+* ```
+*
+* @param value - {@link ox#Bytes.Bytes} value.
+* @returns Trimmed {@link ox#Bytes.Bytes} value.
+*/
+function trimRight(value) {
+	return trim(value, { dir: "right" });
+}
+/**
+* Thrown when the bytes value cannot be represented as a boolean.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.toBoolean(Bytes.from([5]))
+* // @error: Bytes.InvalidBytesBooleanError: Bytes value `[5]` is not a valid boolean.
+* // @error: The bytes array must contain a single byte of either a `0` or `1` value.
+* ```
+*/
+var InvalidBytesBooleanError = class extends BaseError {
+	constructor(bytes) {
+		super(`Bytes value \`${bytes}\` is not a valid boolean.`, { metaMessages: ["The bytes array must contain a single byte of either a `0` or `1` value."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Bytes.InvalidBytesBooleanError"
+		});
+	}
+};
+/**
+* Thrown when a value cannot be converted to bytes.
+*
+* @example
+* ```ts twoslash
+* // @noErrors
+* import { Bytes } from 'ox'
+*
+* Bytes.from('foo')
+* // @error: Bytes.InvalidBytesTypeError: Value `foo` of type `string` is an invalid Bytes value.
+* ```
+*/
+var InvalidBytesTypeError = class extends BaseError {
+	constructor(value) {
+		super(`Value \`${typeof value === "object" ? stringify(value) : value}\` of type \`${typeof value}\` is an invalid Bytes value.`, { metaMessages: ["Bytes values must be of type `Bytes`."] });
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Bytes.InvalidBytesTypeError"
+		});
+	}
+};
+/**
+* Thrown when a size exceeds the maximum allowed size.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.fromString('Hello World!', { size: 8 })
+* // @error: Bytes.SizeOverflowError: Size cannot exceed `8` bytes. Given size: `12` bytes.
+* ```
+*/
+var SizeOverflowError = class extends BaseError {
+	constructor({ givenSize, maxSize }) {
+		super(`Size cannot exceed \`${maxSize}\` bytes. Given size: \`${givenSize}\` bytes.`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Bytes.SizeOverflowError"
+		});
+	}
+};
+/**
+* Thrown when a slice offset is out-of-bounds.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.slice(Bytes.from([1, 2, 3]), 4)
+* // @error: Bytes.SliceOffsetOutOfBoundsError: Slice starting at offset `4` is out-of-bounds (size: `3`).
+* ```
+*/
+var SliceOffsetOutOfBoundsError = class extends BaseError {
+	constructor({ offset, position, size }) {
+		super(`Slice ${position === "start" ? "starting" : "ending"} at offset \`${offset}\` is out-of-bounds (size: \`${size}\`).`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Bytes.SliceOffsetOutOfBoundsError"
+		});
+	}
+};
+/**
+* Thrown when a the padding size exceeds the maximum allowed size.
+*
+* @example
+* ```ts twoslash
+* import { Bytes } from 'ox'
+*
+* Bytes.padLeft(Bytes.fromString('Hello World!'), 8)
+* // @error: [Bytes.SizeExceedsPaddingSizeError: Bytes size (`12`) exceeds padding size (`8`).
+* ```
+*/
+var SizeExceedsPaddingSizeError = class extends BaseError {
+	constructor({ size, targetSize, type }) {
+		super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} size (\`${size}\`) exceeds padding size (\`${targetSize}\`).`);
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: true,
+			value: "Bytes.SizeExceedsPaddingSizeError"
+		});
+	}
+};
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Hash.js
+init_hmac();
+/**
+* Calculates the [HMAC-SHA256](https://en.wikipedia.org/wiki/HMAC) of a {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
+*
+* This function is a re-export of `hmac` from [`@noble/hashes`](https://github.com/paulmillr/noble-hashes), an audited & minimal JS hashing library.
+*
+* @example
+* ```ts twoslash
+* import { Hash, Hex } from 'ox'
+*
+* Hash.hmac256(Hex.fromString('key'), '0xdeadbeef')
+* // @log: '0x...'
+* ```
+*
+* @example
+* ### Configure Return Type
+*
+* ```ts twoslash
+* import { Hash, Hex } from 'ox'
+*
+* Hash.hmac256(Hex.fromString('key'), '0xdeadbeef', { as: 'Bytes' })
+* // @log: Uint8Array [...]
+* ```
+*
+* @param key - {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} key.
+* @param value - {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
+* @param options - Options.
+* @returns HMAC-SHA256 hash.
+*/
+function hmac256(key, value, options = {}) {
+	const { as = typeof value === "string" ? "Hex" : "Bytes" } = options;
+	const bytes = hmac(sha256$1, from$2(key), from$2(value));
+	if (as === "Bytes") return bytes;
+	return fromBytes$1(bytes);
+}
+/**
+* Calculates the [Sha256](https://en.wikipedia.org/wiki/SHA-256) hash of a {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
+*
+* This function is a re-export of `sha256` from [`@noble/hashes`](https://github.com/paulmillr/noble-hashes), an audited & minimal JS hashing library.
+*
+* @example
+* ```ts twoslash
+* import { Hash } from 'ox'
+*
+* Hash.sha256('0xdeadbeef')
+* // '0x5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953'
+* ```
+*
+* @param value - {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
+* @param options - Options.
+* @returns Sha256 hash.
+*/
+function sha256(value, options = {}) {
+	const { as = typeof value === "string" ? "Hex" : "Bytes" } = options;
+	const bytes = sha256$1(from$2(value));
+	if (as === "Bytes") return bytes;
+	return fromBytes$1(bytes);
+}
+
+// ../../../node_modules/.pnpm/ox@0.14.45_typescript@7.0.2_zod@4.6.7/node_modules/ox/_esm/core/Base64.js
+const encoder = /*#__PURE__*/ new TextEncoder();
+const decoder = /*#__PURE__*/ new TextDecoder();
+const integerToCharacter = /*#__PURE__*/ Object.fromEntries(Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/").map((a, i) => [i, a.charCodeAt(0)]));
+const characterToInteger = {
+	...Object.fromEntries(Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/").map((a, i) => [a.charCodeAt(0), i])),
+	["=".charCodeAt(0)]: 0,
+	["-".charCodeAt(0)]: 62,
+	["_".charCodeAt(0)]: 63
+};
+/**
+* Encodes a {@link ox#Bytes.Bytes} to a Base64-encoded string (with optional padding and/or URL-safe characters).
+*
+* @example
+* ```ts twoslash
+* import { Base64, Bytes } from 'ox'
+*
+* const value = Base64.fromBytes(Bytes.fromString('hello world'))
+* // @log: 'aGVsbG8gd29ybGQ='
+* ```
+*
+* @example
+* ### No Padding
+*
+* Turn off [padding of encoded data](https://datatracker.ietf.org/doc/html/rfc4648#section-3.2) with the `pad` option:
+*
+* ```ts twoslash
+* import { Base64, Bytes } from 'ox'
+*
+* const value = Base64.fromBytes(Bytes.fromString('hello world'), { pad: false })
+* // @log: 'aGVsbG8gd29ybGQ'
+* ```
+*
+* ### URL-safe Encoding
+*
+* Turn on [URL-safe encoding](https://datatracker.ietf.org/doc/html/rfc4648#section-5) (Base64 URL) with the `url` option:
+*
+* ```ts twoslash
+* import { Base64, Bytes } from 'ox'
+*
+* const value = Base64.fromBytes(Bytes.fromString('hello wod'), { url: true })
+* // @log: 'aGVsbG8gd29_77-9ZA=='
+* ```
+*
+* @param value - The byte array to encode.
+* @param options - Encoding options.
+* @returns The Base64 encoded string.
+*/
+function fromBytes(value, options = {}) {
+	const { pad = true, url = false } = options;
+	const encoded = new Uint8Array(Math.ceil(value.length / 3) * 4);
+	for (let i = 0, j = 0; j < value.length; i += 4, j += 3) {
+		const y = (value[j] << 16) + (value[j + 1] << 8) + (value[j + 2] | 0);
+		encoded[i] = integerToCharacter[y >> 18];
+		encoded[i + 1] = integerToCharacter[y >> 12 & 63];
+		encoded[i + 2] = integerToCharacter[y >> 6 & 63];
+		encoded[i + 3] = integerToCharacter[y & 63];
+	}
+	const k = value.length % 3;
+	const end = Math.floor(value.length / 3) * 4 + (k && k + 1);
+	let base64 = decoder.decode(new Uint8Array(encoded.buffer, 0, end));
+	if (pad && k === 1) base64 += "==";
+	if (pad && k === 2) base64 += "=";
+	if (url) base64 = base64.replaceAll("+", "-").replaceAll("/", "_");
+	return base64;
+}
+/**
+* Encodes a string to a Base64-encoded string (with optional padding and/or URL-safe characters).
+*
+* @example
+* ```ts twoslash
+* import { Base64 } from 'ox'
+*
+* const value = Base64.fromString('hello world')
+* // @log: 'aGVsbG8gd29ybGQ='
+* ```
+*
+* @example
+* ### No Padding
+*
+* Turn off [padding of encoded data](https://datatracker.ietf.org/doc/html/rfc4648#section-3.2) with the `pad` option:
+*
+* ```ts twoslash
+* import { Base64 } from 'ox'
+*
+* const value = Base64.fromString('hello world', { pad: false })
+* // @log: 'aGVsbG8gd29ybGQ'
+* ```
+*
+* ### URL-safe Encoding
+*
+* Turn on [URL-safe encoding](https://datatracker.ietf.org/doc/html/rfc4648#section-5) (Base64 URL) with the `url` option:
+*
+* ```ts twoslash
+* import { Base64 } from 'ox'
+*
+* const value = Base64.fromString('hello wod', { url: true })
+* // @log: 'aGVsbG8gd29_77-9ZA=='
+* ```
+*
+* @param value - The string to encode.
+* @param options - Encoding options.
+* @returns The Base64 encoded string.
+*/
+function fromString(value, options = {}) {
+	return fromBytes(fromString$1(value), options);
+}
+/**
+* Decodes a Base64-encoded string (with optional padding and/or URL-safe characters) to {@link ox#Bytes.Bytes}.
+*
+* @example
+* ```ts twoslash
+* import { Base64, Bytes } from 'ox'
+*
+* const value = Base64.toBytes('aGVsbG8gd29ybGQ=')
+* // @log: Uint8Array([104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100])
+* ```
+*
+* @param value - The string, hex value, or byte array to encode.
+* @returns The Base64 decoded {@link ox#Bytes.Bytes}.
+*/
+function toBytes(value) {
+	const base64 = value.replace(/=+$/, "");
+	const size = base64.length;
+	const decoded = new Uint8Array(size + 3);
+	encoder.encodeInto(base64 + "===", decoded);
+	for (let i = 0, j = 0; i < base64.length; i += 4, j += 3) {
+		const x = (characterToInteger[decoded[i]] << 18) + (characterToInteger[decoded[i + 1]] << 12) + (characterToInteger[decoded[i + 2]] << 6) + characterToInteger[decoded[i + 3]];
+		decoded[j] = x >> 16;
+		decoded[j + 1] = x >> 8 & 255;
+		decoded[j + 2] = x & 255;
+	}
+	const decodedSize = (size >> 2) * 3 + (size % 4 && size % 4 - 1);
+	return new Uint8Array(decoded.buffer, 0, decodedSize);
+}
+/**
+* Decodes a Base64-encoded string (with optional padding and/or URL-safe characters) to a string.
+*
+* @example
+* ```ts twoslash
+* import { Base64 } from 'ox'
+*
+* const value = Base64.toString('aGVsbG8gd29ybGQ=')
+* // @log: 'hello world'
+* ```
+*
+* @param value - The string, hex value, or byte array to encode.
+* @returns The Base64 decoded string.
+*/
+function toString(value) {
+	return toString$1(toBytes(value));
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/BodyDigest.js
+/**
+* Computes a SHA-256 digest of the given body.
+*
+* @param body - The body to digest (string or object).
+* @returns A digest string in the format "sha-256=base64hash".
+*
+* @example
+* ```ts
+* import { BodyDigest } from 'mppx'
+*
+* const digest = BodyDigest.compute({ amount: '1000' })
+* // => 'sha-256=X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE'
+* ```
+*/
+function compute(body) {
+	const str = typeof body === "object" ? JSON.stringify(body) : body;
+	const bytes = fromString$1(str);
+	const hash = sha256(bytes, { as: "Bytes" });
+	return `sha-256=${fromBytes(hash)}`;
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/Constants.js
+/** HTTP header names used by the Payment authentication scheme. */
+const Headers$1 = {
+	acceptPayment: "Accept-Payment",
+	authorization: "Authorization",
+	paymentAuthorization: "Payment-Authorization",
+	paymentReceipt: "Payment-Receipt",
+	paymentSession: "Payment-Session",
+	paymentSessionSnapshot: "Payment-Session-Snapshot",
+	wwwAuthenticate: "WWW-Authenticate"
+};
+/** Authentication scheme names used by mppx transports. */
+const Schemes = { payment: "Payment" };
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/PaymentRequest.js
+/**
+* Deserializes a base64url string to a request.
+*
+* @param encoded - The base64url-encoded string.
+* @returns The deserialized request.
+*
+* @example
+* ```ts
+* import { PaymentRequest } from 'mppx'
+*
+* const request = PaymentRequest.deserialize(serialized)
+* ```
+*/
+function deserialize$3(encoded) {
+	const json = toString(encoded);
+	return JSON.parse(json);
+}
+/**
+* Serializes a request to a base64url string.
+*
+* @param request - The request to serialize.
+* @returns A base64url-encoded string (no padding).
+*
+* @example
+* ```ts
+* import { PaymentRequest } from 'mppx'
+*
+* const serialized = PaymentRequest.serialize(request)
+* // => "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweC4uLiJ9"
+* ```
+*/
+function serialize(request) {
+	const json = canonicalize(request);
+	return fromString(json, {
+		pad: false,
+		url: true
+	});
+}
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js
+function jsonStringifyReplacer(_, value) {
+	if (typeof value === "bigint") return value.toString();
+	return value;
+}
+var Cached = class {
+	constructor(getter) {
+		this._getter = getter;
+		this._value = void 0;
+	}
+	get value() {
+		const getter = this._getter;
+		if (getter !== void 0) {
+			this._value = getter();
+			this._getter = void 0;
+		}
+		return this._value;
+	}
+};
+function cached(getter) {
+	return new Cached(getter);
+}
+function nullish(input) {
+	return input === null || input === void 0;
+}
+function cleanRegex(source) {
+	const start = source.startsWith("^") ? 1 : 0;
+	const end = source.endsWith("$") ? source.length - 1 : source.length;
+	return source.slice(start, end);
+}
+function assignProp(target, prop, value) {
+	Object.defineProperty(target, prop, {
+		value,
+		writable: true,
+		enumerable: true,
+		configurable: true
+	});
+}
+const captureStackTrace = "captureStackTrace" in Error ? Error.captureStackTrace : (..._args) => {};
+function isObject(data) {
+	return typeof data === "object" && data !== null && !Array.isArray(data);
+}
+function isPlainObject(o) {
+	if (isObject(o) === false) return false;
+	const ctor = o.constructor;
+	if (ctor === void 0) return true;
+	if (typeof ctor !== "function") return true;
+	const prot = ctor.prototype;
+	if (isObject(prot) === false) return false;
+	if (Object.prototype.hasOwnProperty.call(prot, "isPrototypeOf") === false) return false;
+	return true;
+}
+function escapeRegex(str) {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function clone(inst, def, params) {
+	const cl = new inst._zod.constr(def ?? inst._zod.def);
+	if (!def || params?.parent) cl._zod.parent = inst;
+	return cl;
+}
+function normalizeParams(_params) {
+	const params = _params;
+	if (!params) return {};
+	if (typeof params === "string") return { error: () => params };
+	if (params?.message !== void 0) {
+		if (params?.error !== void 0) throw new Error("Cannot specify both `message` and `error` params");
+		params.error = params.message;
+	}
+	delete params.message;
+	if (typeof params.error === "string") return {
+		...params,
+		error: () => params.error
+	};
+	return params;
+}
+function optionalKeys(shape) {
+	return Object.keys(shape).filter((k) => {
+		return shape[k]._zod.optin !== void 0 && shape[k]._zod.optout === "optional";
+	});
+}
+function aborted(x, startIndex = 0) {
+	if (x.aborted === true) return true;
+	for (let i = startIndex; i < x.issues.length; i++) if (x.issues[i]?.continue !== true) return true;
+	return false;
+}
+function explicitlyAborted(x, startIndex = 0) {
+	if (x.aborted === true) return true;
+	for (let i = startIndex; i < x.issues.length; i++) if (x.issues[i]?.continue === false) return true;
+	return false;
+}
+function prefixIssues(path, issues) {
+	return issues.map((iss) => {
+		var _a;
+		(_a = iss).path ?? (_a.path = []);
+		iss.path.unshift(path);
+		return iss;
+	});
+}
+function unwrapMessage(message) {
+	return typeof message === "string" ? message : message?.message;
+}
+function attachSchema(issues, start, inst) {
+	var _a;
+	for (let i = start; i < issues.length; i++) (_a = issues[i]).schema ?? (_a.schema = inst);
+}
+function finalizeIssue(iss, ctx, config) {
+	var _a;
+	const traits = iss.inst?._zod?.traits;
+	if (traits?.has("$ZodType")) {
+		if (traits.has("$ZodCheck")) (_a = iss).schema ?? (_a.schema = iss.inst);
+		else iss.schema = iss.inst;
+	}
+	const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
+	const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config.customError?.(iss)) ?? unwrapMessage(config.localeError?.(iss)) ?? "Invalid input";
+	const full = {};
+	for (const k of Object.keys(iss)) {
+		if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__") continue;
+		full[k] = iss[k];
+	}
+	full.path ?? (full.path = []);
+	full.message = message;
+	if (ctx?.reportInput) full.input = iss.input;
+	return full;
+}
+const highSurrogate = /[\uD800-\uDBFF]/;
+function codePointLength(str) {
+	const units = str.length;
+	if (!highSurrogate.test(str)) return units;
+	let count = units;
+	for (let i = 0; i < units - 1; i++) if ((str.charCodeAt(i) & 64512) === 55296 && (str.charCodeAt(i + 1) & 64512) === 56320) {
+		count--;
+		i++;
+	}
+	return count;
+}
+function getLengthableOrigin(input) {
+	if (Array.isArray(input)) return "array";
+	if (typeof input === "string") return "string";
+	return "unknown";
+}
+/**
+* Installs a trait's members on its prototype. Each value builds that member for the instance on first read; the built value shadows the accessor as an own property, so a detached `const { parse } = schema` keeps working.
+*
+* Call this from a `proto` initializer, which runs once per prototype — never per instance.
+*/
+function members(proto, table) {
+	for (const key in table) {
+		const desc = Object.getOwnPropertyDescriptor(table, key);
+		if (desc.get) Object.defineProperty(proto, key, {
+			...desc,
+			enumerable: false
+		});
+		else defineBound(proto, key, desc.value);
+	}
+}
+/** Shadows a prototype member with an own value, so a getter that builds from the instance runs once. */
+function own(inst, key, value, enumerable = true) {
+	Object.defineProperty(inst, key, {
+		configurable: true,
+		writable: true,
+		enumerable,
+		value
+	});
+	return value;
+}
+/** Like {@link own}, for a member that was never an own data property and has to stay out of `Object.keys`. */
+function hide(inst, key, value) {
+	return own(inst, key, value, false);
+}
+function defineBound(proto, key, fn) {
+	Object.defineProperty(proto, key, {
+		configurable: true,
+		get() {
+			return this == null ? fn : own(this, key, fn.bind(this));
+		},
+		set(value) {
+			own(this, key, value);
+		}
+	});
+}
+/** Returns the prototype to install on, or `undefined` if this group is already installed on it. */
+function claim(inst, sentinel) {
+	const proto = Object.getPrototypeOf(inst);
+	return sentinel in proto ? void 0 : proto;
+}
+let installing;
+let broke = false;
+const breaker = {
+	configurable: true,
+	get() {
+		broke = true;
+	}
+};
+/**
+* Installs a lazily-derived internal on the `_zod` prototype of `inst`'s
+* constructor, computed from the internals object itself and cached there on
+* first read. One accessor per constructor rather than one per instance.
+*/
+function defineLazyInternal(inst, key, compute) {
+	const proto = Object.getPrototypeOf(inst._zod);
+	if (key in proto && installing !== inst._zod) {
+		installing = void 0;
+		return;
+	}
+	installing = inst._zod;
+	Object.defineProperty(proto, key, {
+		configurable: true,
+		get() {
+			Object.defineProperty(this, key, breaker);
+			const outer = broke;
+			broke = false;
+			try {
+				const value = compute(this);
+				if (broke) delete this[key];
+				else Object.defineProperty(this, key, {
+					configurable: true,
+					writable: true,
+					value
+				});
+				broke = broke || outer;
+				return value;
+			} catch (err) {
+				delete this[key];
+				broke = broke || outer;
+				throw err;
+			}
+		},
+		set(value) {
+			Object.defineProperty(this, key, {
+				configurable: true,
+				writable: true,
+				value
+			});
+		}
+	});
+}
+/**
+* Installs `key` on `inst`'s prototype, computed by `make` on first read and cached there as an own
+* data property. One accessor per constructor rather than one per instance, because an own accessor
+* puts every instance after the first into v8 dictionary mode. The key doubles as the sentinel.
+*/
+function installLazyProp(inst, key, make, enumerable) {
+	const proto = claim(inst, key);
+	if (!proto) return;
+	Object.defineProperty(proto, key, {
+		configurable: true,
+		get() {
+			const desc = {
+				configurable: true,
+				writable: true,
+				enumerable,
+				value: void 0
+			};
+			Object.defineProperty(this, key, desc);
+			desc.value = make(this);
+			Object.defineProperty(this, key, desc);
+			return desc.value;
+		},
+		set(value) {
+			Object.defineProperty(this, key, {
+				configurable: true,
+				writable: true,
+				enumerable,
+				value
+			});
+		}
+	});
+}
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
+var _a;
+const _zodDesc = {
+	value: void 0,
+	enumerable: false
+};
+let _E = "captureStackTrace" in Error ? Error : null;
+function newError(Definition) {
+	const E = _E;
+	if (E) {
+		const saved = E.stackTraceLimit;
+		if (typeof saved === "number") {
+			try {
+				E.stackTraceLimit = 0;
+			} catch {
+				_E = null;
+				return new Definition();
+			}
+			try {
+				return new Definition();
+			} finally {
+				E.stackTraceLimit = saved;
+			}
+		}
+	}
+	return new Definition();
+}
+/* @__NO_SIDE_EFFECTS__ */
+function $constructor(name, initializer, proto, params) {
+	const zodProto = {};
+	function Internals(def) {
+		this.def = def;
+		this.constr = _;
+		this.traits = /* @__PURE__ */ new Set();
+	}
+	Internals.prototype = zodProto;
+	const protoMembers = proto;
+	const initialized = protoMembers && /* @__PURE__ */ new WeakSet();
+	function init(inst, def) {
+		if (!inst._zod) {
+			_zodDesc.value = new Internals(def);
+			try {
+				Object.defineProperty(inst, "_zod", _zodDesc);
+			} finally {
+				_zodDesc.value = void 0;
+			}
+		} else if (inst._zod.traits.has(name)) return;
+		inst._zod.traits.add(name);
+		initializer(inst, def);
+		if (initialized) {
+			const own = Object.getPrototypeOf(inst);
+			const ctorProto = inst._zod.constr.prototype;
+			let up = own;
+			while (up && up !== ctorProto) up = Object.getPrototypeOf(up);
+			const target = up ?? own;
+			if (!initialized.has(target)) {
+				initialized.add(target);
+				members(target, protoMembers);
+			}
+		}
+		const proto = _.prototype;
+		for (const k in proto) {
+			if (!Object.prototype.hasOwnProperty.call(proto, k)) continue;
+			if (!(k in inst)) inst[k] = proto[k].bind(inst);
+		}
+	}
+	const Parent = params?.Parent ?? Object;
+	class Definition extends Parent {}
+	Object.defineProperty(Definition, "name", { value: name });
+	function _(def) {
+		const inst = params?.Parent ? newError(Definition) : this;
+		init(inst, def);
+		const deferred = inst._zod.deferred;
+		if (deferred) {
+			for (const fn of deferred) fn();
+			inst._zod.deferred = void 0;
+		}
+		const pp = globalThis.__zod_globalConfig?.postProcessor;
+		if (pp) pp(inst);
+		return inst;
+	}
+	Object.defineProperty(_, "init", { value: init });
+	Object.defineProperty(_, Symbol.hasInstance, { value: (inst) => {
+		if (params?.Parent && inst instanceof params.Parent) return true;
+		return inst?._zod?.traits?.has(name);
+	} });
+	Object.defineProperty(_, "name", { value: name });
+	return _;
+}
+var $ZodAsyncError = class extends Error {
+	constructor() {
+		super(`Encountered Promise during synchronous parse. Use .parseAsync() instead.`);
+	}
+};
+(_a = globalThis).__zod_globalConfig ?? (_a.__zod_globalConfig = {});
+const globalConfig = globalThis.__zod_globalConfig;
+function config(newConfig) {
+	if (newConfig) Object.assign(globalConfig, newConfig);
+	return globalConfig;
+}
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js
+function _getMessage() {
+	const internals = this._zod;
+	internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
+	return internals.message;
+}
+function _setMessage(value) {
+	this._zod.message = value;
+}
+const _messageDesc = {
+	get: _getMessage,
+	set: _setMessage,
+	enumerable: true,
+	configurable: true
+};
+const _issuesDesc = {
+	value: void 0,
+	enumerable: false
+};
+const _installedToString = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
+const initializer = (inst, def) => {
+	inst.name = "$ZodError";
+	_issuesDesc.value = def;
+	Object.defineProperty(inst, "issues", _issuesDesc);
+	_issuesDesc.value = void 0;
+	Object.defineProperty(inst, "message", _messageDesc);
+	const proto = Object.getPrototypeOf(inst);
+	if (!_installedToString.has(proto)) {
+		_installedToString.add(proto);
+		Object.defineProperty(proto, "toString", {
+			configurable: true,
+			enumerable: false,
+			get() {
+				const value = () => this.message;
+				Object.defineProperty(this, "toString", {
+					value,
+					configurable: true,
+					writable: true
+				});
+				return value;
+			},
+			set(value) {
+				Object.defineProperty(this, "toString", {
+					value,
+					configurable: true,
+					writable: true
+				});
+			}
+		});
+	}
+};
+const $ZodRealError = /* @__PURE__ */ $constructor("$ZodError", initializer, void 0, { Parent: Error });
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js
+const _parse = (_Err) => {
+	const fn = (schema, value, _ctx, _params) => {
+		const ctx = _ctx ? {
+			..._ctx,
+			async: false
+		} : { async: false };
+		const result = schema._zod.run({
+			value,
+			issues: []
+		}, ctx);
+		if (result instanceof Promise) throw new $ZodAsyncError();
+		if (result.issues.length) {
+			const e = new ((_params?.Err) ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+			captureStackTrace(e, _params?.callee ?? fn);
+			throw e;
+		}
+		return result.value;
+	};
+	return fn;
+};
+const parse = /* @__PURE__*/ _parse($ZodRealError);
+const _parseAsync = (_Err) => {
+	const fn = async (schema, value, _ctx, params) => {
+		const ctx = _ctx ? {
+			..._ctx,
+			async: true
+		} : { async: true };
+		let result = schema._zod.run({
+			value,
+			issues: []
+		}, ctx);
+		if (result instanceof Promise) result = await result;
+		if (result.issues.length) {
+			const e = new ((params?.Err) ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+			captureStackTrace(e, params?.callee ?? fn);
+			throw e;
+		}
+		return result.value;
+	};
+	return fn;
+};
+const parseAsync = /* @__PURE__*/ _parseAsync($ZodRealError);
+const _safeParse = (_Err) => (schema, value, _ctx) => {
+	const ctx = _ctx ? {
+		..._ctx,
+		async: false
+	} : { async: false };
+	const result = schema._zod.run({
+		value,
+		issues: []
+	}, ctx);
+	if (result instanceof Promise) throw new $ZodAsyncError();
+	return result.issues.length ? failure(_Err, result.issues, ctx) : {
+		success: true,
+		data: result.value
+	};
+};
+const safeParse = /* @__PURE__*/ _safeParse($ZodRealError);
+function failure(Err, issues, ctx) {
+	let error;
+	return {
+		success: false,
+		get error() {
+			if (!error) {
+				error = new Err(issues.map((iss) => finalizeIssue(iss, ctx, config())));
+				issues = void 0;
+				ctx = void 0;
+			}
+			return error;
+		},
+		set error(e) {
+			error = e;
+			issues = void 0;
+			ctx = void 0;
+		}
+	};
+}
+const _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
+	const ctx = _ctx ? {
+		..._ctx,
+		async: true
+	} : { async: true };
+	let result = schema._zod.run({
+		value,
+		issues: []
+	}, ctx);
+	if (result instanceof Promise) result = await result;
+	return result.issues.length ? failure(_Err, result.issues, ctx) : {
+		success: true,
+		data: result.value
+	};
+};
+const safeParseAsync = /* @__PURE__*/ _safeParseAsync($ZodRealError);
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js
+const anyString = /^[\s\S]{0,}$/;
+const number = /^-?\d+(?:\.\d+)?$/;
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js
+const $ZodCheck = /*@__PURE__*/ $constructor("$ZodCheck", (inst, def) => {
+	var _a;
+	inst._zod ?? (inst._zod = {});
+	inst._zod.def = def;
+	(_a = inst._zod).onattach ?? (_a.onattach = []);
+});
+/** Default `when` for length-based checks: run only on non-nullish values with a `length`. */
+const _whenHasLength = (payload) => {
+	const val = payload.value;
+	return !nullish(val) && val.length !== void 0;
+};
+const $ZodCheckMinLength = /*@__PURE__*/ $constructor("$ZodCheckMinLength", (inst, def) => {
+	var _a;
+	$ZodCheck.init(inst, def);
+	(_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
+	inst._zod.check = (payload) => {
+		const input = payload.value;
+		const units = input.length;
+		if ((typeof input === "string" && units >= def.minimum && units < def.minimum * 2 ? codePointLength(input) : units) >= def.minimum) return;
+		const origin = getLengthableOrigin(input);
+		payload.issues.push({
+			origin,
+			code: "too_small",
+			minimum: def.minimum,
+			inclusive: true,
+			input,
+			inst,
+			continue: !def.abort
+		});
+	};
+});
+const $ZodCheckStringFormat = /*@__PURE__*/ $constructor("$ZodCheckStringFormat", (inst, def) => {
+	var _a, _b;
+	$ZodCheck.init(inst, def);
+	if (def.pattern) (_a = inst._zod).check ?? (_a.check = (payload) => {
+		def.pattern.lastIndex = 0;
+		if (def.pattern.test(payload.value)) return;
+		payload.issues.push({
+			origin: "string",
+			code: "invalid_format",
+			format: def.format,
+			input: payload.value,
+			...def.pattern ? { pattern: def.pattern.toString() } : {},
+			inst,
+			continue: !def.abort
+		});
+	});
+	else (_b = inst._zod).check ?? (_b.check = () => {});
+});
+const $ZodCheckRegex = /*@__PURE__*/ $constructor("$ZodCheckRegex", (inst, def) => {
+	$ZodCheckStringFormat.init(inst, def);
+	inst._zod.check = (payload) => {
+		def.pattern.lastIndex = 0;
+		if (def.pattern.test(payload.value)) return;
+		payload.issues.push({
+			origin: "string",
+			code: "invalid_format",
+			format: "regex",
+			input: payload.value,
+			pattern: def.pattern.toString(),
+			inst,
+			continue: !def.abort
+		});
+	};
+});
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js
+const version = {
+	major: 4,
+	minor: 6,
+	patch: 7
+};
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js
+const $ZodType = /*@__PURE__*/ $constructor("$ZodType", (inst, def) => {
+	var _a;
+	inst ?? (inst = {});
+	inst._zod.def = def;
+	inst._zod.bag = inst._zod.bag || {};
+	inst._zod.version = version;
+	const defChecks = inst._zod.def.checks;
+	const checks = inst._zod.traits.has("$ZodCheck") ? [inst, ...defChecks ?? []] : defChecks?.length ? [...defChecks] : [];
+	for (const ch of checks) for (const fn of ch._zod.onattach) fn(inst);
+	if (checks.length === 0) {
+		(_a = inst._zod).deferred ?? (_a.deferred = []);
+		inst._zod.deferred?.push(() => {
+			inst._zod.run = inst._zod.parse;
+		});
+	} else {
+		const runChecks = (payload, checks, ctx) => {
+			if (payload.memo) return payload;
+			let isAborted = aborted(payload);
+			let asyncResult;
+			for (const ch of checks) {
+				if (ch._zod.def.when) {
+					if (explicitlyAborted(payload)) continue;
+					if (!ch._zod.def.when(payload)) continue;
+				} else if (isAborted) continue;
+				const currLen = payload.issues.length;
+				const _ = ch._zod.check(payload);
+				if (_ instanceof Promise && ctx?.async === false) throw new $ZodAsyncError();
+				if (asyncResult || _ instanceof Promise) asyncResult = (asyncResult ?? Promise.resolve()).then(async () => {
+					await _;
+					if (payload.issues.length === currLen) return;
+					attachSchema(payload.issues, currLen, inst);
+					if (!isAborted) isAborted = aborted(payload, currLen);
+				});
+				else {
+					if (payload.issues.length === currLen) continue;
+					attachSchema(payload.issues, currLen, inst);
+					if (!isAborted) isAborted = aborted(payload, currLen);
+				}
+			}
+			if (asyncResult) return asyncResult.then(() => {
+				return payload;
+			});
+			return payload;
+		};
+		const handleCanaryResult = (canary, payload, ctx) => {
+			if (aborted(canary)) {
+				canary.aborted = true;
+				return canary;
+			}
+			const checkResult = runChecks(payload, checks, ctx);
+			if (checkResult instanceof Promise) {
+				if (ctx.async === false) throw new $ZodAsyncError();
+				return checkResult.then((checkResult) => inst._zod.parse(checkResult, ctx));
+			}
+			return inst._zod.parse(checkResult, ctx);
+		};
+		inst._zod.run = (payload, ctx) => {
+			if (ctx.skipChecks) return inst._zod.parse(payload, ctx);
+			if (ctx.direction === "backward") {
+				const canary = inst._zod.parse({
+					value: payload.value,
+					issues: []
+				}, {
+					...ctx,
+					skipChecks: true
+				});
+				if (canary instanceof Promise) return canary.then((canary) => {
+					return handleCanaryResult(canary, payload, ctx);
+				});
+				return handleCanaryResult(canary, payload, ctx);
+			}
+			const result = inst._zod.parse(payload, ctx);
+			if (result instanceof Promise) {
+				if (ctx.async === false) throw new $ZodAsyncError();
+				return result.then((result) => runChecks(result, checks, ctx));
+			}
+			return runChecks(result, checks, ctx);
+		};
+	}
+}, {
+	get "~standard"() {
+		return hide(this, "~standard", standardProps(this));
+	},
+	set "~standard"(value) {
+		own(this, "~standard", value);
+	}
+});
+/** The Standard Schema surface for `inst`. Shared so wrappers can extend it without forcing it. */
+const toStandardResult = (r, ctx) => r.issues.length ? { issues: r.issues.map((iss) => finalizeIssue(iss, ctx, config())) } : { value: r.value };
+async function validateAsync(inst, value) {
+	const ctx = { async: true };
+	return toStandardResult(await inst._zod.run({
+		value,
+		issues: []
+	}, ctx), ctx);
+}
+function standardProps(inst) {
+	return {
+		validate: (value) => {
+			const ctx = { async: false };
+			try {
+				const r = inst._zod.run({
+					value,
+					issues: []
+				}, ctx);
+				if (!(r instanceof Promise)) return toStandardResult(r, ctx);
+			} catch (_) {}
+			return validateAsync(inst, value);
+		},
+		vendor: "zod",
+		version: 1
+	};
+}
+const $ZodString = /*@__PURE__*/ $constructor("$ZodString", (inst, def) => {
+	$ZodType.init(inst, def);
+	inst._zod.pattern = def.pattern ?? anyString;
+	inst._zod.parse = (payload, _) => {
+		if (def.coerce) try {
+			payload.value = String(payload.value);
+		} catch (_) {}
+		if (typeof payload.value === "string") return payload;
+		payload.issues.push({
+			expected: "string",
+			code: "invalid_type",
+			input: payload.value,
+			inst
+		});
+		return payload;
+	};
+});
+const $ZodUnknown = /*@__PURE__*/ $constructor("$ZodUnknown", (inst, def) => {
+	$ZodType.init(inst, def);
+	inst._zod.parse = (payload) => payload;
+});
+function handlePropertyResult(result, final, key, input, optin, optout) {
+	const isPresent = key in input;
+	const isOptionalOut = optout === "optional";
+	if (!isPresent && isOptionalOut && optin === "optional") return;
+	if (result.issues.length) {
+		if (optin !== void 0 && isOptionalOut && !isPresent) return;
+		final.issues.push(...prefixIssues(key, result.issues));
+	}
+	if (!isPresent && optin === void 0) {
+		if (!result.issues.length) final.issues.push({
+			code: "invalid_type",
+			expected: "nonoptional",
+			input: void 0,
+			path: [key]
+		});
+		return;
+	}
+	if (result.value === void 0) {
+		if (isPresent || optin === "defaulted" && !isOptionalOut) final.value[key] = void 0;
+	} else final.value[key] = result.value;
+}
+const NO_SYMBOL_KEYS = [];
+function normalizeDef(def) {
+	const keys = Object.keys(def.shape);
+	const ownSymbols = Object.getOwnPropertySymbols(def.shape);
+	const symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
+	const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+	for (const k of allKeys) if (!def.shape?.[k]?._zod?.traits?.has("$ZodType")) throw new Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
+	const okeys = optionalKeys(def.shape);
+	return {
+		...def,
+		allKeys,
+		symbolKeys,
+		keySet: new Set(keys),
+		numKeys: keys.length,
+		optionalKeys: new Set(okeys)
+	};
+}
+function handleCatchall(proms, input, payload, ctx, def, inst, abortEarly) {
+	const unrecognized = [];
+	const keySet = def.keySet;
+	const _catchall = def.catchall._zod;
+	const t = _catchall.def.type;
+	const optin = _catchall.optin;
+	const optout = _catchall.optout;
+	let seen = 0;
+	for (const key in input) {
+		if (abortEarly && payload.issues.length !== seen) {
+			if (aborted(payload, seen)) break;
+			seen = payload.issues.length;
+		}
+		if (keySet.has(key)) continue;
+		if (key === "__proto__") {
+			if (t === "never") unrecognized.push(key);
+			continue;
+		}
+		if (t === "never") {
+			unrecognized.push(key);
+			continue;
+		}
+		const r = _catchall.run({
+			value: input[key],
+			issues: []
+		}, ctx);
+		if (r instanceof Promise) proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, optin, optout)));
+		else handlePropertyResult(r, payload, key, input, optin, optout);
+	}
+	if (unrecognized.length) payload.issues.push({
+		code: "unrecognized_keys",
+		keys: unrecognized,
+		input,
+		inst,
+		continue: true
+	});
+	if (!proms.length) return payload;
+	return Promise.all(proms).then(() => {
+		return payload;
+	});
+}
+const $ZodObject = /*@__PURE__*/ $constructor("$ZodObject", (inst, def) => {
+	$ZodType.init(inst, def);
+	const desc = Object.getOwnPropertyDescriptor(def, "shape");
+	const sh = desc?.get ? desc.get.raw : def.shape ?? {};
+	if (sh) {
+		const get = () => {
+			const newSh = { ...sh };
+			Object.defineProperty(def, "shape", { value: newSh });
+			get.raw = newSh;
+			return newSh;
+		};
+		get.raw = sh;
+		Object.defineProperty(def, "shape", { get });
+	}
+	const _normalized = cached(() => normalizeDef(def));
+	defineLazyInternal(inst, "propValues", (zod) => {
+		const shape = zod.def.shape;
+		const propValues = {};
+		for (const key in shape) {
+			const field = shape[key]._zod;
+			if (field.values) {
+				if (!Object.prototype.hasOwnProperty.call(propValues, key)) assignProp(propValues, key, /* @__PURE__ */ new Set());
+				for (const v of field.values) propValues[key].add(v);
+				if (field.optin !== void 0) propValues[key].add(void 0);
+			}
+		}
+		return propValues;
+	});
+	const isObject$1 = isObject;
+	const catchall = def.catchall;
+	let value;
+	const memo = globalConfig.memoizer;
+	memo?.attach(inst);
+	inst._zod.parse = (payload, ctx) => {
+		value ?? (value = _normalized.value);
+		const input = payload.value;
+		if (!isObject$1(input)) {
+			payload.issues.push({
+				expected: "object",
+				code: "invalid_type",
+				input,
+				inst
+			});
+			return payload;
+		}
+		payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+		const proms = [];
+		const shape = value.shape;
+		const abortEarly = ctx?.abortEarly;
+		let seen = payload.issues.length;
+		for (const key of value.allKeys) {
+			if (abortEarly && payload.issues.length !== seen) {
+				if (aborted(payload, seen)) break;
+				seen = payload.issues.length;
+			}
+			if (key === "__proto__") continue;
+			const el = shape[key];
+			const optin = el._zod.optin;
+			const optout = el._zod.optout;
+			const r = el._zod.run({
+				value: input[key],
+				issues: []
+			}, ctx);
+			if (r instanceof Promise) proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, optin, optout)));
+			else handlePropertyResult(r, payload, key, input, optin, optout);
+		}
+		if (!catchall) return proms.length ? Promise.all(proms).then(() => payload) : payload;
+		return handleCatchall(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
+	};
+});
+const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
+	$ZodType.init(inst, def);
+	const memo = globalConfig.memoizer;
+	memo?.attach(inst);
+	inst._zod.parse = (payload, ctx) => {
+		const input = payload.value;
+		if (!isPlainObject(input)) {
+			payload.issues.push({
+				expected: "record",
+				code: "invalid_type",
+				input,
+				inst
+			});
+			return payload;
+		}
+		const proms = [];
+		const values = def.keyType._zod.values;
+		if (values && !def.partial) {
+			payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+			const recordKeys = /* @__PURE__ */ new Set();
+			for (const key of values) if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+				recordKeys.add(typeof key === "number" ? key.toString() : key);
+				if (key === "__proto__") continue;
+				const keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (keyResult.issues.length) {
+					payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const outKey = keyResult.value;
+				if (outKey === "__proto__") continue;
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}
+			}
+			let unrecognized;
+			for (const key in input) if (!recordKeys.has(key)) {
+				if (def.mode === "loose") {
+					if (key === "__proto__") continue;
+					payload.value[key] = input[key];
+				} else {
+					unrecognized = unrecognized ?? [];
+					unrecognized.push(key);
+				}
+			}
+			if (unrecognized && unrecognized.length > 0) payload.issues.push({
+				code: "unrecognized_keys",
+				input,
+				inst,
+				keys: unrecognized,
+				continue: true
+			});
+		} else {
+			payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+			let unrecognized;
+			for (const key of Reflect.ownKeys(input)) {
+				if (key === "__proto__") continue;
+				if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+				let keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (typeof key === "string" && number.test(key) && keyResult.issues.length) {
+					const retryResult = def.keyType._zod.run({
+						value: Number(key),
+						issues: []
+					}, ctx);
+					if (retryResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (retryResult.issues.length === 0) keyResult = retryResult;
+				}
+				if (keyResult.issues.length) {
+					if (def.mode === "loose") payload.value[key] = input[key];
+					else if (values) {
+						unrecognized = unrecognized ?? [];
+						unrecognized.push(key);
+					} else payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const outKey = keyResult.value;
+				if (outKey === "__proto__") continue;
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}
+			}
+			if (unrecognized && unrecognized.length > 0) payload.issues.push({
+				code: "unrecognized_keys",
+				input,
+				inst,
+				keys: unrecognized,
+				continue: true
+			});
+		}
+		if (proms.length) return Promise.all(proms).then(() => payload);
+		return payload;
+	};
+});
+const $ZodLiteral = /*@__PURE__*/ $constructor("$ZodLiteral", (inst, def) => {
+	$ZodType.init(inst, def);
+	const values = new Set(def.values);
+	inst._zod.values = values;
+	defineLazyInternal(inst, "pattern", (zod) => {
+		const vals = zod.def.values;
+		return new RegExp(vals.length ? `^(${vals.map((o) => typeof o === "string" ? escapeRegex(o) : o ? escapeRegex(o.toString()) : String(o)).join("|")})$` : "^[^\\s\\S]$");
+	});
+	inst._zod.parse = (payload, _ctx) => {
+		const input = payload.value;
+		if (values.has(input)) return payload;
+		payload.issues.push({
+			code: "invalid_value",
+			values: def.values,
+			input,
+			inst
+		});
+		return payload;
+	};
+});
+function handleOptionalResult(payload, result) {
+	payload.value = result.issues.length ? void 0 : result.value;
+	return payload;
+}
+const $ZodOptional = /*@__PURE__*/ $constructor("$ZodOptional", (inst, def) => {
+	$ZodType.init(inst, def);
+	defineLazyInternal(inst, "optin", (zod) => zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional");
+	inst._zod.optout = "optional";
+	defineLazyInternal(inst, "values", (zod) => {
+		const values = zod.def.innerType._zod.values;
+		return values ? /* @__PURE__ */ new Set([...values, void 0]) : void 0;
+	});
+	defineLazyInternal(inst, "pattern", (zod) => {
+		const pattern = zod.def.innerType._zod.pattern;
+		return pattern ? new RegExp(`^(${cleanRegex(pattern.source)})?$`) : void 0;
+	});
+	inst._zod.parse = (payload, ctx) => {
+		if (payload.value === void 0) {
+			if (def.innerType._zod.optin !== "defaulted") return payload;
+			const result = def.innerType._zod.run({
+				value: payload.value,
+				issues: []
+			}, ctx);
+			if (result instanceof Promise) return result.then((result) => handleOptionalResult(payload, result));
+			return handleOptionalResult(payload, result);
+		}
+		return def.innerType._zod.run(payload, ctx);
+	};
+});
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js
+function snapshotChecks(def) {
+	if (def.checks) def.checks = [...def.checks];
+	return def;
+}
+// @__NO_SIDE_EFFECTS__
+function _string(Class, params) {
+	return new Class(snapshotChecks({
+		type: "string",
+		...normalizeParams(params)
+	}));
+}
+// @__NO_SIDE_EFFECTS__
+function _unknown(Class) {
+	return new Class({ type: "unknown" });
+}
+// @__NO_SIDE_EFFECTS__
+function _minLength(minimum, params) {
+	return new $ZodCheckMinLength({
+		check: "min_length",
+		...normalizeParams(params),
+		minimum
+	});
+}
+// @__NO_SIDE_EFFECTS__
+function _regex(pattern, params) {
+	return new $ZodCheckRegex({
+		check: "string_format",
+		format: "regex",
+		...normalizeParams(params),
+		pattern
+	});
+}
+
+// ../../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/mini/schemas.js
+const ZodMiniType = /*@__PURE__*/ $constructor("ZodMiniType", (inst, def) => {
+	if (!inst._zod) throw new Error("Uninitialized schema in ZodMiniType.");
+	$ZodType.init(inst, def);
+	inst.def = def;
+	inst.type = def.type;
+}, {
+	get with() {
+		return this.check;
+	},
+	set with(value) {
+		own(this, "with", value);
+	},
+	parse(data, params) {
+		return parse(this, data, params, { callee: this.parse });
+	},
+	parseAsync(data, params) {
+		return parseAsync(this, data, params, { callee: this.parseAsync });
+	},
+	safeParse(data, params) {
+		return safeParse(this, data, params);
+	},
+	safeParseAsync(data, params) {
+		return safeParseAsync(this, data, params);
+	},
+	check(...checks) {
+		const def = this.def;
+		return this.clone({
+			...def,
+			checks: [...def.checks ?? [], ...checks.map((ch) => typeof ch === "function" ? { _zod: {
+				check: ch,
+				def: { check: "custom" },
+				onattach: []
+			} } : ch)]
+		}, { parent: true });
+	},
+	clone(_def, params) {
+		return clone(this, _def, params);
+	},
+	brand() {
+		return this;
+	},
+	register(reg, meta) {
+		reg.add(this, meta);
+		return this;
+	},
+	apply(fn, ...args) {
+		return args.length === 0 ? fn(this) : fn(this, ...args);
+	}
+});
+const ZodMiniString = /*@__PURE__*/ $constructor("ZodMiniString", (inst, def) => {
+	$ZodString.init(inst, def);
+	ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function string(params) {
+	return _string(ZodMiniString, params);
+}
+const ZodMiniUnknown = /*@__PURE__*/ $constructor("ZodMiniUnknown", (inst, def) => {
+	$ZodUnknown.init(inst, def);
+	ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function unknown() {
+	return _unknown(ZodMiniUnknown);
+}
+const ZodMiniObject = /*@__PURE__*/ $constructor("ZodMiniObject", (inst, def) => {
+	$ZodObject.init(inst, def);
+	ZodMiniType.init(inst, def);
+	installLazyProp(inst, "shape", (self) => self._zod.def.shape, false);
+});
+// @__NO_SIDE_EFFECTS__
+function object(shape, params) {
+	const def = {
+		type: "object",
+		shape: shape ?? {},
+		...normalizeParams(params)
+	};
+	return new ZodMiniObject(def);
+}
+// @__NO_SIDE_EFFECTS__
+function looseObject(shape, params) {
+	return new ZodMiniObject({
+		type: "object",
+		shape,
+		catchall: /* @__PURE__ */ unknown(),
+		...normalizeParams(params)
+	});
+}
+const ZodMiniRecord = /*@__PURE__*/ $constructor("ZodMiniRecord", (inst, def) => {
+	$ZodRecord.init(inst, def);
+	ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function record(keyType, valueType, params) {
+	if (!valueType || !valueType._zod) return new ZodMiniRecord({
+		type: "record",
+		keyType: /* @__PURE__ */ string(),
+		valueType: keyType,
+		...normalizeParams(valueType)
+	});
+	return new ZodMiniRecord({
+		type: "record",
+		keyType,
+		valueType,
+		...normalizeParams(params)
+	});
+}
+const ZodMiniLiteral = /*@__PURE__*/ $constructor("ZodMiniLiteral", (inst, def) => {
+	$ZodLiteral.init(inst, def);
+	ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function literal(value, params) {
+	return new ZodMiniLiteral({
+		type: "literal",
+		values: Array.isArray(value) ? value : [value],
+		...normalizeParams(params)
+	});
+}
+const ZodMiniOptional = /*@__PURE__*/ $constructor("ZodMiniOptional", (inst, def) => {
+	$ZodOptional.init(inst, def);
+	ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function optional(innerType) {
+	return new ZodMiniOptional({
+		type: "optional",
+		innerType
+	});
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/zod.js
+/** ISO 8601 datetime string (e.g., "2025-01-06T12:00:00Z"). */
+function datetime() {
+	return string().check(_regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/, "Invalid ISO 8601 datetime"));
+}
+/** Serializes an ISO 8601 datetime string or Date object for wire output. */
+function toDatetimeString(value) {
+	if (!(value instanceof Date)) return value;
+	if (!Number.isFinite(value.getTime())) return "Invalid Date";
+	return value.toISOString();
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/Challenge.js
+const maxRequestParameterLength = 16384;
+/**
+* Schema for a payment challenge.
+*
+* @example
+* ```ts
+* import { Challenge } from 'mppx'
+*
+* const challenge = Challenge.Schema.parse(data)
+* ```
+*/
+const Schema$1 = object({
+	/** Optional human-readable description of the payment. */
+	description: optional(string()),
+	/** Optional digest of the request body (format: "sha-256=base64hash"). */
+	digest: optional(string().check(_regex(/^sha-256=/, "Invalid digest format"))),
+	/** Optional expiration timestamp (ISO 8601). */
+	expires: optional(datetime()),
+	/** Optional HTTP field name to carry the payment credential. When omitted, uses Authorization. */
+	header: optional(string().check(_regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, "Invalid HTTP header name"))),
+	/** Unique challenge identifier (HMAC-bound). */
+	id: string().check(_minLength(1)),
+	/** Intent type (e.g., "charge", "session"). */
+	intent: string(),
+	/** Payment method (e.g., "tempo", "stripe"). */
+	method: string(),
+	/** Optional parsed server-defined correlation data. */
+	meta: optional(record(string(), string())),
+	/** Optional server-defined correlation data. Raw base64url string; clients MUST NOT modify. */
+	opaque: optional(string()),
+	/** Server realm (e.g., hostname). */
+	realm: string(),
+	/** Method-specific request data. */
+	request: record(string(), unknown())
+});
+/**
+* Creates a challenge from the given parameters.
+*
+* If `secretKey` option is provided, the challenge ID is computed as HMAC-SHA256
+* over the canonical challenge ID input
+* (`realm|method|intent|request|expires|digest|opaque`),
+* cryptographically binding the ID to its contents.
+*
+* @param parameters - Challenge parameters.
+* @param options - Optional settings including secretKey for HMAC-bound ID.
+* @returns A challenge.
+*
+* @example
+* ```ts
+* import { Challenge } from 'mppx'
+*
+* // With HMAC-bound ID (recommended for servers)
+* const challenge = Challenge.from(
+*   {
+*     realm: 'api.example.com',
+*     method: 'tempo',
+*     intent: 'charge',
+*     request: { amount: '1000000', currency: '0x...', recipient: '0x...' },
+*   },
+*   { secretKey: 'my-secret' },
+* )
+*
+* // With explicit ID
+* const challenge = Challenge.from({
+*   id: 'abc123',
+*   realm: 'api.example.com',
+*   method: 'tempo',
+*   intent: 'charge',
+*   request: { amount: '1000000', currency: '0x...', recipient: '0x...' },
+* })
+* ```
+*/
+function from$1(parameters, options) {
+	const { description, digest, meta, method: methodName, header: suppliedHeader, intent, realm, request, secretKey } = parameters;
+	const header = isDefaultCredentialHeader(suppliedHeader) ? void 0 : suppliedHeader;
+	const expires = parameters.expires ? toDatetimeString(parameters.expires) : void 0;
+	const opaque = parameters.opaque ?? (meta !== void 0 ? serialize(meta) : void 0);
+	const id = secretKey ? computeId({
+		...parameters,
+		expires,
+		...meta !== void 0 && { meta },
+		opaque
+	}, { secretKey }) : parameters.id;
+	return Schema$1.parse({
+		id,
+		realm,
+		method: methodName,
+		intent,
+		request,
+		...description && { description },
+		...digest && { digest },
+		...expires && { expires },
+		...header !== void 0 && { header },
+		...meta !== void 0 && { meta },
+		...opaque !== void 0 && { opaque }
+	});
+}
+/**
+* Deserializes a WWW-Authenticate header value to a challenge.
+*
+* @example
+* ```ts
+* import { Challenge } from 'mppx'
+*
+* const challenge = Challenge.deserialize(header)
+*
+* // With methods for type narrowing
+* const challenge = Challenge.deserialize(header, { methods })
+* ```
+*
+* @param header - The WWW-Authenticate header value.
+* @param options - Optional settings to narrow the challenge type.
+* @returns The deserialized challenge.
+*/
+function deserialize$2(value, options) {
+	const params = extractPaymentAuthParams(value);
+	if (!params) throw new Error("Missing Payment scheme.");
+	const { request, opaque, ...rest } = parseAuthParams(params);
+	if (!request) throw new Error("Missing request parameter.");
+	if (request.length > maxRequestParameterLength) throw new Error("Request parameter too large.");
+	if (rest.method && !/^[a-z][a-z0-9:_-]*$/.test(rest.method)) throw new Error(`Invalid method: "${rest.method}". Must be lowercase per spec.`);
+	return from$1({
+		...rest,
+		request: deserialize$3(request),
+		...opaque && { opaque }
+	}, options);
+}
+/** @internal Extracts the `Payment` scheme from a WWW-Authenticate value that may contain multiple schemes. */
+function extractPaymentAuthParams(header) {
+	const token = Schemes.payment;
+	const [start] = findSchemeStarts(header, token);
+	if (start === void 0) return null;
+	let paramsStart = start + token.length;
+	while (paramsStart < header.length && /\s/.test(header[paramsStart] ?? "")) paramsStart++;
+	return header.slice(paramsStart);
+}
+/** @internal Parses auth-params with support for escaped quoted-string values. */
+function parseAuthParams(input) {
+	const result = Object.create(null);
+	let i = 0;
+	while (i < input.length) {
+		while (i < input.length && /[\s,]/.test(input[i] ?? "")) i++;
+		if (i >= input.length) break;
+		const keyStart = i;
+		while (i < input.length && /[A-Za-z0-9_-]/.test(input[i] ?? "")) i++;
+		const key = input.slice(keyStart, i).toLowerCase();
+		if (!key) throw new Error("Malformed auth-param.");
+		while (i < input.length && /\s/.test(input[i] ?? "")) i++;
+		if (input[i] !== "=") break;
+		i++;
+		while (i < input.length && /\s/.test(input[i] ?? "")) i++;
+		const [value, nextIndex] = readAuthParamValue(input, i);
+		i = nextIndex;
+		if (key in result) throw new Error(`Duplicate parameter: ${key}`);
+		result[key] = value;
+	}
+	return result;
+}
+/** @internal */
+function readAuthParamValue(input, start) {
+	if (input[start] === "\"") return readQuotedAuthParamValue(input, start + 1);
+	let i = start;
+	while (i < input.length && input[i] !== ",") i++;
+	return [input.slice(start, i).trim(), i];
+}
+/** @internal */
+function readQuotedAuthParamValue(input, start) {
+	let i = start;
+	let escaped = false;
+	let segmentStart = start;
+	let parts;
+	while (i < input.length) {
+		const char = input[i];
+		i++;
+		if (escaped) {
+			parts ??= [];
+			const hex = char === "u" ? input.slice(i, i + 4) : void 0;
+			if (hex && /^[0-9A-Fa-f]{4}$/.test(hex)) {
+				parts.push(String.fromCharCode(Number.parseInt(hex, 16)));
+				i += 4;
+			} else parts.push(char);
+			segmentStart = i;
+			escaped = false;
+			continue;
+		}
+		if (char === "\\") {
+			parts ??= [];
+			parts.push(input.slice(segmentStart, i - 1));
+			segmentStart = i;
+			escaped = true;
+			continue;
+		}
+		if (char === "\"") return [parts ? [...parts, input.slice(segmentStart, i - 1)].join("") : input.slice(start, i - 1), i];
+	}
+	throw new Error("Unterminated quoted-string.");
+}
+/** @internal */
+function startsWithSchemeToken(value, index, token) {
+	if (value.slice(index, index + token.length).toLowerCase() !== token.toLowerCase()) return false;
+	const next = value[index + token.length];
+	return Boolean(next && /\s/.test(next));
+}
+/** @internal Finds auth scheme boundaries while ignoring quoted-string contents. */
+function findSchemeStarts(value, token) {
+	const starts = [];
+	let inQuotes = false;
+	let escaped = false;
+	for (let i = 0; i < value.length; i++) {
+		const char = value[i];
+		if (inQuotes) {
+			if (escaped) escaped = false;
+			else if (char === "\\") escaped = true;
+			else if (char === "\"") inQuotes = false;
+			continue;
+		}
+		if (char === "\"") {
+			inQuotes = true;
+			continue;
+		}
+		if (!startsWithSchemeToken(value, i, token)) continue;
+		let boundary = i - 1;
+		while (boundary >= 0 && /\s/.test(value[boundary] ?? "")) boundary--;
+		if (boundary >= 0 && value[boundary] !== ",") continue;
+		starts.push(i);
+	}
+	return starts;
+}
+/**
+* Canonical HMAC input for challenge ID binding per §5.1.2.1.1 of the spec.
+*
+* Seven fixed positional slots, pipe-delimited. Optional fields use empty
+* string when absent so the slot count is stable. This is the single source
+* of truth for what the challenge ID binds to — used by both `computeId()`
+* (challenge creation) and `verify()` (credential verification).
+*
+* Legacy slots: realm | method | intent | request | expires | digest | opaque.
+* Challenges advertising a credential header insert it immediately before the
+* final opaque slot.
+*
+* Because the HMAC covers ALL fields, the server does not need to separately
+* pin opaque, digest, or expires during verification — any change to those
+* fields produces a different HMAC and fails the ID comparison.
+*/
+function idBindingInput(challenge) {
+	const values = [
+		challenge.realm,
+		challenge.method,
+		challenge.intent,
+		serialize(challenge.request),
+		challenge.expires ?? "",
+		challenge.digest ?? ""
+	];
+	const credentialHeader = challenge.header;
+	if (credentialHeader !== void 0 && !isDefaultCredentialHeader(credentialHeader)) values.push(credentialHeader);
+	values.push(challenge.opaque ?? (challenge.meta ? serialize(challenge.meta) : ""));
+	return values.join("|");
+}
+/** Returns whether a credential header is the implicit HTTP authentication default. */
+function isDefaultCredentialHeader(header) {
+	return header?.toLowerCase() === Headers$1.authorization.toLowerCase();
+}
+/** @internal Computes HMAC-SHA256 challenge ID from parameters. */
+function computeId(challenge, options) {
+	const input = idBindingInput(challenge);
+	const key = fromString$1(options.secretKey);
+	const data = fromString$1(input);
+	const mac = hmac256(key, data, { as: "Bytes" });
+	return fromBytes(mac, {
+		url: true,
+		pad: false
+	});
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/Credential.js
+const maxAuthorizationLength = 65536;
+var MissingPaymentSchemeError = class extends Error {
+	name = "MissingPaymentSchemeError";
+	constructor() {
+		super("Missing Payment scheme.");
+	}
+};
+var InvalidCredentialEncodingError = class extends Error {
+	name = "InvalidCredentialEncodingError";
+	constructor() {
+		super("Invalid base64url or JSON.");
+	}
+};
+/**
+* Deserializes a Payment credential header value to a credential.
+* Rejects values longer than 64 KiB before decoding.
+* Accepts the spec-compliant base64url `opaque` string shape and the legacy
+* object-shaped `opaque` form emitted by older mppx versions.
+*
+* @param header - The Authorization header value.
+* @returns The deserialized credential.
+*
+* @example
+* ```ts
+* import { Credential } from 'mppx'
+*
+* const credential = Credential.deserialize(header)
+* ```
+*/
+function deserialize$1(value) {
+	if (value.length > maxAuthorizationLength) throw new InvalidCredentialEncodingError();
+	const prefixMatch = value.match(new RegExp(`^${Schemes.payment}\\s+(.+)$`, "i"));
+	if (!prefixMatch?.[1]) throw new MissingPaymentSchemeError();
+	try {
+		const json = toString(prefixMatch[1]);
+		const parsed = JSON.parse(json);
+		const { opaque: challengeOpaque, request, meta: _meta, ...challengeFields } = parsed.challenge;
+		const { meta, opaque } = normalizeCredentialOpaque(challengeOpaque);
+		return {
+			challenge: Schema$1.parse({
+				...challengeFields,
+				...meta !== void 0 && { meta },
+				...opaque !== void 0 && { opaque },
+				request: deserialize$3(request)
+			}),
+			payload: parsed.payload,
+			...parsed.source && { source: parsed.source }
+		};
+	} catch {
+		throw new InvalidCredentialEncodingError();
+	}
+}
+function normalizeCredentialOpaque(value) {
+	if (value === void 0) return {};
+	if (typeof value === "string") return { opaque: value };
+	if (!isStringRecord(value)) throw new Error("Invalid opaque.");
+	return {
+		meta: value,
+		opaque: serialize(value)
+	};
+}
+function isStringRecord(value) {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	return Object.values(value).every((entry) => typeof entry === "string");
+}
+
+// ../../../node_modules/.pnpm/mppx@0.15.0_next@16.4.2_@opentelemetry+api@1.9.1_@playwright+test@1.64.1_@types+node@24_dd97f5daf3660a1bd652a27eb120678a/node_modules/mppx/dist/Receipt.js
+const shape = {
+	/** Currency actually debited to fund the payment, when known. */
+	fundingCurrency: optional(string()),
+	/** Payment method used (e.g., "tempo", "stripe"). */
+	method: string(),
+	/** Method-specific reference (e.g., transaction hash). */
+	reference: string(),
+	/** Optional external reference ID echoed from the credential payload. */
+	externalId: optional(string()),
+	/** Optional server-issued subscription identifier for recurring payments. */
+	subscriptionId: optional(string()),
+	/** Payment status. Always "success" — failures use 402 + Problem Details. */
+	status: literal("success"),
+	/** RFC 3339 settlement timestamp. */
+	timestamp: datetime()
+};
+/**
+* Schema for a payment receipt.
+*
+* Method specifications may define additional receipt fields beyond the
+* base set (per the core spec's Payment-Receipt section); unknown fields
+* are preserved through parse/serialize round-trips rather than stripped.
+*
+* @example
+* ```ts
+* import { Receipt } from 'mppx'
+*
+* const receipt = Receipt.Schema.parse(data)
+* ```
+*/
+const Schema = looseObject(shape);
+/**
+* Deserializes a Payment-Receipt header value to a receipt.
+*
+* @param encoded - The base64url-encoded header value.
+* @returns The deserialized receipt.
+*
+* @example
+* ```ts
+* import { Receipt } from 'mppx'
+*
+* const receipt = Receipt.deserialize(encoded)
+* ```
+*/
+function deserialize(encoded) {
+	const json = toString(encoded);
+	return from(JSON.parse(json));
+}
+/**
+* Creates a receipt from the given parameters.
+*
+* @param parameters - Receipt parameters.
+* @returns A receipt.
+*
+* @example
+* ```ts
+* import { Receipt } from 'mppx'
+*
+* const receipt = Receipt.from({
+*   method: 'tempo',
+*   status: 'success',
+*   timestamp: new Date().toISOString(),
+*   reference: '0x...',
+* })
+* ```
+*/
+function from(parameters) {
+	return Schema.parse(parameters);
+}
+
+// src/account/wallet.ts
+const MESSAGES = {
+	payment_required: "A recurring wallet payment credential is required.",
+	payment_credential_invalid: "The wallet payment credential is not valid for this signup.",
+	recurring_grant_required: "This signup needs a recurring payment grant. The wallet supplied a grant for one payment.",
+	wallet_payments_disabled: "Wallet payments are not available in this environment.",
+	wallet_recovery_required: "The saved wallet payment needs recovery.",
+	payment_action_required: "The wallet payment needs browser approval. Use Checkout to pay.",
+	wallet_payment_failed: "The wallet payment could not complete. Run the command again to check it."
+};
+var WalletError = class extends CliError {
+	code;
+	constructor(code, hint) {
+		super(MESSAGES[code], code === "payment_required" ? ExitCode.credential : ExitCode.failure, hint);
+		this.code = code;
+	}
+};
+function isWalletState(value) {
+	return value === "quoted" || value === "confirming" || value === "requires_action" || value === "paid" || value === "canceled";
+}
+/** Read one credential from a pipe. Keep it in memory until the request ends. */
+async function readPaymentCredential(input, deadline) {
+	if (input.isTTY) throw usageError("Pipe the payment credential into stdin.");
+	const parts = [];
+	let joined;
+	let size = 0;
+	const timer = setTimeout(() => input.destroy(/* @__PURE__ */ new Error("Payment input timed out.")), Math.max(1, deadline - Date.now()));
+	try {
+		for await (const chunk of input) {
+			const value = chunk;
+			if (typeof value !== "string" && !Buffer.isBuffer(value)) throw new WalletError("payment_credential_invalid");
+			const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value);
+			size += bytes.length;
+			if (size > 16384) throw new WalletError("payment_credential_invalid");
+			parts.push(bytes);
+		}
+		joined = Buffer.concat(parts);
+		const credential = joined.toString("utf8").trim();
+		if (!credential || /[\r\n]/.test(credential)) throw new WalletError("payment_credential_invalid");
+		return credential;
+	} catch (error) {
+		if (error instanceof CliError) throw error;
+		throw new CliError("Cannot read the payment credential from stdin.");
+	} finally {
+		clearTimeout(timer);
+		joined?.fill(0);
+		for (const part of parts) part.fill(0);
+	}
+}
+function checkedChallenge(header, environment, body, secrets) {
+	try {
+		if (header.length > 16384) throw new Error();
+		const challenge = deserialize$2(header);
+		const content = JSON.stringify(challenge);
+		const input = JSON.parse(body);
+		const digest = compute(body);
+		if (secrets.some((secret) => secret && content.includes(secret)) || /spt_[A-Za-z0-9_]{8,}/.test(content)) throw new Error();
+		if (challenge.realm !== new URL(environment.controlPlaneUrl).hostname || challenge.method !== "stripe" || challenge.intent !== "charge" || challenge.header !== "Payment-Authorization") throw new Error();
+		if (challenge.digest !== digest && challenge.digest !== `sha-256=:${digest.slice(8)}:`) throw new Error();
+		if (!challenge.expires || Date.parse(challenge.expires) <= Date.now()) throw new Error();
+		if (challenge.request.currency !== "usd" || typeof challenge.request.amount !== "string" || !/^[1-9][0-9]*$/.test(challenge.request.amount)) throw new Error();
+		const details = challenge.request.methodDetails;
+		if (!isRecord(details) || typeof details.networkId !== "string" || !details.networkId.startsWith("profile_test_") || !isRecord(details.metadata) || details.metadata.renewal_authorization !== "recurring_spt_month") throw new Error();
+		if (!isRecord(input) || !isRecord(details.metadata) || details.metadata.signup_session_id !== input.sessionId || details.metadata.selection_revision !== input.selectionRevision) throw new Error();
+		return challenge;
+	} catch {
+		throw new WalletError("payment_credential_invalid");
+	}
+}
+/** Check the echoed quote before sending a secret to the account service. */
+function validateWalletCredential(value, reply, environment, body) {
+	try {
+		const credential = deserialize$1(value);
+		if (!reply.challenge || !isRecord(credential.payload) || typeof credential.payload.spt !== "string" || !/^spt_[A-Za-z0-9_]{8,252}$/.test(credential.payload.spt)) throw new Error();
+		const expected = checkedChallenge(reply.challenge, environment, body, [credential.payload.spt]);
+		if (credential.challenge.id !== expected.id || credential.challenge.realm !== expected.realm || credential.challenge.method !== expected.method || credential.challenge.intent !== expected.intent || credential.challenge.expires !== expected.expires || credential.challenge.opaque !== expected.opaque || JSON.stringify(credential.challenge.request) !== JSON.stringify(expected.request) || credential.challenge.header !== expected.header || credential.challenge.digest !== expected.digest || credential.payload.externalId !== reply.attemptId) throw new Error();
+	} catch {
+		throw new WalletError("payment_credential_invalid");
+	}
+}
+/** The public quote stays on stdout. The bearer token and payment header do not. */
+async function walletCall(environment, token, body, credential) {
+	let response;
+	try {
+		response = await fetch(`${environment.controlPlaneUrl.replace(/\/$/, "")}/cli/v1/signup-payment`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+				...credential ? { "Payment-Authorization": credential } : {}
+			},
+			body,
+			redirect: "error",
+			signal: AbortSignal.timeout(15e3)
+		});
+	} catch {
+		throw new ConnectionError();
+	}
+	if (response.status === 401) throw new AccountError("unauthenticated", 401);
+	if ([
+		429,
+		502,
+		503,
+		504
+	].includes(response.status)) throw new AccountError("unavailable", response.status);
+	let value;
+	try {
+		value = await response.json();
+	} catch {
+		throw new WalletError(response.status === 404 ? "wallet_payments_disabled" : "wallet_payment_failed");
+	}
+	if (!isRecord(value)) throw new WalletError("wallet_payment_failed");
+	if (![
+		200,
+		202,
+		402
+	].includes(response.status)) {
+		if (value.error === "email_unverified") throw new AccountError("permission_denied", 403, "email_unverified");
+		if (value.error === "signup_choices_changed") throw new AccountError("failed_precondition", 409, "selection_changed");
+		if (value.error === "promotion_code_invalid") throw new AccountError("invalid_argument", response.status, "promotion_code_invalid");
+		if (value.error === "recurring_grant_required") throw new WalletError("recurring_grant_required");
+		if (value.error === "wallet_recovery_required") throw new WalletError("wallet_recovery_required");
+		if (value.error === "invalid_payment_credential") throw new WalletError("payment_credential_invalid");
+		throw new WalletError(response.status === 404 ? "wallet_payments_disabled" : "wallet_payment_failed");
+	}
+	if (!isWalletState(value.state)) throw new WalletError("wallet_payment_failed");
+	const state = value.state;
+	if (typeof value.attemptId !== "string" || !(state === "canceled" && value.attemptId === "") && !/^pay_[A-Za-z0-9_-]{1,60}$/.test(value.attemptId)) throw new WalletError("wallet_payment_failed");
+	const result = {
+		state,
+		attemptId: value.attemptId
+	};
+	if (response.status === 402) {
+		const header = response.headers.get("WWW-Authenticate");
+		if (!header || state !== "quoted") throw new WalletError("wallet_payment_failed");
+		let paymentToken;
+		if (credential) try {
+			const payload = deserialize$1(credential).payload;
+			if (isRecord(payload) && typeof payload.spt === "string") paymentToken = payload.spt;
+		} catch {
+			throw new WalletError("payment_credential_invalid");
+		}
+		const challenge = checkedChallenge(header, environment, body, [
+			token,
+			...credential ? [credential] : [],
+			...paymentToken ? [paymentToken] : []
+		]);
+		if (challenge.request.externalId !== result.attemptId || !isRecord(challenge.request.methodDetails) || !isRecord(challenge.request.methodDetails.metadata)) throw new WalletError("payment_credential_invalid");
+		result.challenge = header;
+		result.amount = String(challenge.request.amount);
+		result.currency = "usd";
+		const monthly = challenge.request.methodDetails.metadata.monthly_plan_amount;
+		if (typeof monthly !== "string" || !/^[1-9][0-9]*$/.test(monthly)) throw new WalletError("payment_credential_invalid");
+		result.monthlyPlanAmount = monthly;
+	}
+	if (state === "paid") try {
+		const receipt = deserialize(response.headers.get("Payment-Receipt") ?? "");
+		if (receipt.status !== "success" || receipt.method !== "stripe" || receipt.externalId !== result.attemptId || !/^pi_[A-Za-z0-9_]+$/.test(receipt.reference)) throw new Error();
+		result.reference = receipt.reference;
+	} catch {
+		throw new WalletError("wallet_payment_failed");
+	}
+	return result;
+}
+
 // src/account/workos.ts
 function timedOut() {
 	return new CliError("Account setup timed out. Run the command again to resume.");
@@ -19523,6 +22987,15 @@ async function accountRPC(environment, file, state, service, method, body = {}) 
 		return rpc(base, method, state.accessToken, body);
 	}
 }
+async function accountWallet(environment, file, state, body, paymentCredential) {
+	try {
+		return await walletCall(environment, state.accessToken, body, paymentCredential);
+	} catch (error) {
+		if (!(error instanceof AccountError) || error.status !== 401) throw error;
+		Object.assign(state, await refresh(environment, file, state, state.orgId));
+		return walletCall(environment, state.accessToken, body, paymentCredential);
+	}
+}
 /** The longest wait between two tries of a poll after a transient failure. */
 const MAX_RETRY_SECONDS = 30;
 /**
@@ -19551,16 +23024,23 @@ function events(session) {
 			...fields
 		})}\n`);
 		else if (event === "ready") {
+			const keyName = typeof fields.keyName === "string" ? fields.keyName : "[unnamed]";
 			session.out(`Code Storage is ready for ${String(fields.org)}.`);
 			session.out(`Host: ${String(fields.host)}`);
 			session.out(`API URL: ${String(fields.apiUrl)}`);
 			session.out(`Key file: ${String(fields.keyFile)}`);
 			session.out(`Key ID: ${String(fields.keyId)}`);
+			session.out(`Key name: ${keyName.replace(/[\p{Cc}\p{Cf}]/gu, "")}`);
+			session.out(`Key scopes: ${registeredKeyScopes(fields.keyScopes)?.join(", ") ?? ""}.`);
+			session.out(`To revoke this key, open ${String(fields.keyDashboardUrl)}.`);
+			session.out(`Select ${String(fields.org)}. On the Keys page, delete the key with the name shown above.`);
 			session.out("Next steps:");
-			for (const next of NEXT_STEPS) session.out(`  ${next}`);
+			if (Array.isArray(fields.nextSteps)) for (const next of fields.nextSteps) session.out(`  ${String(next)}`);
 		} else if (event === "sign_in_required") session.ctx.stderr.write(`Open ${String(fields.url)}\nConfirm code ${String(fields.userCode)}.\n`);
-		else if (event === "payment_required") session.ctx.stderr.write(`Complete payment at ${String(fields.url)}\n`);
-		else if (!session.options.quiet) session.ctx.stderr.write(`Code Storage: ${event.replaceAll("_", " ")}.\n`);
+		else if (event === "payment_required") {
+			if (fields.method === "stripe_mpp") session.ctx.stderr.write(`Authorize a recurring payment with your wallet.\nPayment challenge: ${String(fields.challenge)}\n`);
+			else session.ctx.stderr.write(`Complete payment at ${String(fields.url)}\n`);
+		} else if (!session.options.quiet) session.ctx.stderr.write(`Code Storage: ${event.replaceAll("_", " ")}.\n`);
 	};
 }
 function objects(value) {
@@ -19609,8 +23089,23 @@ async function selectTarget(environment, file, state, options) {
 * expire, so the CLI asks for its URL again after this time and shows a replacement URL.
 */
 const CHECKOUT_RECHECK_MS = 3e5;
+async function clearRejectedPromotion(environment, file, state, error, promotionCode, revision) {
+	if (!(error instanceof AccountError) || error.reason !== "promotion_code_invalid" || !promotionCode || state.signup?.promotionCode !== promotionCode) return;
+	if (environment.accountFlowVersion === 2 && revision) await accountRPC(environment, file, state, "workspace", `${SIGNUP}SaveSignupSelection`, {
+		sessionId: state.signupSessionId,
+		selection: {
+			planType: state.signup.plan,
+			promotionCode: "",
+			subdomain: state.signup.subdomain,
+			clusterTarget: state.signup.clusterTarget,
+			revision
+		}
+	});
+	delete state.signup.promotionCode;
+	await saveAccount(file, state);
+}
 /** Start or resume the hosted checkout. Show its URL when it is new, and return the shown URL. */
-async function showCheckout(environment, file, state, plan, emit, shown) {
+async function showCheckout(environment, file, state, plan, emit, shown, revision) {
 	let checkout;
 	try {
 		checkout = await accountRPC(environment, file, state, "workspace", `${SIGNUP}CreateSignupCheckoutSession`, {
@@ -19619,10 +23114,7 @@ async function showCheckout(environment, file, state, plan, emit, shown) {
 			hosted: true
 		});
 	} catch (error) {
-		if (error instanceof AccountError && error.reason === "promotion_code_invalid" && plan.promotionCode && state.signup?.promotionCode === plan.promotionCode) {
-			delete state.signup.promotionCode;
-			await saveAccount(file, state);
-		}
+		await clearRejectedPromotion(environment, file, state, error, plan.promotionCode, revision);
 		throw error;
 	}
 	if (typeof checkout.checkoutUrl !== "string" || !checkout.checkoutUrl || checkout.checkoutUrl === shown) return shown;
@@ -19652,6 +23144,24 @@ function reservation(current) {
 		...clusterTarget ? { clusterTarget } : {}
 	};
 }
+function serverSelection(current) {
+	if (current.selection === void 0) return void 0;
+	const saved = current.selection;
+	if (!isRecord(saved) || !isRecord(saved.clusterTarget) || typeof saved.revision !== "string" || !/^[1-9][0-9]{0,19}$/.test(saved.revision) || BigInt(saved.revision) > 18446744073709551615n) throw new CliError("The signup service returned invalid saved choices.");
+	return {
+		revision: saved.revision,
+		selection: {
+			subdomain: textField(saved, "subdomain"),
+			plan: textField(saved, "planType"),
+			...typeof saved.promotionCode === "string" && saved.promotionCode ? { promotionCode: saved.promotionCode } : {},
+			clusterTarget: {
+				provider: textField(saved.clusterTarget, "provider"),
+				region: textField(saved.clusterTarget, "region"),
+				cluster: textField(saved.clusterTarget, "cluster")
+			}
+		}
+	};
+}
 /**
 * Select the subdomain, the plan, and the cluster of a signup, and save the selection. For the
 * subdomain, a reservation on the server wins over --subdomain, and --subdomain wins over the
@@ -19661,11 +23171,13 @@ function reservation(current) {
 async function select(session, environment, file, state, options, current, plans) {
 	const reserved = reservation(current);
 	if (options.subdomain && reserved.subdomain && options.subdomain !== reserved.subdomain) throw usageError("This signup already reserved a subdomain. Resume with its reserved name.");
-	const saved = state.signup;
+	const server = environment.accountFlowVersion === 2 ? serverSelection(current) : void 0;
+	let revision = server?.revision;
+	const saved = server?.selection ?? state.signup;
 	const subdomain = reserved.subdomain ?? options.subdomain ?? saved?.subdomain ?? await ask(session, "subdomain", "Organization subdomain");
 	validateSubdomain(subdomain, environment);
 	const serverPlan = typeof current.planType === "string" && current.planType ? current.planType : void 0;
-	const plan = saved?.plan ?? serverPlan ?? options.plan ?? await ask(session, "plan", `Plan (${plans.map((item) => String(item.planType)).join(", ")})`);
+	const plan = serverPlan ?? saved?.plan ?? options.plan ?? await ask(session, "plan", `Plan (${plans.map((item) => String(item.planType)).join(", ")})`);
 	if (plan !== serverPlan && plans.length > 0 && !plans.some((item) => item.planType === plan)) throw usageError("The selected plan is not available.");
 	if (options.plan && options.plan !== plan) throw usageError("The plan differs from the signup in progress. Resume with its original plan.");
 	if (!saved && !reserved.subdomain && !reserved.clusterTarget && !session.options.noInput && session.ctx.stdin.isTTY && !await confirm({
@@ -19681,23 +23193,68 @@ async function select(session, environment, file, state, options, current, plans
 		"region",
 		"cluster"
 	].some((field) => options[field] && options[field] !== target[field])) throw usageError("The placement differs from the signup in progress. Resume with its original --provider, --region, and --cluster.");
-	const promotionCode = options.promotionCode ?? saved?.promotionCode;
-	const selection = {
+	const code = options.promotionCode ?? saved?.promotionCode;
+	const promotionCode = environment.accountFlowVersion === 2 ? code?.trim().toUpperCase() : code;
+	let selection = {
 		subdomain,
 		plan,
 		...promotionCode ? { promotionCode } : {},
 		clusterTarget: target ?? await selectTarget(environment, file, state, options)
 	};
-	if (JSON.stringify(selection) !== JSON.stringify(saved)) {
+	if (environment.accountFlowVersion === 2 && (server !== void 0 || serverPlan === void 0) && JSON.stringify(selection) !== JSON.stringify(server?.selection)) {
+		const stored = serverSelection(await accountRPC(environment, file, state, "workspace", `${SIGNUP}SaveSignupSelection`, {
+			sessionId: state.signupSessionId,
+			selection: {
+				planType: selection.plan,
+				promotionCode: selection.promotionCode ?? "",
+				subdomain: selection.subdomain,
+				clusterTarget: selection.clusterTarget,
+				revision: server?.revision ?? "0"
+			}
+		}));
+		if (!stored) throw new CliError("The signup service did not save the choices.");
+		selection = stored.selection;
+		revision = stored.revision;
+	}
+	if (JSON.stringify(selection) !== JSON.stringify(state.signup)) {
 		state.signup = selection;
 		await saveAccount(file, state);
 	}
-	return selection;
+	return {
+		selection,
+		revision
+	};
+}
+async function selectOrganization(session, environment, file, state, emit) {
+	const result = await accountRPC(environment, file, state, "workspace", `${SIGNUP}ListAccountOrganizations`);
+	if (result.organizations === void 0) result.organizations = [];
+	if (!Array.isArray(result.organizations) || result.organizations.length > 1e3) throw new CliError("The account service returned an invalid organization list.");
+	const organizations = result.organizations.map((value) => {
+		if (!isRecord(value)) throw new CliError("The account service returned an invalid organization.");
+		return {
+			id: textField(value, "organizationId"),
+			name: typeof value.name === "string" ? value.name.replace(/[\p{Cc}\p{Cf}]/gu, "") : ""
+		};
+	});
+	if (new Set(organizations.map((organization) => organization.id)).size !== organizations.length) throw new CliError("The account service returned duplicate organizations.");
+	if (organizations.length === 0) {
+		if (state.orgId) throw new CliError("The selected organization has no active membership. Run `pierre auth logout --account`, then try again.");
+		return state;
+	}
+	let selected = organizations[0].id;
+	if (organizations.length > 1) {
+		emit("organization_required", { organizations });
+		selected = await ask(session, "org-id", `Organization ID (${organizations.map((organization) => `${organization.name || organization.id}: ${organization.id}`).join(", ")})`);
+		if (!organizations.some((organization) => organization.id === selected)) throw usageError("Select an organization from the account list.");
+	}
+	return state.orgId === selected ? state : refresh(environment, file, state, selected);
 }
 async function signup(session, environment, file, initial, options, emit, deadline) {
 	let state = initial;
 	let paymentShown = "";
 	let checkoutRecheck = 0;
+	let canceledWallet = false;
+	let paymentCredential;
 	while (Date.now() < deadline) {
 		const result = await pollRPC(environment, file, state, deadline, `${SIGNUP}GetSignupSession`, state.signupSessionId ? { sessionId: state.signupSessionId } : {});
 		if (!isRecord(result.session)) throw new CliError("The signup service did not return a session.");
@@ -19708,6 +23265,7 @@ async function signup(session, environment, file, initial, options, emit, deadli
 			await saveAccount(file, state);
 		}
 		const next = step(result.nextStep);
+		if (options.cancelWalletPayment && !canceledWallet && !["SELECT_PLAN", "COMPLETE_PAYMENT"].includes(next)) throw new WalletError("wallet_recovery_required");
 		if (next === "PROVISIONING_BLOCKED") throw new CliError("Provisioning needs support. Payment is already recorded.");
 		if ((next === "PROVISIONING" || next === "COMPLETED") && typeof current.workosOrgId === "string") {
 			if (options.subdomain && current.subdomain && options.subdomain !== current.subdomain) throw usageError("This signup already reserved another subdomain. Resume with its reserved name.");
@@ -19717,12 +23275,65 @@ async function signup(session, environment, file, initial, options, emit, deadli
 				workspaceId: textField(current, "initialWorkspaceId")
 			};
 		}
-		const selection = await select(session, environment, file, state, options, current, objects(result.plans));
+		const { selection, revision } = await select(session, environment, file, state, options, current, objects(result.plans));
 		if (next === "SELECT_PLAN" || next === "COMPLETE_PAYMENT" && Date.now() >= checkoutRecheck) {
-			paymentShown = await showCheckout(environment, file, state, {
+			if (options.cancelWalletPayment && !canceledWallet) {
+				const canceled = await accountWallet(environment, file, state, JSON.stringify({
+					sessionId,
+					action: "cancel",
+					attemptId: options.cancelWalletPayment
+				}));
+				if (canceled.state !== "canceled" || canceled.attemptId !== options.cancelWalletPayment) throw new WalletError("wallet_recovery_required");
+				canceledWallet = true;
+			}
+			if (options.payment === "wallet") {
+				if (!revision) throw new WalletError("wallet_payments_disabled");
+				const body = JSON.stringify({
+					sessionId,
+					selectionRevision: revision,
+					action: "pay"
+				});
+				let payment;
+				try {
+					payment = await accountWallet(environment, file, state, body);
+				} catch (error) {
+					await clearRejectedPromotion(environment, file, state, error, selection.promotionCode, revision);
+					throw error;
+				}
+				if (payment.challenge) {
+					emit("payment_required", {
+						method: "stripe_mpp",
+						sessionId,
+						attemptId: payment.attemptId,
+						challenge: payment.challenge,
+						amount: payment.amount,
+						currency: payment.currency,
+						monthlyPlanAmount: payment.monthlyPlanAmount
+					});
+					if (!options.paymentCredentialStdin) throw new WalletError("payment_required", "Get a recurring payment credential from your wallet. Resume with --payment-credential-stdin.");
+					paymentCredential ??= await readPaymentCredential(session.ctx.stdin, deadline);
+					validateWalletCredential(paymentCredential, payment, environment, body);
+					const attemptId = payment.attemptId;
+					try {
+						payment = await accountWallet(environment, file, state, body, paymentCredential);
+					} catch (error) {
+						if (error instanceof WalletError && (error.code === "recurring_grant_required" || error.code === "payment_credential_invalid")) throw new WalletError(error.code, `Resume with --payment checkout --cancel-wallet-payment ${attemptId}.`);
+						throw error;
+					}
+					if (payment.challenge) throw new WalletError("payment_credential_invalid");
+					paymentCredential = void 0;
+				}
+				if (payment.state === "requires_action") throw new WalletError("payment_action_required", `Resume with --payment checkout --cancel-wallet-payment ${payment.attemptId}.`);
+				if (payment.state === "canceled") throw new WalletError("wallet_recovery_required");
+				if (payment.state === "paid") emit("payment_confirmed", {
+					method: "stripe_mpp",
+					attemptId: payment.attemptId,
+					reference: payment.reference
+				});
+			} else paymentShown = await showCheckout(environment, file, state, {
 				planType: selection.plan,
 				...selection.promotionCode ? { promotionCode: selection.promotionCode } : {}
-			}, emit, paymentShown);
+			}, emit, paymentShown, revision);
 			checkoutRecheck = Date.now() + CHECKOUT_RECHECK_MS;
 		} else if (next === "PROVISION_ORG") {
 			await accountRPC(environment, file, state, "workspace", `${SIGNUP}CompleteSignupDeployment`, {
@@ -19831,7 +23442,7 @@ async function savedCredential(host, org, apiUrl, keyFile) {
 		throw error;
 	}
 }
-async function setupCredential(session, environment, file, state, workspace, options) {
+async function setupCredential(session, environment, file, state, workspace, options, explicitScopes) {
 	const org = textField(workspace, "slug");
 	const label = hostLabel(workspace, org);
 	const host = normalizeHost(environment.gitHostTemplate.replaceAll("{{org}}", label));
@@ -19839,23 +23450,33 @@ async function setupCredential(session, environment, file, state, workspace, opt
 	if (session.options.hostname && normalizeHost(session.options.hostname) !== host) throw usageError("The selected organization does not match --hostname.");
 	const paths = configPaths(session.ctx.env);
 	const hosts = await readHosts(paths.hostsFile);
+	const resumesKey = state.key?.orgId === state.orgId && state.key?.host === host;
+	if (resumesKey && explicitScopes && state.keyScopes && !sameKeyScopes(state.keyScopes, explicitScopes)) throw usageError("The pending key has different scopes. Resume with its saved scopes.");
+	const requestedScopes = explicitScopes ?? (resumesKey ? state.keyScopes : void 0);
+	let selectedScopes = requestedScopes ?? ["*"];
 	let selected;
+	let selectedName;
 	let verify = false;
 	const saved = hosts[host];
 	const candidate = saved ? await savedCredential(host, org, apiUrl, saved.keyFile) : void 0;
+	if (saved && !candidate && !requestedScopes) throw usageError("The saved key cannot be used. Pass --key-scope for its replacement.");
 	if (candidate) {
 		const registered = objects((await accountRPC(environment, file, state, "cloud", `${KEYS}ListPublicKeys`)).keys).find((item) => listedKeyId(item) === candidate.auth.keyId);
-		const unrestricted = (registered && isRecord(registered.allowedScopes) && Array.isArray(registered.allowedScopes.scopes) ? registered.allowedScopes.scopes : []).includes("*");
+		const scopes = registeredKeyScopes(registered && isRecord(registered.allowedScopes) && Array.isArray(registered.allowedScopes.scopes) ? registered.allowedScopes.scopes : []);
+		if (!requestedScopes && scopes) selectedScopes = scopes;
 		try {
-			if (unrestricted) {
+			if (scopes && sameKeyScopes(scopes, selectedScopes)) {
 				await createClient(candidate).repos.list({ limit: 1 });
 				selected = candidate;
+				selectedName = typeof registered?.name === "string" ? registered.name : void 0;
 			}
 		} catch (error) {
 			if (!(error instanceof AuthenticationError) && !(error instanceof PermissionDeniedError)) throw error;
 		}
+		if (!selected && !requestedScopes) throw usageError("The saved key cannot be used. Pass --key-scope for its replacement.");
 	}
 	if (!selected) {
+		state.keyScopes = selectedScopes;
 		if (!state.key || state.key.orgId !== state.orgId || state.key.host !== host) {
 			if (state.key) await removePendingKey(state.key.keyFile, hosts, paths.keysDir);
 			const registrationId = randomBytes(16).toString("base64url").slice(0, 21);
@@ -19867,6 +23488,7 @@ async function setupCredential(session, environment, file, state, workspace, opt
 			}).toString());
 			state.key = {
 				orgId: state.orgId,
+				name: options.keyName ?? `pierre CLI on ${hostname()} (${registrationId.slice(0, 8)})`,
 				host,
 				keyFile,
 				registrationId,
@@ -19878,25 +23500,36 @@ async function setupCredential(session, environment, file, state, workspace, opt
 			await saveAccount(file, state);
 		}
 		const key = state.key;
+		key.name ??= options.keyName ?? `pierre CLI on ${hostname()} (${key.registrationId.slice(0, 8)})`;
+		await saveAccount(file, state);
 		const pem = await readFile(key.keyFile, "utf8");
 		const publicKey = createPublicKey(pem).export({
 			type: "spki",
 			format: "pem"
 		}).toString();
 		if (publicKey !== key.publicKey) throw new CliError("The pending key file changed. Account setup stopped.");
-		try {
-			await accountRPC(environment, file, state, "cloud", `${KEYS}SavePublicKey`, {
-				id: key.registrationId,
-				name: options.keyName ?? `pierre CLI on ${hostname()}`,
-				publicKey,
-				keyType: "ecdsa-p256",
-				allowedScopes: { scopes: ["*"] }
-			});
-		} catch (error) {
-			if (!(error instanceof AccountError) || error.code !== "already_exists") throw error;
-			const listed = await accountRPC(environment, file, state, "cloud", `${KEYS}ListPublicKeys`);
-			const keyId = keyIdOf(createPublicKey(pem));
-			if (!objects(listed.keys).some((item) => listedKeyId(item) === keyId)) throw error;
+		const pendingKeyId = keyIdOf(createPublicKey(pem));
+		const matchesRegistration = (keys) => {
+			const registered = objects(keys.keys).find((item) => listedKeyId(item) === pendingKeyId);
+			if (!registered) return false;
+			const scopes = registeredKeyScopes(isRecord(registered.allowedScopes) ? registered.allowedScopes.scopes : void 0);
+			if (!scopes || !sameKeyScopes(scopes, selectedScopes)) throw usageError("The registered key scopes differ from this setup. Account setup stopped.");
+			selectedName = typeof registered.name === "string" ? registered.name : key.name;
+			return true;
+		};
+		if (!matchesRegistration(await accountRPC(environment, file, state, "cloud", `${KEYS}ListPublicKeys`))) {
+			try {
+				await accountRPC(environment, file, state, "cloud", `${KEYS}SavePublicKey`, {
+					id: key.registrationId,
+					name: key.name,
+					publicKey,
+					keyType: "ecdsa-p256",
+					allowedScopes: { scopes: selectedScopes }
+				});
+			} catch (error) {
+				if (!(error instanceof AccountError) || error.code !== "already_exists") throw error;
+			}
+			if (!matchesRegistration(await accountRPC(environment, file, state, "cloud", `${KEYS}ListPublicKeys`))) throw new CliError("The key registration is not available. Run the command again to resume.");
 		}
 		selected = credential(host, org, apiUrl, key.keyFile, pem);
 		verify = true;
@@ -19909,7 +23542,7 @@ async function setupCredential(session, environment, file, state, workspace, opt
 			hostname: host
 		},
 		info: () => {}
-	}, {});
+	}, { readOnly: !selectedScopes.includes("*") && !selectedScopes.includes("git:write") });
 	return {
 		org,
 		orgId: state.orgId,
@@ -19918,7 +23551,10 @@ async function setupCredential(session, environment, file, state, workspace, opt
 		apiUrl,
 		keyFile: selected.auth.source.path,
 		keyId: selected.auth.keyId,
-		nextSteps: NEXT_STEPS
+		...selectedName === void 0 ? {} : { keyName: selectedName },
+		keyScopes: selectedScopes,
+		keyDashboardUrl: environment.dashboardUrl,
+		nextSteps: selectedScopes.includes("*") || selectedScopes.includes("repo:write") ? NEXT_STEPS : [SKILL_INSTALL]
 	};
 }
 /** Each variable replaces the key file of a host entry, so the key that setup stores is unused. */
@@ -19930,23 +23566,31 @@ const ENV_CREDENTIALS = [
 async function runAccount(session, command, options) {
 	let release;
 	try {
+		if (options.keyName !== void 0 && (!options.keyName.trim() || /\p{Cc}/u.test(options.keyName))) throw usageError("--key-name must have text and no control characters.");
+		const requestedScopes = options.keyScope === void 0 ? void 0 : keyScopes(options.keyScope);
+		if (options.keyScope !== void 0 && !requestedScopes) throw usageError("Use --key-scope git:read and --key-scope org:read. Add git:write or repo:write as needed. Use * alone for full access.");
+		if (options.payment && !["checkout", "wallet"].includes(options.payment)) throw usageError("--payment must be checkout or wallet.");
+		if (options.paymentCredentialStdin && (options.payment !== "wallet" || !session.options.noInput)) throw usageError("--payment-credential-stdin requires --payment wallet and --no-input.");
+		if (options.cancelWalletPayment && (options.payment === "wallet" || !/^pay_[A-Za-z0-9_-]{1,60}$/.test(options.cancelWalletPayment))) throw usageError("Use --cancel-wallet-payment with a wallet attempt ID and --payment checkout.");
 		const variable = ENV_CREDENTIALS.find((name) => envValue(session.ctx.env, name));
 		if (variable) throw usageError(`Unset ${variable} before account setup.`, `The CLI and Git use ${variable} in place of the key that account setup stores.`);
 		const deadline = Date.now() + parseDuration(options.timeout ?? "30m", "--timeout") * 1e3;
 		const file = accountFile(session.ctx.env);
 		release = await acquireAccountLock(session.ctx.env);
 		const environment = await discover(session.ctx.env);
+		if ((options.payment === "wallet" || options.cancelWalletPayment) && environment.accountFlowVersion !== 2) throw new WalletError("wallet_payments_disabled");
 		const emit = events(session);
 		let state = await authenticated(environment, file, emit, deadline);
 		if (command === "init" && options.orgId) {
 			if (state.signupSessionId) throw usageError("Resume signup without --org-id. The signup selects its own organization.");
 			if (state.orgId !== options.orgId) state = await refresh(environment, file, state, options.orgId);
 		}
+		if (command === "init" && !options.orgId && !state.signupSessionId && environment.accountFlowVersion === 2) state = await selectOrganization(session, environment, file, state, emit);
 		let workspaceId;
 		if (command === "signup" || state.signupSessionId || !state.orgId) ({state, workspaceId} = await signup(session, environment, file, state, options, emit, deadline));
 		else workspaceId = await existingWorkspace(session, environment, file, state, options);
 		const workspace = await readyWorkspace(environment, file, state, workspaceId, emit, deadline);
-		const ready = await setupCredential(session, environment, file, state, workspace, options);
+		const ready = await setupCredential(session, environment, file, state, workspace, options, requestedScopes);
 		await clearAccount(session.ctx.env);
 		emit("ready", ready);
 	} catch (error) {
@@ -19957,7 +23601,7 @@ async function runAccount(session, command, options) {
 		const failure = error instanceof CliError ? error : new CliError("Account setup failed. Run the command again to resume.");
 		if (session.options.json) events(session)("error", {
 			...failure instanceof AccountError && failure.reason ? { reason: failure.reason } : {},
-			code: failure instanceof AccountError || failure instanceof AccountUnavailableError || failure instanceof AccountSetupInProgressError ? failure.code : failure.exitCode === 2 ? "usage" : "account_setup_failed",
+			code: failure instanceof AccountError || failure instanceof AccountUnavailableError || failure instanceof AccountSetupInProgressError || failure instanceof WalletError ? failure.code : failure.exitCode === 2 ? "usage" : "account_setup_failed",
 			message: failure.message
 		});
 		throw failure.body === void 0 ? failure : new CliError(failure.message, failure.exitCode, failure.hint);
@@ -19968,7 +23612,11 @@ async function runAccount(session, command, options) {
 
 // src/commands/account.ts
 function accountCommand(ctx, name) {
-	const command = new Command(name).description(name === "signup" ? "Create an organization and set up this machine." : "Set up this machine. Sign up if the account has no organization.").option("--plan <plan-type>", "The plan for a new organization.").option("--subdomain <name>", name === "signup" ? "The subdomain to reserve for the new organization." : "The subdomain to reserve for a new organization, or the subdomain to select in an existing organization.").option("--region <region>", "Select a region for the new organization.").option("--provider <provider>", "Select a cloud provider.").option("--cluster <cluster>", "Select a cluster in the region.").option("--promotion-code <code>", "A promotion code for the payment of a new organization.").option("--key-name <name>", "The name of this machine key in the dashboard.").option("--timeout <duration>", "The maximum wait. Default: 30m.");
+	const command = new Command(name).description(name === "signup" ? "Create an organization and set up this machine." : "Set up this machine. Sign up if the account has no organization.").option("--plan <plan-type>", "The plan for a new organization.").option("--subdomain <name>", name === "signup" ? "The subdomain to reserve for the new organization." : "The subdomain to reserve for a new organization, or the subdomain to select in an existing organization.").option("--region <region>", "Select a region for the new organization.").option("--provider <provider>", "Select a cloud provider.").option("--cluster <cluster>", "Select a cluster in the region.").option("--promotion-code <code>", "A promotion code for the payment of a new organization.").option("--key-name <name>", "The name of this machine key in the dashboard.").option("--key-scope <scope>", "Allow a key scope. Repeat for each scope. Setup needs git:read and org:read.", (value, scopes) => {
+		const values = scopes ?? [];
+		values.push(value);
+		return values;
+	}).option("--payment <method>", "Use checkout or wallet for signup payment. Default: checkout.").option("--payment-credential-stdin", "Read a wallet payment credential from stdin. Requires --no-input.").option("--cancel-wallet-payment <attempt-id>", "Cancel an unpaid wallet attempt before opening Checkout.").option("--timeout <duration>", "The maximum wait. Default: 30m.");
 	if (name === "init") command.option("--org-id <org-id>", "Select an existing organization by its ID.");
 	return command.action((options, selected) => runAccount(createSession(ctx, selected), name, options));
 }

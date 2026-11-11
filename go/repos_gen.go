@@ -271,9 +271,9 @@ type ReposMergeParams struct {
 	RepoName string `path:"repo_name" json:"-"`
 	// Permit merges between unrelated histories.
 	AllowUnrelatedHistories Opt[bool] `json:"allow_unrelated_histories,omitzero"`
-	// Author identity used when the backend creates a merge commit. Required for merge-commit strategies.
+	// Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.
 	Author Opt[GitIdentity] `json:"author,omitzero"`
-	// Commit message used when a merge commit is created.
+	// Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request.
 	CommitMessage Opt[string] `json:"commit_message,omitzero"`
 	// Committer identity for the merge commit. Defaults to author when omitted.
 	Committer Opt[GitIdentity] `json:"committer,omitzero"`
@@ -285,9 +285,9 @@ type ReposMergeParams struct {
 	SourceIsEphemeral Opt[bool] `json:"source_is_ephemeral,omitzero"`
 	// Branch or refs/heads ref to merge from. The merge reads the source and never updates it. Provide source_ref or the deprecated source_branch.
 	SourceRef Opt[string] `json:"source_ref,omitzero"`
-	// When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy.
+	// When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy.
 	Squash Opt[bool] `json:"squash,omitzero"`
-	// Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+	// Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
 	Strategy ReposMergeRequestStrategy `json:"strategy"`
 	// Destination branch to update. A merge always updates a branch.
 	TargetBranch string `json:"target_branch"`
@@ -314,7 +314,7 @@ var opReposMerge = operation{
 //
 // # Preview Merge
 //
-// Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
+// Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
 //
 // Scope: `git:read` on the repository.
 //
@@ -327,12 +327,18 @@ func (n *ReposNamespace) PreviewMerge(ctx context.Context, params ReposPreviewMe
 type ReposPreviewMergeParams struct {
 	// The repository name, for example `acme/web`.
 	RepoName string `path:"repo_name" json:"-"`
+	// Preview a merge of branches with no common ancestor, as the `allow_unrelated_histories` of `POST /merge`.
+	AllowUnrelatedHistories Opt[bool] `query:"allow_unrelated_histories" json:"-"`
 	// When true, include bounded conflict content in the response.
 	IncludeContent Opt[bool] `query:"include_content" json:"-"`
 	// Source branch to merge from.
 	SourceBranch string `query:"source_branch" json:"-"`
 	// Whether `source_branch` should be resolved from the ephemeral namespace.
 	SourceIsEphemeral Opt[bool] `query:"source_is_ephemeral" json:"-"`
+	// Preview a squash merge, as the `squash` of `POST /merge`. Cannot be used with the `ff_only` strategy.
+	Squash Opt[bool] `query:"squash" json:"-"`
+	// Merge strategy to preview, as the `strategy` of `POST /merge`. Defaults to `ff_prefer`.
+	Strategy Opt[ReposPreviewMergeParamsStrategy] `query:"strategy" json:"-"`
 	// Destination branch to preview merging into.
 	TargetBranch string `query:"target_branch" json:"-"`
 	// Whether `target_branch` should be resolved from the ephemeral namespace.
@@ -391,6 +397,15 @@ var opReposUpdate = operation{
 	itemField:      "",
 	idempotencyKey: false,
 }
+
+// ReposPreviewMergeParamsStrategy is an open enum: a response can hold a value that this SDK version does not list.
+type ReposPreviewMergeParamsStrategy string
+
+const (
+	ReposPreviewMergeParamsStrategyFfOnly   ReposPreviewMergeParamsStrategy = "ff_only"
+	ReposPreviewMergeParamsStrategyFfPrefer ReposPreviewMergeParamsStrategy = "ff_prefer"
+	ReposPreviewMergeParamsStrategyMerge    ReposPreviewMergeParamsStrategy = "merge"
+)
 
 // ReposArchiveNamespace is the repos.archive namespace: client.Repos.Archive.
 type ReposArchiveNamespace struct {

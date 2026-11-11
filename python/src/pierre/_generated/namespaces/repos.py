@@ -761,9 +761,12 @@ REPOS_PREVIEW_MERGE: OperationSpec[NoHeaders] = OperationSpec(
     path="/api/repos/{repo_name}/merge/preview",
     parameters=(
         ParameterSpec("path", "repo_name", "repo_name"),
+        ParameterSpec("query", "allow_unrelated_histories", "allow_unrelated_histories"),
         ParameterSpec("query", "include_content", "include_content"),
         ParameterSpec("query", "source_branch", "source_branch"),
         ParameterSpec("query", "source_is_ephemeral", "source_is_ephemeral"),
+        ParameterSpec("query", "squash", "squash"),
+        ParameterSpec("query", "strategy", "strategy"),
         ParameterSpec("query", "target_branch", "target_branch"),
         ParameterSpec("query", "target_is_ephemeral", "target_is_ephemeral"),
     ),
@@ -2931,18 +2934,18 @@ class ReposNamespace:
 
         Args:
             repo_name: The repository name, for example `acme/web`.
-            strategy: Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+            strategy: Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
             target_branch: Destination branch to update. A merge always updates a branch.
             allow_unrelated_histories: Permit merges between unrelated histories.
-            author: Author identity used when the backend creates a merge commit. Required for merge-commit strategies.
-            commit_message: Commit message used when a merge commit is created.
+            author: Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.
+            commit_message: Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request.
             committer: Committer identity for the merge commit. Defaults to author when omitted.
             expected_source_sha: Optional source commit guard. The merge uses this commit instead of the current tip of source_ref, and fails if source_ref does not contain it when the merge starts. A later advance of source_ref does not change the merged commit.
             expected_target_sha: Optional branch tip guard. The merge fails if the target has moved since this SHA.
             source_branch: Deprecated: use source_ref. Source branch to merge from.
             source_is_ephemeral: Whether source_ref should be resolved from the ephemeral namespace.
             source_ref: Branch or refs/heads ref to merge from. The merge reads the source and never updates it. Provide source_ref or the deprecated source_branch.
-            squash: When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy.
+            squash: When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy.
             target_is_ephemeral: Whether target_branch should be resolved from the ephemeral namespace.
 
         Catalog ID `repos.merge`: `POST /api/repos/{repo_name}/merge`.
@@ -2985,8 +2988,11 @@ class ReposNamespace:
         repo_name: str,
         source_branch: str,
         target_branch: str,
+        allow_unrelated_histories: Union[bool, NotGiven] = NOT_GIVEN,
         include_content: Union[bool, NotGiven] = NOT_GIVEN,
         source_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
+        squash: Union[bool, NotGiven] = NOT_GIVEN,
+        strategy: Union[Literal["ff_only", "ff_prefer", "merge"], str, NotGiven] = NOT_GIVEN,
         target_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
         extra_headers: Union[Mapping[str, str], NotGiven] = NOT_GIVEN,
         timeout: Union[float, NotGiven] = NOT_GIVEN,
@@ -2996,7 +3002,7 @@ class ReposNamespace:
     ) -> schemas.ReposPreviewMergeResponse:
         """Preview Merge
 
-        Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
+        Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
 
         Scope: `git:read` on the repository.
 
@@ -3004,8 +3010,11 @@ class ReposNamespace:
             repo_name: The repository name, for example `acme/web`.
             source_branch: Source branch to merge from.
             target_branch: Destination branch to preview merging into.
+            allow_unrelated_histories: Preview a merge of branches with no common ancestor, as the `allow_unrelated_histories` of `POST /merge`.
             include_content: When true, include bounded conflict content in the response.
             source_is_ephemeral: Whether `source_branch` should be resolved from the ephemeral namespace.
+            squash: Preview a squash merge, as the `squash` of `POST /merge`. Cannot be used with the `ff_only` strategy.
+            strategy: Merge strategy to preview, as the `strategy` of `POST /merge`. Defaults to `ff_prefer`.
             target_is_ephemeral: Whether `target_branch` should be resolved from the ephemeral namespace.
 
         Catalog ID `repos.previewMerge`: `GET /api/repos/{repo_name}/merge/preview`.
@@ -3020,8 +3029,11 @@ class ReposNamespace:
                     "repo_name": repo_name,
                     "source_branch": source_branch,
                     "target_branch": target_branch,
+                    "allow_unrelated_histories": allow_unrelated_histories,
                     "include_content": include_content,
                     "source_is_ephemeral": source_is_ephemeral,
+                    "squash": squash,
+                    "strategy": strategy,
                     "target_is_ephemeral": target_is_ephemeral,
                 },
                 RequestOptions(
@@ -5111,18 +5123,18 @@ class AsyncReposNamespace:
 
         Args:
             repo_name: The repository name, for example `acme/web`.
-            strategy: Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+            strategy: Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
             target_branch: Destination branch to update. A merge always updates a branch.
             allow_unrelated_histories: Permit merges between unrelated histories.
-            author: Author identity used when the backend creates a merge commit. Required for merge-commit strategies.
-            commit_message: Commit message used when a merge commit is created.
+            author: Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.
+            commit_message: Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request.
             committer: Committer identity for the merge commit. Defaults to author when omitted.
             expected_source_sha: Optional source commit guard. The merge uses this commit instead of the current tip of source_ref, and fails if source_ref does not contain it when the merge starts. A later advance of source_ref does not change the merged commit.
             expected_target_sha: Optional branch tip guard. The merge fails if the target has moved since this SHA.
             source_branch: Deprecated: use source_ref. Source branch to merge from.
             source_is_ephemeral: Whether source_ref should be resolved from the ephemeral namespace.
             source_ref: Branch or refs/heads ref to merge from. The merge reads the source and never updates it. Provide source_ref or the deprecated source_branch.
-            squash: When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy.
+            squash: When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy.
             target_is_ephemeral: Whether target_branch should be resolved from the ephemeral namespace.
 
         Catalog ID `repos.merge`: `POST /api/repos/{repo_name}/merge`.
@@ -5165,8 +5177,11 @@ class AsyncReposNamespace:
         repo_name: str,
         source_branch: str,
         target_branch: str,
+        allow_unrelated_histories: Union[bool, NotGiven] = NOT_GIVEN,
         include_content: Union[bool, NotGiven] = NOT_GIVEN,
         source_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
+        squash: Union[bool, NotGiven] = NOT_GIVEN,
+        strategy: Union[Literal["ff_only", "ff_prefer", "merge"], str, NotGiven] = NOT_GIVEN,
         target_is_ephemeral: Union[bool, NotGiven] = NOT_GIVEN,
         extra_headers: Union[Mapping[str, str], NotGiven] = NOT_GIVEN,
         timeout: Union[float, NotGiven] = NOT_GIVEN,
@@ -5176,7 +5191,7 @@ class AsyncReposNamespace:
     ) -> schemas.ReposPreviewMergeResponse:
         """Preview Merge
 
-        Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
+        Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
 
         Scope: `git:read` on the repository.
 
@@ -5184,8 +5199,11 @@ class AsyncReposNamespace:
             repo_name: The repository name, for example `acme/web`.
             source_branch: Source branch to merge from.
             target_branch: Destination branch to preview merging into.
+            allow_unrelated_histories: Preview a merge of branches with no common ancestor, as the `allow_unrelated_histories` of `POST /merge`.
             include_content: When true, include bounded conflict content in the response.
             source_is_ephemeral: Whether `source_branch` should be resolved from the ephemeral namespace.
+            squash: Preview a squash merge, as the `squash` of `POST /merge`. Cannot be used with the `ff_only` strategy.
+            strategy: Merge strategy to preview, as the `strategy` of `POST /merge`. Defaults to `ff_prefer`.
             target_is_ephemeral: Whether `target_branch` should be resolved from the ephemeral namespace.
 
         Catalog ID `repos.previewMerge`: `GET /api/repos/{repo_name}/merge/preview`.
@@ -5200,8 +5218,11 @@ class AsyncReposNamespace:
                     "repo_name": repo_name,
                     "source_branch": source_branch,
                     "target_branch": target_branch,
+                    "allow_unrelated_histories": allow_unrelated_histories,
                     "include_content": include_content,
                     "source_is_ephemeral": source_is_ephemeral,
+                    "squash": squash,
+                    "strategy": strategy,
                     "target_is_ephemeral": target_is_ephemeral,
                 },
                 RequestOptions(
