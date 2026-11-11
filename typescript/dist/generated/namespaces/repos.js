@@ -639,7 +639,7 @@ export class ReposNamespace {
     /**
      * Preview Merge
      *
-     * Preview merge conflicts without creating commits, updating refs, or touching a working tree. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
+     * Preview a merge without creating commits, updating refs, or touching a working tree. Send the `strategy`, `squash`, and `allow_unrelated_histories` that you send to `POST /merge`: `result` is the result of that merge on the current tips. When requested, conflict content is rendered from Git objects produced in request-local scratch storage.
      *
      * Scope: `git:read` on the repository.
      *

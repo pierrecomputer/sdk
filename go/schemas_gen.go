@@ -230,7 +230,7 @@ type FileLastCommit struct {
 type FileOperation struct {
 	// Identifier that blob chunks reference for this file. Required for upsert.
 	ContentID Opt[string] `json:"content_id,omitzero"`
-	// File mode such as 100644 or 100755. Defaults to 100644.
+	// Octal file mode for an upsert: 100644 for a regular file, 100755 for an executable, or 120000 for a symlink. Permission bits such as 644, and regular-file modes such as 100664, are stored as 100755 when the owner can execute the file and as 100644 otherwise. Defaults to 100644.
 	Mode Opt[string] `json:"mode,omitzero"`
 	// upsert (default) to add or replace content, or delete to remove a file.
 	Operation Opt[string] `json:"operation,omitzero"`
@@ -970,9 +970,9 @@ type ReposListResponse struct {
 type ReposMergeRequest struct {
 	// Permit merges between unrelated histories.
 	AllowUnrelatedHistories Opt[bool] `json:"allow_unrelated_histories,omitzero"`
-	// Author identity used when the backend creates a merge commit. Required for merge-commit strategies.
+	// Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.
 	Author Opt[GitIdentity] `json:"author,omitzero"`
-	// Commit message used when a merge commit is created.
+	// Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request.
 	CommitMessage Opt[string] `json:"commit_message,omitzero"`
 	// Committer identity for the merge commit. Defaults to author when omitted.
 	Committer Opt[GitIdentity] `json:"committer,omitzero"`
@@ -986,9 +986,9 @@ type ReposMergeRequest struct {
 	SourceIsEphemeral Opt[bool] `json:"source_is_ephemeral,omitzero"`
 	// Branch or refs/heads ref to merge from. The merge reads the source and never updates it. Provide source_ref or the deprecated source_branch.
 	SourceRef Opt[string] `json:"source_ref,omitzero"`
-	// When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy.
+	// When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy.
 	Squash Opt[bool] `json:"squash,omitzero"`
-	// Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+	// Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
 	Strategy ReposMergeRequestStrategy `json:"strategy"`
 	// Destination branch to update. A merge always updates a branch.
 	TargetBranch string `json:"target_branch"`
@@ -996,7 +996,7 @@ type ReposMergeRequest struct {
 	TargetIsEphemeral Opt[bool] `json:"target_is_ephemeral,omitzero"`
 }
 
-// Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+// Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
 //
 // ReposMergeRequestStrategy is an open enum: a response can hold a value that this SDK version does not list.
 type ReposMergeRequestStrategy string
@@ -1121,13 +1121,13 @@ type ReposPreviewMergeResponse struct {
 	FilteredConflicts Opt[[]PreviewMergeFilteredConflict] `json:"filtered_conflicts,omitzero"`
 	// Merge base SHA used for the preview.
 	MergeBaseSHA Opt[string] `json:"merge_base_sha,omitzero"`
-	// Operation result if applied: merge_commit, fast_forward, or no_op.
+	// The result of POST /merge with the same strategy, squash, and allow_unrelated_histories on the current tips: merge_commit, fast_forward, no_op, squash, or rejected. rejected means that the strategy is ff_only and a fast-forward is not possible: the merge fails with 412.
 	Result ReposPreviewMergeResponseResult `json:"result"`
 	// Source branch requested by the caller.
 	SourceBranch string `json:"source_branch"`
 	// Resolved source branch tip SHA.
 	SourceTipSHA string `json:"source_tip_sha"`
-	// Preview status: clean or conflicted.
+	// Whether the tree of the commit that the merge makes has conflicts: clean or conflicted. A no_op, fast_forward, or rejected result makes no commit, so its status is clean.
 	Status ReposPreviewMergeResponseStatus `json:"status"`
 	// Target branch requested by the caller.
 	TargetBranch string `json:"target_branch"`
@@ -1135,7 +1135,7 @@ type ReposPreviewMergeResponse struct {
 	TargetTipSHA string `json:"target_tip_sha"`
 }
 
-// Operation result if applied: merge_commit, fast_forward, or no_op.
+// The result of POST /merge with the same strategy, squash, and allow_unrelated_histories on the current tips: merge_commit, fast_forward, no_op, squash, or rejected. rejected means that the strategy is ff_only and a fast-forward is not possible: the merge fails with 412.
 //
 // ReposPreviewMergeResponseResult is an open enum: a response can hold a value that this SDK version does not list.
 type ReposPreviewMergeResponseResult string
@@ -1144,9 +1144,11 @@ const (
 	ReposPreviewMergeResponseResultFastForward ReposPreviewMergeResponseResult = "fast_forward"
 	ReposPreviewMergeResponseResultMergeCommit ReposPreviewMergeResponseResult = "merge_commit"
 	ReposPreviewMergeResponseResultNoOp        ReposPreviewMergeResponseResult = "no_op"
+	ReposPreviewMergeResponseResultRejected    ReposPreviewMergeResponseResult = "rejected"
+	ReposPreviewMergeResponseResultSquash      ReposPreviewMergeResponseResult = "squash"
 )
 
-// Preview status: clean or conflicted.
+// Whether the tree of the commit that the merge makes has conflicts: clean or conflicted. A no_op, fast_forward, or rejected result makes no commit, so its status is clean.
 //
 // ReposPreviewMergeResponseStatus is an open enum: a response can hold a value that this SDK version does not list.
 type ReposPreviewMergeResponseStatus string

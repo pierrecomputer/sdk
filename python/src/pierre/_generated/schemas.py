@@ -324,7 +324,7 @@ class FileOperation(TypedDict):
 
     # Identifier that blob chunks reference for this file. Required for upsert.
     content_id: NotRequired[str]
-    # File mode such as 100644 or 100755. Defaults to 100644.
+    # Octal file mode for an upsert: 100644 for a regular file, 100755 for an executable, or 120000 for a symlink. Permission bits such as 644, and regular-file modes such as 100664, are stored as 100755 when the owner can execute the file and as 100644 otherwise. Defaults to 100644.
     mode: NotRequired[str]
     # upsert (default) to add or replace content, or delete to remove a file.
     operation: NotRequired[str]
@@ -1079,9 +1079,9 @@ class ReposMergeRequest(TypedDict):
 
     # Permit merges between unrelated histories.
     allow_unrelated_histories: NotRequired[bool]
-    # Author identity used when the backend creates a merge commit. Required for merge-commit strategies.
+    # Author identity of the commit that the merge makes. Required when the merge makes a commit: with merge, with ff_prefer when a fast-forward is not possible, and with squash.
     author: NotRequired["GitIdentity"]
-    # Commit message used when a merge commit is created.
+    # Message of the commit that the merge makes. Required with squash. When it is omitted, a merge commit gets a message in the form Merge branch 'feature' into main, with the source and target branch names of the request.
     commit_message: NotRequired[str]
     # Committer identity for the merge commit. Defaults to author when omitted.
     committer: NotRequired["GitIdentity"]
@@ -1095,9 +1095,9 @@ class ReposMergeRequest(TypedDict):
     source_is_ephemeral: NotRequired[bool]
     # Branch or refs/heads ref to merge from. The merge reads the source and never updates it. Provide source_ref or the deprecated source_branch.
     source_ref: NotRequired[str]
-    # When true, collapse the source into a single new commit whose only parent is the current target tip. Defaults to false, which preserves the standard merge/fast-forward behavior. Incompatible with the ff_only strategy.
+    # When true, makes one new commit with the current target tip as its only parent, also when a fast-forward is possible. Defaults to false. Incompatible with the ff_only strategy.
     squash: NotRequired[bool]
-    # Merge strategy. merge creates a merge commit when needed, ff_only rejects non-fast-forward merges, and ff_prefer fast-forwards when possible before falling back to a merge commit.
+    # Merge strategy. merge makes a merge commit, also when a fast-forward is possible. ff_prefer fast-forwards when it can, and else makes a merge commit. ff_only only fast-forwards and never makes a commit. It fails with 412 when the target has commits that the source does not have. When the target already contains the source, each strategy returns no_op and makes no commit.
     strategy: Union[Literal["ff_only", "ff_prefer", "merge"], str]
     # Destination branch to update. A merge always updates a branch.
     target_branch: str
@@ -1226,13 +1226,13 @@ class ReposPreviewMergeResponse(TypedDict):
     filtered_conflicts: NotRequired[List["PreviewMergeFilteredConflict"]]
     # Merge base SHA used for the preview.
     merge_base_sha: NotRequired[str]
-    # Operation result if applied: merge_commit, fast_forward, or no_op.
-    result: Union[Literal["fast_forward", "merge_commit", "no_op"], str]
+    # The result of POST /merge with the same strategy, squash, and allow_unrelated_histories on the current tips: merge_commit, fast_forward, no_op, squash, or rejected. rejected means that the strategy is ff_only and a fast-forward is not possible: the merge fails with 412.
+    result: Union[Literal["fast_forward", "merge_commit", "no_op", "rejected", "squash"], str]
     # Source branch requested by the caller.
     source_branch: str
     # Resolved source branch tip SHA.
     source_tip_sha: str
-    # Preview status: clean or conflicted.
+    # Whether the tree of the commit that the merge makes has conflicts: clean or conflicted. A no_op, fast_forward, or rejected result makes no commit, so its status is clean.
     status: Union[Literal["clean", "conflicted"], str]
     # Target branch requested by the caller.
     target_branch: str

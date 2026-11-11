@@ -666,9 +666,12 @@ export const reposPreviewMerge = {
     path: '/api/repos/{repo_name}/merge/preview',
     parameters: [
         { in: 'path', name: 'repo_name', field: 'repo_name' },
+        { in: 'query', name: 'allow_unrelated_histories', field: 'allow_unrelated_histories' },
         { in: 'query', name: 'include_content', field: 'include_content' },
         { in: 'query', name: 'source_branch', field: 'source_branch' },
         { in: 'query', name: 'source_is_ephemeral', field: 'source_is_ephemeral' },
+        { in: 'query', name: 'squash', field: 'squash' },
+        { in: 'query', name: 'strategy', field: 'strategy' },
         { in: 'query', name: 'target_branch', field: 'target_branch' },
         { in: 'query', name: 'target_is_ephemeral', field: 'target_is_ephemeral' },
     ],

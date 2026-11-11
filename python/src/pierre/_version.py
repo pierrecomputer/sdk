@@ -1,3 +1,3 @@
 """The version of the package. It equals the version in pyproject.toml."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
