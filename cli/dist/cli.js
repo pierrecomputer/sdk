@@ -3007,7 +3007,7 @@ function useColor() {
 const program = new Command();
 
 // ../typescript/dist/version.js
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 
 // ../typescript/dist/runtime/errors.js
 /** The docs page with the table of problem codes, in the Markdown form for agents. */
@@ -9635,7 +9635,7 @@ function envValue(env, name) {
 }
 
 // package.json
-var version$2 = "0.1.2";
+var version$2 = "0.1.3";
 
 // src/version.ts
 /** The version of this CLI. */
@@ -19206,7 +19206,7 @@ function loginCommand(ctx) {
 	return new Command("login").description("Store a private key for a Code Storage host.").option("--api-url <url>", "The REST API URL, including http:// or https://. Derived for <org>.code.storage hosts.").option("--from-file <path>", "Read the key from a file.").option("--no-verify", "Do not check the key against the organization.").option("--org <org>", "The organization that owns the key (JWT issuer). Derived for <org>.code.storage hosts.").option("--with-key", "Store a private key that the dashboard created. Read it from stdin, --from-file, or a paste.").action((options, command) => withAccountLock(ctx.env, () => login(createSession(ctx, command), options)));
 }
 async function login(session, options) {
-	if (!options.withKey) throw usageError("Interactive sign-in is not available yet. Pass --with-key.", "Create a key on the dashboard, then run `pierre auth login --hostname <host> --with-key < key.pem`.");
+	if (!options.withKey) throw usageError("Use `pierre init` to sign in and set up this machine.", "To use an existing key, run `pierre auth login --hostname <host> --with-key < key.pem`.");
 	const { env } = session.ctx;
 	const hostInput = session.options.hostname ?? envValue(env, "PIERRE_GIT_HOST") ?? (options.org ? defaultHost(options.org.trim()) : void 0);
 	if (!hostInput) throw usageError("Pass --hostname <host>.", "For example: `pierre auth login --hostname acme.code.storage --with-key < key.pem`");
@@ -22735,6 +22735,9 @@ function from(parameters) {
 }
 
 // src/account/wallet.ts
+function walletTestingEnabled(env) {
+	return envValue(env, "PIERRE_EXPERIMENTAL_WALLET") === "1";
+}
 const MESSAGES = {
 	payment_required: "A recurring wallet payment credential is required.",
 	payment_credential_invalid: "The wallet payment credential is not valid for this signup.",
@@ -23017,8 +23020,13 @@ async function pollRPC(environment, file, state, deadline, method, body) {
 }
 /** The commands that follow setup: create a repository, then add the agent skill. */
 const NEXT_STEPS = ["pierre repos create <name>", SKILL_INSTALL];
-function events(session) {
-	return (event, fields = {}) => {
+const SIGNUP_SIGN_IN_MESSAGE = "Sign in to verify your identity. If the browser asks for an existing organization, select one that you belong to. Signup creates a separate Code Storage organization.";
+function events(session, command) {
+	return (event, eventFields = {}) => {
+		const fields = event === "sign_in_required" && command === "signup" ? {
+			...eventFields,
+			message: SIGNUP_SIGN_IN_MESSAGE
+		} : eventFields;
 		if (session.options.json) session.ctx.stdout.write(`${JSON.stringify({
 			event,
 			...fields
@@ -23036,8 +23044,10 @@ function events(session) {
 			session.out(`Select ${String(fields.org)}. On the Keys page, delete the key with the name shown above.`);
 			session.out("Next steps:");
 			if (Array.isArray(fields.nextSteps)) for (const next of fields.nextSteps) session.out(`  ${String(next)}`);
-		} else if (event === "sign_in_required") session.ctx.stderr.write(`Open ${String(fields.url)}\nConfirm code ${String(fields.userCode)}.\n`);
-		else if (event === "payment_required") {
+		} else if (event === "sign_in_required") {
+			const message = typeof fields.message === "string" ? `${fields.message}\n` : "";
+			session.ctx.stderr.write(`${message}Open ${String(fields.url)}\nConfirm code ${String(fields.userCode)}.\n`);
+		} else if (event === "payment_required") {
 			if (fields.method === "stripe_mpp") session.ctx.stderr.write(`Authorize a recurring payment with your wallet.\nPayment challenge: ${String(fields.challenge)}\n`);
 			else session.ctx.stderr.write(`Complete payment at ${String(fields.url)}\n`);
 		} else if (!session.options.quiet) session.ctx.stderr.write(`Code Storage: ${event.replaceAll("_", " ")}.\n`);
@@ -23566,6 +23576,7 @@ const ENV_CREDENTIALS = [
 async function runAccount(session, command, options) {
 	let release;
 	try {
+		if ((options.payment === "wallet" || options.paymentCredentialStdin || options.cancelWalletPayment !== void 0) && !walletTestingEnabled(session.ctx.env)) throw new WalletError("wallet_payments_disabled", "Use --payment checkout. Wallet payments are available for testing only.");
 		if (options.keyName !== void 0 && (!options.keyName.trim() || /\p{Cc}/u.test(options.keyName))) throw usageError("--key-name must have text and no control characters.");
 		const requestedScopes = options.keyScope === void 0 ? void 0 : keyScopes(options.keyScope);
 		if (options.keyScope !== void 0 && !requestedScopes) throw usageError("Use --key-scope git:read and --key-scope org:read. Add git:write or repo:write as needed. Use * alone for full access.");
@@ -23579,7 +23590,7 @@ async function runAccount(session, command, options) {
 		release = await acquireAccountLock(session.ctx.env);
 		const environment = await discover(session.ctx.env);
 		if ((options.payment === "wallet" || options.cancelWalletPayment) && environment.accountFlowVersion !== 2) throw new WalletError("wallet_payments_disabled");
-		const emit = events(session);
+		const emit = events(session, command);
 		let state = await authenticated(environment, file, emit, deadline);
 		if (command === "init" && options.orgId) {
 			if (state.signupSessionId) throw usageError("Resume signup without --org-id. The signup selects its own organization.");
@@ -23599,7 +23610,7 @@ async function runAccount(session, command, options) {
 			session.debug(`account setup failed: ${error instanceof Error ? error.name : typeof error}${code ? ` ${code}` : ""}`);
 		}
 		const failure = error instanceof CliError ? error : new CliError("Account setup failed. Run the command again to resume.");
-		if (session.options.json) events(session)("error", {
+		if (session.options.json) events(session, command)("error", {
 			...failure instanceof AccountError && failure.reason ? { reason: failure.reason } : {},
 			code: failure instanceof AccountError || failure instanceof AccountUnavailableError || failure instanceof AccountSetupInProgressError || failure instanceof WalletError ? failure.code : failure.exitCode === 2 ? "usage" : "account_setup_failed",
 			message: failure.message
@@ -23612,11 +23623,12 @@ async function runAccount(session, command, options) {
 
 // src/commands/account.ts
 function accountCommand(ctx, name) {
+	const hideWallet = !walletTestingEnabled(ctx.env);
 	const command = new Command(name).description(name === "signup" ? "Create an organization and set up this machine." : "Set up this machine. Sign up if the account has no organization.").option("--plan <plan-type>", "The plan for a new organization.").option("--subdomain <name>", name === "signup" ? "The subdomain to reserve for the new organization." : "The subdomain to reserve for a new organization, or the subdomain to select in an existing organization.").option("--region <region>", "Select a region for the new organization.").option("--provider <provider>", "Select a cloud provider.").option("--cluster <cluster>", "Select a cluster in the region.").option("--promotion-code <code>", "A promotion code for the payment of a new organization.").option("--key-name <name>", "The name of this machine key in the dashboard.").option("--key-scope <scope>", "Allow a key scope. Repeat for each scope. Setup needs git:read and org:read.", (value, scopes) => {
 		const values = scopes ?? [];
 		values.push(value);
 		return values;
-	}).option("--payment <method>", "Use checkout or wallet for signup payment. Default: checkout.").option("--payment-credential-stdin", "Read a wallet payment credential from stdin. Requires --no-input.").option("--cancel-wallet-payment <attempt-id>", "Cancel an unpaid wallet attempt before opening Checkout.").option("--timeout <duration>", "The maximum wait. Default: 30m.");
+	}).addOption(new Option("--payment <method>", "Use checkout or wallet for signup payment. Wallet is for testing only. Default: checkout.").hideHelp(hideWallet)).addOption(new Option("--payment-credential-stdin", "Read a test wallet payment credential from stdin. Requires --no-input.").hideHelp(hideWallet)).addOption(new Option("--cancel-wallet-payment <attempt-id>", "Cancel an unpaid test wallet attempt before opening Checkout.").hideHelp(hideWallet)).option("--timeout <duration>", "The maximum wait. Default: 30m.");
 	if (name === "init") command.option("--org-id <org-id>", "Select an existing organization by its ID.");
 	return command.action((options, selected) => runAccount(createSession(ctx, selected), name, options));
 }
@@ -23770,7 +23782,7 @@ the current repository's Code Storage remote, or the sole saved host.
 		mcpCommand(ctx),
 		versionCommand(ctx)
 	]) program.addCommand(helper.helpGroup(HELPERS_GROUP));
-	for (const name of ["signup", "init"]) program.addCommand(accountCommand(ctx, name), { hidden: true });
+	for (const name of ["signup", "init"]) program.addCommand(accountCommand(ctx, name).helpGroup(HELPERS_GROUP));
 	inheritSettings(program);
 	for (const group of api) for (const method of group.commands) method.allowExcessArguments(true);
 	return program;

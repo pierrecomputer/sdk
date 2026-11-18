@@ -32,6 +32,56 @@ later. Run `pierre auth setup-git` from a global install: Git stores the path of
 
 ## Quick start
 
+Set up an account and this machine:
+
+```sh
+pierre init
+```
+
+Approve the sign-in code in a browser. If you have no organization, the CLI asks for the plan,
+subdomain, and location, then gives you a Stripe Checkout link. After payment, it registers a
+machine key and sets up Git. For an existing organization, it skips signup and payment and keeps a
+working key.
+
+Use `pierre signup` to create another organization. Use `pierre init --org-id <org-id>` to select an
+existing organization when your account has more than one.
+
+If WorkOS asks you to select an existing organization, select one that you belong to. The selection
+completes sign-in. `pierre signup` creates a separate organization.
+
+### Setup for agents
+
+Use `--json --no-input` for commands that an agent runs. Account commands write one JSON event per
+line. The `sign_in_required` event gives the sign-in URL and user code. The `payment_required` event
+gives the full Stripe Checkout URL. Give these links to a person. The browser can run on another
+machine; the CLI checks for approval and payment through the API.
+
+When an agent starts a signup, supply `--plan` and `--subdomain`. Always select a location with
+`--provider`, `--region`, and `--cluster`. Without placement flags, the CLI uses the first available
+location. If placement flags match no location or several locations, the command stops. For an
+existing organization, replace `YOUR_ORGANIZATION_ID` with its organization ID:
+
+```sh
+pierre init --org-id YOUR_ORGANIZATION_ID --json --no-input \
+  --key-scope git:read --key-scope org:read
+```
+
+If `init` emits `organization_required`, select an ID from that event and run it again with
+`--org-id`. A `ready` event gives the organization, host, API URL, key file, key ID, and key scopes.
+Then `pierre auth status` checks the registered key against the API.
+
+Repeat `--key-scope` for each allowed scope. Setup needs `git:read` and `org:read`. Add `git:write`
+for push and `repo:write` for repository creation. A new key has full access when you give no
+scopes. Setup keeps the scopes of a working key. Read-only setup also restricts the Git helper to
+read access.
+
+If setup stops, run the same command again. The CLI resumes the saved signup. The server keeps the
+signup choices, so a new machine can also recover a paid signup after sign-in. The CLI does not
+print the sign-in tokens or private key. It removes its saved WorkOS session after setup completes.
+`pierre auth logout --account --yes` clears an interrupted sign-in session and keeps host keys.
+
+### Sign in with an existing key
+
 Create a key on the **Keys** page of your organization dashboard, and keep the private key in your
 secrets manager. Then store it, and let Git get its credential from `pierre`:
 
@@ -145,6 +195,8 @@ pierre api repos.branches.create -F repo_name=acme/web -F target_branch=feat -F 
 ## Helpers
 
 ```
+pierre signup [--plan <plan-type>] [--subdomain <name>] [--json] [--no-input]
+pierre init [--org-id <org-id>] [--json] [--no-input]
 pierre auth login [--hostname <host>] [--org <org>] [--api-url <url>] [--from-file <path>] [--no-verify] --with-key
 pierre auth status [--hostname <host>] [--json]
 pierre auth logout [--hostname <host>] [--yes]
